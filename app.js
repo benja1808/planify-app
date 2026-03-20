@@ -1,7 +1,14 @@
 // Configuración de Supabase
 const supabaseUrl = 'https://fygvulgffhxrimaeyoep.supabase.co';
 const supabaseKey = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF'; // Clave Anon Key de Supabase
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// Guard: si el SDK no cargó (offline sin caché), no crashear toda la app
+const supabaseClient = window.supabase
+    ? window.supabase.createClient(supabaseUrl, supabaseKey)
+    : null;
+
+// Exponer en window para que syncQueue.js pueda accederlo
+window.supabaseClient = supabaseClient;
 
 // ── Helper de escritura offline-safe ────────────────────────────────────────
 // Mapea tabla Supabase → store de localDB
@@ -137,6 +144,9 @@ async function inicializarDatos() {
     if (window.syncQueue) window.syncQueue.actualizar();
 
     try {
+        // Si el SDK de Supabase no se cargó (offline sin caché de CDN), ir directo a IndexedDB
+        if (!supabaseClient) throw new Error('Supabase SDK no disponible — modo offline sin caché CDN');
+
         console.log('Cargando datos desde Supabase...');
 
         const _timeout = ms => new Promise((_, reject) =>

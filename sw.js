@@ -1,8 +1,8 @@
 // Service Worker — Planify Offline v2
 const CACHE_NAME = 'planify-offline-v2';
 
-// Assets que se cachean en el install (shell de la app)
-const STATIC_SHELL = [
+// Archivos locales: se cachean atómicamente (si uno falla, todo falla — intencional)
+const LOCAL_SHELL = [
   './',
   './index.html',
   './styles.css',
@@ -12,23 +12,40 @@ const STATIC_SHELL = [
   './favicon.ico',
   './icon-512.png',
   './manifest.json',
-  // JS desde CDN
+];
+
+// Librerías de CDN: se cachean individualmente (best-effort, un fallo no rompe el install)
+const CDN_RESOURCES = [
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/pizzip@3.1.1/dist/pizzip.min.js',
   'https://cdn.jsdelivr.net/npm/docxtemplater@3.37.2/build/docxtemplater.js',
-  // CSS desde CDN
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
 ];
 
 // ── INSTALL: precachear shell ────────────────────────────────────────────────
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async cache => {
+      // 1) Archivos locales: atómico (crítico)
+      await cache.addAll(LOCAL_SHELL);
+
+      // 2) CDN: cada URL se cachea por separado — un fallo no cancela el resto
+      await Promise.allSettled(
+        CDN_RESOURCES.map(url =>
+          fetch(url, { mode: 'cors', credentials: 'omit' })
+            .then(res => {
+              // Guardar bajo la URL ORIGINAL como clave (evita problemas con redirects)
+              if (res.ok || res.type === 'opaque') {
+                return cache.put(url, res);
+              }
+            })
+            .catch(err => console.warn('[SW] No se pudo cachear CDN:', url, err.message))
+        )
+      );
+    }).then(() => self.skipWaiting())
   );
 });
 
