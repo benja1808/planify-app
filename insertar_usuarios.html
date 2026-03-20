@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Insertando Usuarios...</title>
+</head>
+<body>
+    <h1>Insertando usuarios en Supabase...</h1>
+    <p id="status">Por favor espera...</p>
+
+    <script>
+        const url = 'https://fygvulgffhxrimaeyoep.supabase.co/rest/v1/trabajadores';
+        const key = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+
+        const datos = [
+            {
+                nombre: 'Jose Araya',
+                puesto: 'Técnico Lubricación',
+                habilidades: ['Lubricación', 'Cambios de aceite'],
+                disponible: false,
+                ocupado: false
+            },
+            {
+                nombre: 'Eduardo Tapia',
+                puesto: 'Técnico Lubricación',
+                habilidades: ['Lubricación', 'Balanceo', 'Cambios de aceite'],
+                disponible: false,
+                ocupado: false
+            },
+            {
+                nombre: 'Octavio Navarrete',
+                puesto: 'Administrador de Contrato - Analista',
+                habilidades: ['END (Tintas penetrantes)', 'Medición de vibraciones', 'Termografía', 'Medición de espesores', 'Medición de dureza', 'Lubricación'],
+                disponible: false,
+                ocupado: false
+            }
+        ];
+
+        async function insertarUsuarios() {
+            try {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': key,
+                        'Authorization': `Bearer ${key}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(datos)
+                });
+
+                if (res.ok) {
+                    document.getElementById('status').innerText = "¡Los 3 usuarios fueron agregados exitosamente a la base de datos!";
+                    document.getElementById('status').style.color = "green";
+                } else {
+                    const text = await res.text();
+                    document.getElementById('status').innerText = "Hubo un error al intentar agregar: " + text;
+                    document.getElementById('status').style.color = "red";
+                }
+            } catch (error) {
+                document.getElementById('status').innerText = "Error de conexión: " + error;
+                document.getElementById('status').style.color = "red";
+            }
+        }
+
+        insertarUsuarios();
+    </script>
+</body>
+</html>

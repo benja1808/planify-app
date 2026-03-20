@@ -1,0 +1,18 @@
+{
+  "name": "planner_app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node -c app.js && node -c server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.99.0",
+    "xlsx": "^0.18.5"
+  }
+}
