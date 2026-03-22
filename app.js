@@ -352,6 +352,31 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         return t ? t.nombre : 'Desconocido';
     });
 
+    // Si algún ayudante ya tiene tarea activa → forzar a cola (programada_semana)
+    if (estadoTarea === 'en_curso' && ayudantesIds.length > 0) {
+        const idsEnTarea = new Set(
+            estado.tareas
+                .filter(t => t.estadoTarea === 'en_curso')
+                .flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean))
+        );
+        const ocupados = ayudantesIds.filter(aid => idsEnTarea.has(aid));
+        if (ocupados.length > 0) {
+            estadoTarea = 'programada_semana';
+            estadoEjecucion = 'activo';
+            const nombres = ocupados.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
+            const toast = document.createElement('div');
+            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea enviada a cola.`;
+            Object.assign(toast.style, {
+                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
+                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
+                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+    }
+
     // UUID generado en cliente: funciona igual online y offline
     const tareaId = crypto.randomUUID();
     const hora = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -549,6 +574,31 @@ async function guardarTareaFinalizada({
 window.completarTareaExposed = completarTarea;
 window.eliminarTareaExposed = eliminarTarea;
 window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
+
+// Iniciar tarea que estaba en cola (programada_semana → en_curso)
+window.iniciarTareaColaExposed = async function(tareaId) {
+    const tarea = estado.tareas.find(t => t.id === tareaId);
+    if (!tarea) return;
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    // Actualizar estado local
+    tarea.estadoTarea = 'en_curso';
+    tarea.horaAsignacion = hora;
+    tarea.fechaAsignacion = ahora.toISOString();
+    // Marcar ayudantes como ocupados
+    if (tarea.ayudantesIds?.length) {
+        estado.trabajadores = estado.trabajadores.map(w =>
+            tarea.ayudantesIds.includes(w.id) ? { ...w, ocupado: true } : w
+        );
+        await Promise.all(tarea.ayudantesIds.map(aid => _db.update('trabajadores', aid, { ocupado: true })));
+    }
+    await _db.update('tareas', tareaId, {
+        estado_tarea: 'en_curso',
+        hora_asignacion: hora,
+        fecha_inicio: ahora.toISOString()
+    });
+    renderizarVistaActual();
+};
 
 
 // --- COMPONENTES Y VISTAS ---
@@ -783,8 +833,9 @@ function renderPerfilView() {
     }
 
     // Vista de perfil para trabajador logueado
+    // Incluye: activas (en_curso) + en cola con trabajadores asignados (programada_semana + liderId)
     const tareasDiarias = estado.tareas.filter(t =>
-        t.estadoTarea === 'en_curso' &&
+        (t.estadoTarea === 'en_curso' || (t.estadoTarea === 'programada_semana' && t.liderId)) &&
         (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
     );
     const tareasSemanales = estado.tareas.filter(t =>
@@ -2360,7 +2411,11 @@ function renderFichaTecnicaModal() {
 function renderDashboardView() {
     // Todos los trabajadores son asignables — los ocupados/sin check-in van automáticamente a cola
     const trabajadoresValidados = estado.trabajadores;
-    const tareasDiarias = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
+    // Incluye activas + en cola (programada_semana con personal ya asignado)
+    const tareasDiarias = estado.tareas.filter(t =>
+        t.estadoTarea === 'en_curso' ||
+        (t.estadoTarea === 'programada_semana' && t.liderId)
+    );
     
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
@@ -2461,7 +2516,7 @@ function renderDashboardView() {
                         `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>` : 
                         `<div class="items-list">
                             ${tareasDiarias.map(tarea => `
-                                <div class="list-item" style="border-left: 3px solid var(--warning-color)">
+                                <div class="list-item" style="border-left: 3px solid ${tarea.estadoTarea === 'programada_semana' ? '#9ca3af' : 'var(--warning-color)'}">
                                     <div class="item-info">
                                         <h4>
                                             ${(() => {
@@ -2502,6 +2557,7 @@ function renderDashboardView() {
                                                 return tarea.tipo;
                                             })()}
                                             ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color); margin-left:0.5rem"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
+                                            ${tarea.estadoTarea === 'programada_semana' ? `<span class="badge" style="background:#6b7280; margin-left:0.5rem; font-size:0.7rem;">⏳ EN COLA</span>` : ''}
                                         </h4>
                                         <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                             <div>
@@ -2526,15 +2582,23 @@ function renderDashboardView() {
                                         <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
+                                        ${tarea.estadoTarea === 'programada_semana' ? `
+                                        <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar
+                                        </button>` : `
                                         <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId}', '${tarea.ayudantesIds ? tarea.ayudantesIds.join(',') : ''}')">
                                             <i class="fa-solid fa-check"></i> Terminar
-                                        </button>
+                                        </button>`}
                                     </div>
                                     ` : estado.usuarioActual === 'trabajador' && (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id)) ? `
-                                    <div style="margin-top:0.8rem;">
+                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem;">
+                                        ${tarea.estadoTarea === 'programada_semana' ? `
+                                        <button class="btn btn-primary" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar
+                                        </button>` : `
                                         <button class="btn btn-success" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
                                             <i class="fa-solid fa-flag-checkered"></i> Finalizar
-                                        </button>
+                                        </button>`}
                                     </div>
                                     ` : ''}
                                 </div>
@@ -2732,8 +2796,10 @@ function renderSemanalView() {
     const trabajador = estado.trabajadorLogueado;
 
     // Workers solo ven SUS tareas; admin ve todas
+    // Excluir tareas con personal asignado: ya aparecen en Diario como "En Cola"
     const tareasSemanales = estado.tareas.filter(t => {
         if (t.estadoTarea !== 'programada_semana') return false;
+        if (t.liderId) return false; // tiene personal asignado → aparece en Diario
         if (isAdmin) return true;
         return t.liderId === trabajador?.id || (t.ayudantesIds || []).includes(trabajador?.id);
     });
@@ -3128,38 +3194,50 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         const ayudantesNombres = ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '');
         const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
-        // Ayudantes que ya tienen tarea activa → esta nueva tarea va a cola para ellos
+        // Si algún ayudante ya tiene tarea activa → la tarea COMPLETA va a cola (ninguno inicia)
         const tareasActivasActual = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
         const idsEnTareaActual = new Set(tareasActivasActual.flatMap(t =>
             [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
         ));
-        const ayudantesEnCola = ayudantesIds.filter(aid => idsEnTareaActual.has(aid));
-        if (ayudantesEnCola.length > 0) {
-            const nombres = ayudantesEnCola.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
-            // Solo informar, no bloquear — el planificador decidió asignarlos igual
-            console.info(`[cola] ${nombres} ya tienen trabajo activo. Esta tarea quedará pendiente para ellos.`);
-        }
+        const ayudantesOcupados = ayudantesIds.filter(aid => idsEnTareaActual.has(aid));
+        const hayOcupados = ayudantesOcupados.length > 0;
+
+        // Si se pidió "Iniciar Hoy" pero algún ayudante está ocupado → forzar cola
+        let iniciarAhora = cambiarADashboard && !hayOcupados;
 
         modal.style.display = 'none';
 
-        // Si se inicia hoy Y algún ayudante ya está ocupado → la tarea inicia como programada_semana para esos ayudantes
-        // En práctica: la tarea se inicia igual pero esos ayudantes NO se marcan ocupado adicional
-        const estadoFinal = cambiarADashboard ? 'en_curso' : tarea.estadoTarea;
+        if (hayOcupados && cambiarADashboard) {
+            const nombres = ayudantesOcupados
+                .map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
+            // Notificación visual breve (no alert nativo)
+            const toast = document.createElement('div');
+            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea asignada en cola para todos.`;
+            Object.assign(toast.style, {
+                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
+                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
+                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
         estado.tareas = estado.tareas.map(t => t.id === id ? {
             ...t,
-            ...(cambiarADashboard ? { estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora } : {}),
+            ...(iniciarAhora ? { estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora } : {}),
             liderId, liderNombre: lider?.nombre || '',
             ayudantesIds, ayudantesNombres,
             tipo: tarea.tipo.includes(tipoTrabajo) ? tarea.tipo : `${tarea.tipo} (${tipoTrabajo})`
         } : t);
 
-        if (cambiarADashboard) vistaActual = 'dashboard';
+        if (iniciarAhora) vistaActual = 'dashboard';
         renderizarVistaActual();
 
         const dbUpdate = {
             lider_id: liderId, lider_nombre: lider?.nombre || '',
             ayudantes_ids: ayudantesIds, ayudantes_nombres: ayudantesNombres,
-            ...(cambiarADashboard ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
+            ...(iniciarAhora ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
         };
         await _db.update('tareas', id, dbUpdate);
     };
