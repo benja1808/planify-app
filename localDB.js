@@ -5,7 +5,7 @@
   'use strict';
 
   const DB_NAME    = 'planify_local';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
 
   // ── Stores y sus índices ────────────────────────────────────────────────────
   const STORES = {
@@ -14,7 +14,8 @@
     historial:    { keyPath: 'id', indexes: [{ name: 'created_at', key: 'created_at' }, { name: 'synced', key: 'synced' }] },
     equipos:      { keyPath: 'id', indexes: [] },
     mediciones:   { keyPath: 'id', indexes: [{ name: 'equipoId', key: 'equipo_id' }, { name: 'synced', key: 'synced' }] },
-    cola_sync:    { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'synced', key: 'synced' }, { name: 'timestamp', key: 'timestamp' }] }
+    cola_sync:    { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'synced', key: 'synced' }, { name: 'timestamp', key: 'timestamp' }] },
+    horas_extra:  { keyPath: 'id', indexes: [{ name: 'trabajador_id', key: 'trabajador_id' }, { name: 'fecha', key: 'fecha' }, { name: 'synced', key: 'synced' }] },
   };
 
   let _db = null;
@@ -148,6 +149,16 @@
       bulk:    (items)      => upsertMany('mediciones', items),
       delete:  (id)         => eliminar('mediciones', id),
       getPendientes: ()     => getByIndex('mediciones', 'synced', false),
+    },
+    // Horas extra
+    horas_extra: {
+      getAll:           ()           => getAll('horas_extra'),
+      get:              (id)         => getById('horas_extra', id),
+      upsert:           (item)       => upsert('horas_extra', item),
+      bulk:             (items)      => upsertMany('horas_extra', items),
+      delete:           (id)         => eliminar('horas_extra', id),
+      getByTrabajador:  (wId)        => getByIndex('horas_extra', 'trabajador_id', wId),
+      getPendientes:    ()           => getByIndex('horas_extra', 'synced', false),
     },
     // Cola de sincronización
     cola: {

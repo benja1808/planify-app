@@ -1,5 +1,8 @@
-// Service Worker — Planify Offline v2
-const CACHE_NAME = 'planify-offline-v2';
+// Service Worker — Planify Offline v5
+const CACHE_NAME = 'planify-offline-v5';
+
+// En localhost no cacheamos nada — siempre red directa
+const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
 // Archivos locales: se cachean atómicamente (si uno falla, todo falla — intencional)
 const LOCAL_SHELL = [
@@ -27,6 +30,9 @@ const CDN_RESOURCES = [
 
 // ── INSTALL: precachear shell ────────────────────────────────────────────────
 self.addEventListener('install', event => {
+  // En localhost: activar inmediatamente sin cachear nada
+  if (IS_LOCAL) { self.skipWaiting(); return; }
+
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
       // 1) Archivos locales: atómico (crítico)
@@ -37,10 +43,7 @@ self.addEventListener('install', event => {
         CDN_RESOURCES.map(url =>
           fetch(url, { mode: 'cors', credentials: 'omit' })
             .then(res => {
-              // Guardar bajo la URL ORIGINAL como clave (evita problemas con redirects)
-              if (res.ok || res.type === 'opaque') {
-                return cache.put(url, res);
-              }
+              if (res.ok || res.type === 'opaque') return cache.put(url, res);
             })
             .catch(err => console.warn('[SW] No se pudo cachear CDN:', url, err.message))
         )
@@ -64,6 +67,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
+  // En localhost: pasar todo directo a la red, sin interceptar
+  if (IS_LOCAL) return;
+
   const url = new URL(event.request.url);
 
   // ① Supabase API → NetworkFirst (datos frescos, caché como fallback)
@@ -75,14 +81,19 @@ self.addEventListener('fetch', event => {
   // ② Navegación (HTML) → NetworkFirst con fallback a index.html cacheado
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match('./index.html')
-      )
+      fetch(event.request).catch(() => caches.match('./index.html'))
     );
     return;
   }
 
-  // ③ Assets estáticos (JS, CSS, imágenes, fonts) → CacheFirst
+  // ③ Assets locales (JS/CSS) → NetworkFirst para capturar cambios
+  const isLocalAsset = url.hostname === self.location.hostname;
+  if (isLocalAsset) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  // ④ CDN externos (fonts, FontAwesome, librerías) → CacheFirst
   event.respondWith(cacheFirst(event.request));
 });
 
