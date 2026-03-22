@@ -410,3 +410,94 @@ h3 {
         max-width: 100%;
     }
 }
+
+/* ── LOGIN: ROLE CARDS ──────────────────────────────────────────────────────
+   Solo sobreescribe el fondo del overlay y agrega estilos para las cards.
+   Todos los colores usan las variables existentes de la app.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Fondo levemente más luminoso */
+.login-overlay {
+    background: #f8f9fc;
+}
+
+/* Contenedor de las 3 cards de rol */
+.role-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Cada card de rol */
+.role-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    color: var(--text-main);
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+
+.role-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09);
+    border-color: var(--primary-color);
+}
+
+/* Icono de la card */
+.role-card-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(249, 115, 22, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    transition: background 200ms ease;
+}
+
+.role-card:hover .role-card-icon {
+    background: rgba(249, 115, 22, 0.15);
+}
+
+/* Textos de la card */
+.role-card-body {
+    flex: 1;
+}
+
+.role-card-name {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 0.15rem;
+}
+
+.role-card-desc {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Flecha derecha */
+.role-card-arrow {
+    flex-shrink: 0;
+    color: #d1d5db;
+    transition: color 200ms ease, transform 200ms ease;
+}
+
+.role-card:hover .role-card-arrow {
+    color: var(--primary-color);
+    transform: translateX(3px);
+}

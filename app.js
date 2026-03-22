@@ -1,7 +1,14 @@
 // Configuración de Supabase
 const supabaseUrl = 'https://fygvulgffhxrimaeyoep.supabase.co';
 const supabaseKey = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF'; // Clave Anon Key de Supabase
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// Guard: si el SDK no cargó (offline sin caché), no crashear toda la app
+const supabaseClient = window.supabase
+    ? window.supabase.createClient(supabaseUrl, supabaseKey)
+    : null;
+
+// Exponer en window para que syncQueue.js pueda accederlo
+window.supabaseClient = supabaseClient;
 
 // ── Helper de escritura offline-safe ────────────────────────────────────────
 // Mapea tabla Supabase → store de localDB
@@ -9,7 +16,8 @@ function _storeLocal(tabla) {
     const map = {
         tareas: 'tareas', trabajadores: 'trabajadores', equipos: 'equipos',
         historial_tareas: 'historial', tareas_historial: 'historial',
-        mediciones: 'mediciones', historial_mediciones: 'mediciones'
+        mediciones: 'mediciones', historial_mediciones: 'mediciones',
+        horas_extra: 'horas_extra'
     };
     return map[tabla] || null;
 }
@@ -137,6 +145,9 @@ async function inicializarDatos() {
     if (window.syncQueue) window.syncQueue.actualizar();
 
     try {
+        // Si el SDK de Supabase no se cargó (offline sin caché de CDN), ir directo a IndexedDB
+        if (!supabaseClient) throw new Error('Supabase SDK no disponible — modo offline sin caché CDN');
+
         console.log('Cargando datos desde Supabase...');
 
         const _timeout = ms => new Promise((_, reject) =>
@@ -341,6 +352,31 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         return t ? t.nombre : 'Desconocido';
     });
 
+    // Si algún ayudante ya tiene tarea activa → forzar a cola (programada_semana)
+    if (estadoTarea === 'en_curso' && ayudantesIds.length > 0) {
+        const idsEnTarea = new Set(
+            estado.tareas
+                .filter(t => t.estadoTarea === 'en_curso')
+                .flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean))
+        );
+        const ocupados = ayudantesIds.filter(aid => idsEnTarea.has(aid));
+        if (ocupados.length > 0) {
+            estadoTarea = 'programada_semana';
+            estadoEjecucion = 'activo';
+            const nombres = ocupados.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
+            const toast = document.createElement('div');
+            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea enviada a cola.`;
+            Object.assign(toast.style, {
+                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
+                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
+                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+    }
+
     // UUID generado en cliente: funciona igual online y offline
     const tareaId = crypto.randomUUID();
     const hora = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
@@ -481,6 +517,8 @@ async function guardarTareaFinalizada({
         lider_nombre: tarea.liderNombre,
         ayudantes_nombres: tarea.ayudantesNombres,
         hora_asignacion: tarea.horaAsignacion,
+        fecha_inicio: tarea.fechaAsignacion || null,
+        fecha_termino: new Date().toISOString(),
         hora_termino: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         acciones_realizadas: accionesRealizadas || '',
         observaciones: observaciones || '',
@@ -536,6 +574,31 @@ async function guardarTareaFinalizada({
 window.completarTareaExposed = completarTarea;
 window.eliminarTareaExposed = eliminarTarea;
 window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
+
+// Iniciar tarea que estaba en cola (programada_semana → en_curso)
+window.iniciarTareaColaExposed = async function(tareaId) {
+    const tarea = estado.tareas.find(t => t.id === tareaId);
+    if (!tarea) return;
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    // Actualizar estado local
+    tarea.estadoTarea = 'en_curso';
+    tarea.horaAsignacion = hora;
+    tarea.fechaAsignacion = ahora.toISOString();
+    // Marcar ayudantes como ocupados
+    if (tarea.ayudantesIds?.length) {
+        estado.trabajadores = estado.trabajadores.map(w =>
+            tarea.ayudantesIds.includes(w.id) ? { ...w, ocupado: true } : w
+        );
+        await Promise.all(tarea.ayudantesIds.map(aid => _db.update('trabajadores', aid, { ocupado: true })));
+    }
+    await _db.update('tareas', tareaId, {
+        estado_tarea: 'en_curso',
+        hora_asignacion: hora,
+        fecha_inicio: ahora.toISOString()
+    });
+    renderizarVistaActual();
+};
 
 
 // --- COMPONENTES Y VISTAS ---
@@ -708,6 +771,14 @@ function renderPerfilView() {
                         </h3>
                         ${tareasSemana.length===0 ? `<p style="color:var(--text-muted);font-size:0.83rem;text-align:center;padding:0.8rem 0;">Sin trabajos esta semana.</p>` : tareasSemana.map(t=>cardT(t,'var(--primary-color)')).join('')}
                     </div>
+                </div>
+
+                <!-- Horas Extra del mes (admin view) -->
+                <div class="panel" style="margin-top:1.2rem;">
+                    <h3 style="margin:0 0 0.7rem 0; font-size:0.95rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
+                        <i class="fa-regular fa-clock"></i> Horas Extra
+                    </h3>
+                    <div id="he-admin-resumen"><p style="color:var(--text-muted);font-size:0.83rem;">Cargando...</p></div>
                 </div>` : `<p style="color:var(--text-muted); text-align:center; padding:2rem 0;">Selecciona un trabajador para ver su perfil.</p>`}
             </div>`;
 
@@ -718,8 +789,39 @@ function renderPerfilView() {
             });
 
             if (w) {
+                // Cargar horas extra del mes para admin
+                cargarHorasExtraTrabajador(w.id).then(registros => {
+                    const el = document.getElementById('he-admin-resumen');
+                    if (!el) return;
+                    const mesActual = new Date().toISOString().slice(0, 7);
+                    const totalMes = registros
+                        .filter(r => r.fecha && r.fecha.startsWith(mesActual))
+                        .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+                    const totalHistorico = registros.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+                    el.innerHTML = `
+                        <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+                            <div style="background:var(--glass-bg); border-radius:8px; padding:0.5rem 0.9rem;">
+                                <span style="font-size:1.2rem; font-weight:700; color:var(--primary-color);">${totalMes.toFixed(1)} hrs</span>
+                                <span style="font-size:0.72rem; color:var(--text-muted); margin-left:0.4rem;">este mes</span>
+                            </div>
+                            <div style="background:var(--glass-bg); border-radius:8px; padding:0.5rem 0.9rem;">
+                                <span style="font-size:1.2rem; font-weight:700; color:var(--text-main);">${totalHistorico.toFixed(1)} hrs</span>
+                                <span style="font-size:0.72rem; color:var(--text-muted); margin-left:0.4rem;">histórico</span>
+                            </div>
+                            <div style="display:flex; gap:0.5rem; margin-left:auto;">
+                                <button onclick="window.abrirModalHorasExtraManual('${w.id}')"
+                                    class="btn btn-primary" style="font-size:0.78rem; padding:0.35rem 0.9rem; border-radius:8px;">
+                                    + Agregar
+                                </button>
+                                <button onclick="window.mostrarCalendarioHorasExtra('${w.id}')"
+                                    class="btn" style="font-size:0.78rem; padding:0.35rem 0.8rem; border-radius:8px; border:1px solid var(--primary-color); color:var(--primary-color); background:transparent;">
+                                    Ver detalle
+                                </button>
+                            </div>
+                        </div>`;
+                });
+
                 document.getElementById('btn-marcar-salida-admin').addEventListener('click', async () => {
-                    if (!confirm(`¿Registrar salida de ${w.nombre}?`)) return;
                     await updateTrabajadorDisponibilidad(w.id, false);
                     estado.trabajadores = estado.trabajadores.map(t => t.id === w.id ? { ...t, disponible: false } : t);
                     renderAdminPerfil(null);
@@ -731,8 +833,9 @@ function renderPerfilView() {
     }
 
     // Vista de perfil para trabajador logueado
+    // Incluye: activas (en_curso) + en cola con trabajadores asignados (programada_semana + liderId)
     const tareasDiarias = estado.tareas.filter(t =>
-        t.estadoTarea === 'en_curso' &&
+        (t.estadoTarea === 'en_curso' || (t.estadoTarea === 'programada_semana' && t.liderId)) &&
         (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
     );
     const tareasSemanales = estado.tareas.filter(t =>
@@ -800,31 +903,637 @@ function renderPerfilView() {
                 </div>
 
             </div>
+
+            <!-- Sección Horas Extra -->
+            <div class="panel" id="panel-horas-extra" style="margin-top:1.2rem;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+                    <h3 style="margin:0; font-size:1rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
+                        <i class="fa-regular fa-clock"></i> Mis Horas Extra
+                    </h3>
+                    <button onclick="window.abrirModalHorasExtraManual('${trabajador.id}')"
+                        class="btn btn-primary" style="font-size:0.82rem; padding:0.4rem 0.9rem; border-radius:8px;">
+                        + Agregar horas extra
+                    </button>
+                </div>
+                <div id="he-contenido"><p style="color:var(--text-muted); font-size:0.85rem;">Cargando...</p></div>
+            </div>
+
         </div>`;
     mainContent.innerHTML = html;
+
+    // Cargar horas extra de forma asíncrona
+    cargarHorasExtraTrabajador(trabajador.id).then(registros => {
+        const contenedor = document.getElementById('he-contenido');
+        if (!contenedor) return;
+        if (registros.length === 0) {
+            contenedor.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.5rem 0;">Sin horas extra registradas.</p>`;
+            return;
+        }
+        const ahora = new Date();
+        const mesActual = ahora.getFullYear() + '-' + String(ahora.getMonth() + 1).padStart(2, '0');
+        // Solo contar horas aprobadas en totales
+        const totalMes = registros
+            .filter(r => r.fecha && r.fecha.startsWith(mesActual) && r.estado === 'aprobado')
+            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+        const totalHistorico = registros
+            .filter(r => r.estado === 'aprobado')
+            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+        const filas = registros.map(r => {
+            const fechaFmt = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+            const est = r.estado || 'pendiente';
+            const badgeStyle = est === 'aprobado'
+                ? 'background:#dcfce7; color:#16a34a;'
+                : est === 'rechazado'
+                ? 'background:#fee2e2; color:#dc2626;'
+                : 'background:#fef9c3; color:#b45309;';
+            const badgeLabel = est === 'aprobado' ? 'Aprobado' : est === 'rechazado' ? 'Rechazado' : 'Pendiente';
+            const notaRechazo = est === 'rechazado' && r.motivo_rechazo
+                ? `<div style="font-size:0.7rem; color:#dc2626; margin-top:0.2rem;"><i class="fa-solid fa-circle-info"></i> ${r.motivo_rechazo}</div>` : '';
+            return `<tr style="${est === 'rechazado' ? 'opacity:0.65;' : ''}">
+                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; color:var(--text-muted);">${fechaFmt}</td>
+                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; font-weight:600; color:var(--primary-color); ${est === 'rechazado' ? 'text-decoration:line-through; color:var(--text-muted);' : ''}">${r.horas} hrs</td>
+                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; color:var(--text-muted);">${r.motivo || '—'}</td>
+                <td style="font-size:0.83rem; padding:0.4rem 0.5rem;">
+                    <span style="border-radius:6px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:600; ${badgeStyle}">${badgeLabel}</span>
+                    ${notaRechazo}
+                </td>
+            </tr>`;
+        }).join('');
+        contenedor.innerHTML = `
+            <div style="display:flex; gap:1.5rem; margin-bottom:1rem; flex-wrap:wrap;">
+                <div style="background:var(--glass-bg); border-radius:8px; padding:0.7rem 1rem; min-width:120px;">
+                    <div style="font-size:1.4rem; font-weight:700; color:var(--primary-color);">${totalMes.toFixed(1)} hrs</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Este mes (aprobadas)</div>
+                </div>
+                <div style="background:var(--glass-bg); border-radius:8px; padding:0.7rem 1rem; min-width:120px;">
+                    <div style="font-size:1.4rem; font-weight:700; color:var(--text-main);">${totalHistorico.toFixed(1)} hrs</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Histórico aprobado</div>
+                </div>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border-color);">
+                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Fecha</th>
+                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Horas</th>
+                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Motivo</th>
+                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>${filas}</tbody>
+                </table>
+            </div>`;
+    });
+}
+
+// ── Helper: volver al login limpiando estado ─────────────────────────────────
+function _volverAlLogin() {
+    estado.usuarioActual = 'visita';
+    estado.trabajadorLogueado = null;
+    document.getElementById('login-overlay').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    document.querySelector('.role-cards').style.display = 'block';
+    if (document.getElementById('worker-login-container'))
+        document.getElementById('worker-login-container').style.display = 'none';
+    const selWorker = document.getElementById('select-worker-login');
+    if (selWorker) selWorker.value = '';
 }
 
 window.marcarSalidaTrabajador = async function(id) {
-    if (!confirm('¿Confirmas registrar tu salida?')) return;
     await updateTrabajadorDisponibilidad(id, false);
-    estado.usuarioActual = 'visita';
-    estado.trabajadorLogueado = null;
-    // Volver al login
-    document.getElementById('login-overlay').style.display = 'flex';
-    document.getElementById('app').style.display = 'none';
-    document.querySelector('.role-buttons').style.display = 'block';
-    if (document.getElementById('worker-login-container'))
-        document.getElementById('worker-login-container').style.display = 'none';
-    if (document.getElementById('input-worker-rut')) document.getElementById('input-worker-rut').value = '';
-    if (document.getElementById('input-worker-pin')) document.getElementById('input-worker-pin').value = '';
+    mostrarModalHorasExtra(id);
+};
+
+// ── HORAS EXTRA: guardar registro ────────────────────────────────────────────
+async function guardarHorasExtra(trabajadorId, fecha, horas, motivo) {
+    const id = `he_${trabajadorId}_${Date.now()}`;
+    const payload = {
+        id,
+        trabajador_id: trabajadorId,
+        fecha,
+        horas: parseFloat(horas),
+        motivo: motivo || '',
+        estado: 'pendiente',
+        aprobado_por: null,
+        fecha_aprobacion: null,
+        motivo_rechazo: null,
+        created_at: new Date().toISOString(),
+        synced: false
+    };
+    // Guardar en local primero
+    if (window.localDB) await window.localDB.horas_extra.upsert(payload).catch(() => {});
+    // Intentar sync con Supabase
+    if (navigator.onLine && supabaseClient) {
+        const { data, error } = await supabaseClient.from('horas_extra').insert([{
+            trabajador_id: trabajadorId,
+            fecha,
+            horas: parseFloat(horas),
+            motivo: motivo || '',
+            estado: 'pendiente'
+        }]).select().single();
+        if (!error && data) {
+            // Actualizar local con el id real de Supabase
+            await window.localDB?.horas_extra.delete(id).catch(() => {});
+            await window.localDB?.horas_extra.upsert({ ...data, synced: true }).catch(() => {});
+        } else {
+            await window.syncQueue?.add('horas_extra', 'INSERT', payload);
+        }
+    } else {
+        await window.syncQueue?.add('horas_extra', 'INSERT', payload);
+    }
+}
+
+// ── HORAS EXTRA: aprobar registro ────────────────────────────────────────────
+async function aprobarHorasExtra(heId) {
+    const planificadorNombre = estado.usuarioActual === 'admin' ? 'Planificador' : 'Admin';
+    const updates = {
+        estado: 'aprobado',
+        aprobado_por: planificadorNombre,
+        fecha_aprobacion: new Date().toISOString(),
+        motivo_rechazo: null
+    };
+    const local = await window.localDB?.horas_extra.get(heId).catch(() => null);
+    if (local) await window.localDB?.horas_extra.upsert({ ...local, ...updates }).catch(() => {});
+    if (navigator.onLine && supabaseClient) {
+        await supabaseClient.from('horas_extra').update(updates).eq('id', heId);
+    } else {
+        await window.syncQueue?.add('horas_extra', 'UPDATE', { id: heId, ...updates });
+    }
+}
+
+// ── HORAS EXTRA: rechazar registro ───────────────────────────────────────────
+async function rechazarHorasExtra(heId, motivo) {
+    const planificadorNombre = estado.usuarioActual === 'admin' ? 'Planificador' : 'Admin';
+    const updates = {
+        estado: 'rechazado',
+        aprobado_por: planificadorNombre,
+        fecha_aprobacion: new Date().toISOString(),
+        motivo_rechazo: motivo
+    };
+    const local = await window.localDB?.horas_extra.get(heId).catch(() => null);
+    if (local) await window.localDB?.horas_extra.upsert({ ...local, ...updates }).catch(() => {});
+    if (navigator.onLine && supabaseClient) {
+        await supabaseClient.from('horas_extra').update(updates).eq('id', heId);
+    } else {
+        await window.syncQueue?.add('horas_extra', 'UPDATE', { id: heId, ...updates });
+    }
+}
+
+// ── HORAS EXTRA: cargar TODOS los registros (para planificador) ───────────────
+async function cargarTodasHorasExtra() {
+    // Siempre leer localDB primero (incluye records pendientes de sync)
+    const local = await window.localDB?.horas_extra.getAll().catch(() => []) || [];
+
+    if (navigator.onLine && supabaseClient) {
+        const { data } = await supabaseClient
+            .from('horas_extra')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (data) {
+            // Guardar en local los synced de Supabase
+            if (data.length > 0) {
+                await window.localDB?.horas_extra.bulk(data.map(r => ({ ...r, synced: true }))).catch(() => {});
+            }
+            // Merge: Supabase tiene prioridad; agregar los de localDB que aún no llegaron a Supabase
+            const supabaseIds = new Set(data.map(r => String(r.id)));
+            const soloLocal = local.filter(r => !supabaseIds.has(String(r.id)));
+            const merged = [...data, ...soloLocal];
+            return merged.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+        }
+    }
+
+    return local.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+// ── HORAS EXTRA: badge de pendientes en nav ───────────────────────────────────
+async function actualizarBadgeHE() {
+    const badge = document.getElementById('badge-he-pendientes');
+    if (!badge) return;
+    let todos = [];
+    if (navigator.onLine && supabaseClient) {
+        const { data } = await supabaseClient.from('horas_extra').select('id, estado').eq('estado', 'pendiente');
+        todos = data || [];
+    } else {
+        const all = await window.localDB?.horas_extra.getAll().catch(() => []) || [];
+        todos = all.filter(r => (r.estado || 'pendiente') === 'pendiente');
+    }
+    const n = todos.length;
+    if (n > 0) {
+        badge.textContent = n;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// ── HORAS EXTRA: vista de gestión para planificador ───────────────────────────
+async function renderHorasExtraAdminView() {
+    mainContent.innerHTML = `<div class="fade-in" style="max-width:1100px; margin:0 auto;">
+        <div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div>
+    </div>`;
+
+    const todos = await cargarTodasHorasExtra();
+    const trabajadores = estado.trabajadores || [];
+    const mesActual = new Date().toISOString().slice(0, 7);
+
+    // Enricher: join con nombre de trabajador
+    const enriched = todos.map(r => ({
+        ...r,
+        nombreTrabajador: trabajadores.find(t => t.id === r.trabajador_id)?.nombre || 'Desconocido',
+        estado: r.estado || 'pendiente'
+    }));
+
+    const pendientes  = enriched.filter(r => r.estado === 'pendiente');
+    const aprobadosMes = enriched.filter(r => r.estado === 'aprobado' && r.fecha && r.fecha.startsWith(mesActual));
+    const totalMesHrs = aprobadosMes.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+    const totalTodasMes = enriched.filter(r => r.fecha && r.fecha.startsWith(mesActual))
+        .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+
+    // Estado de filtros (en closure)
+    let filtroEstado = 'todos';
+    let filtroTrabajador = '';
+    let filtroMes = '';
+
+    function badgeEstado(est) {
+        if (est === 'aprobado')  return `<span style="background:#dcfce7; color:#16a34a; border-radius:6px; padding:0.15rem 0.55rem; font-size:0.72rem; font-weight:600;">Aprobado</span>`;
+        if (est === 'rechazado') return `<span style="background:#fee2e2; color:#dc2626; border-radius:6px; padding:0.15rem 0.55rem; font-size:0.72rem; font-weight:600;">Rechazado</span>`;
+        return `<span style="background:#fef9c3; color:#b45309; border-radius:6px; padding:0.15rem 0.55rem; font-size:0.72rem; font-weight:600;">Pendiente</span>`;
+    }
+
+    function renderTabla() {
+        let filtrados = enriched;
+        if (filtroEstado !== 'todos') filtrados = filtrados.filter(r => r.estado === filtroEstado);
+        if (filtroTrabajador) filtrados = filtrados.filter(r => r.trabajador_id === filtroTrabajador);
+        if (filtroMes) filtrados = filtrados.filter(r => r.fecha && r.fecha.startsWith(filtroMes));
+
+        // Recalcular métricas según el trabajador seleccionado (o todos si no hay filtro)
+        const base = filtroTrabajador ? enriched.filter(r => r.trabajador_id === filtroTrabajador) : enriched;
+        const statPend = base.filter(r => r.estado === 'pendiente').length;
+        const statAprobHrs = base.filter(r => r.estado === 'aprobado' && r.fecha && r.fecha.startsWith(mesActual))
+            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+        const statTotal = base.filter(r => r.fecha && r.fecha.startsWith(mesActual))
+            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+        const elPend = document.getElementById('he-stat-pendientes');
+        const elAprob = document.getElementById('he-stat-aprobadas');
+        const elTotal = document.getElementById('he-stat-total');
+        if (elPend) elPend.textContent = statPend;
+        if (elAprob) elAprob.textContent = statAprobHrs.toFixed(1) + ' hrs';
+        if (elTotal) elTotal.textContent = statTotal.toFixed(1) + ' hrs';
+
+        const tabla = document.getElementById('he-admin-tabla-body');
+        if (!tabla) return;
+        if (filtrados.length === 0) {
+            tabla.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted); font-size:0.88rem;">Sin registros para los filtros seleccionados.</td></tr>`;
+            return;
+        }
+        tabla.innerHTML = filtrados.map(r => {
+            const fechaFmt = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+            const btnAprobar = r.estado === 'pendiente'
+                ? `<button onclick="window._heAprobar('${r.id}')" class="btn" style="font-size:0.72rem; padding:0.25rem 0.7rem; border-radius:6px; background:#dcfce7; color:#16a34a; border:1px solid #bbf7d0; margin-right:0.35rem;">✓ Aprobar</button>` : '';
+            const btnRechazar = r.estado === 'pendiente'
+                ? `<button onclick="window._heRechazar('${r.id}')" class="btn" style="font-size:0.72rem; padding:0.25rem 0.7rem; border-radius:6px; background:#fee2e2; color:#dc2626; border:1px solid #fecaca;">✗ Rechazar</button>` : '';
+            const notaRechazo = r.estado === 'rechazado' && r.motivo_rechazo
+                ? `<div style="font-size:0.7rem; color:#dc2626; margin-top:0.2rem;">${r.motivo_rechazo}</div>` : '';
+            return `<tr id="he-row-${r.id}" style="border-bottom:1px solid var(--border-color); ${r.estado === 'rechazado' ? 'opacity:0.6;' : ''}">
+                <td style="padding:0.55rem 0.6rem; font-size:0.83rem; font-weight:600;">${r.nombreTrabajador}</td>
+                <td style="padding:0.55rem 0.6rem; font-size:0.83rem; color:var(--text-muted);">${fechaFmt}</td>
+                <td style="padding:0.55rem 0.6rem; font-size:0.83rem; font-weight:700; color:var(--primary-color);">${r.horas} hrs</td>
+                <td style="padding:0.55rem 0.6rem; font-size:0.83rem; color:var(--text-muted); max-width:160px;">${r.motivo || '—'}</td>
+                <td style="padding:0.55rem 0.6rem;">${badgeEstado(r.estado)}${notaRechazo}</td>
+                <td style="padding:0.55rem 0.6rem; white-space:nowrap;">${btnAprobar}${btnRechazar}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    const opcionesTrabajadores = [
+        `<option value="">Todos los trabajadores</option>`,
+        ...trabajadores.map(t => `<option value="${t.id}">${t.nombre}</option>`)
+    ].join('');
+
+    mainContent.innerHTML = `
+    <div class="fade-in" style="max-width:1100px; margin:0 auto;">
+
+        <!-- Resumen métricas -->
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.2rem;">
+            <div class="panel" style="text-align:center; padding:1.2rem 1rem;">
+                <div id="he-stat-pendientes" style="font-size:2rem; font-weight:700; color:#b45309;">${pendientes.length}</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">Pendientes de aprobación</div>
+            </div>
+            <div class="panel" style="text-align:center; padding:1.2rem 1rem;">
+                <div id="he-stat-aprobadas" style="font-size:2rem; font-weight:700; color:#16a34a;">${aprobadosMes.reduce((s,r)=>s+(parseFloat(r.horas)||0),0).toFixed(1)} hrs</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">Aprobadas este mes</div>
+            </div>
+            <div class="panel" style="text-align:center; padding:1.2rem 1rem;">
+                <div id="he-stat-total" style="font-size:2rem; font-weight:700; color:var(--text-main);">${totalTodasMes.toFixed(1)} hrs</div>
+                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem;">Total solicitado este mes</div>
+            </div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="panel" style="margin-bottom:1rem; display:flex; gap:0.75rem; flex-wrap:wrap; align-items:center;">
+            <select id="he-filtro-estado" class="form-control" style="flex:1; min-width:140px; max-width:180px;">
+                <option value="todos">Todos</option>
+                <option value="pendiente">Pendientes</option>
+                <option value="aprobado">Aprobados</option>
+                <option value="rechazado">Rechazados</option>
+            </select>
+            <select id="he-filtro-trabajador" class="form-control" style="flex:1; min-width:180px;">
+                ${opcionesTrabajadores}
+            </select>
+            <input type="month" id="he-filtro-mes" class="form-control" style="flex:1; min-width:140px; max-width:180px;" placeholder="Mes">
+        </div>
+
+        <!-- Tabla -->
+        <div class="panel" style="overflow-x:auto; padding:0;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--border-color); background:var(--glass-bg);">
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Trabajador</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Fecha</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Horas</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Motivo</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Estado</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="he-admin-tabla-body"></tbody>
+            </table>
+        </div>
+
+    </div>`;
+
+    renderTabla();
+
+    // Filtros listeners
+    document.getElementById('he-filtro-estado').addEventListener('change', e => { filtroEstado = e.target.value; renderTabla(); });
+    document.getElementById('he-filtro-trabajador').addEventListener('change', e => { filtroTrabajador = e.target.value; renderTabla(); });
+    document.getElementById('he-filtro-mes').addEventListener('change', e => { filtroMes = e.target.value; renderTabla(); });
+
+    // Aprobar inline
+    window._heAprobar = async (id) => {
+        const row = document.getElementById(`he-row-${id}`);
+        if (row) {
+            row.querySelector('button') && (row.querySelector('button').textContent = '...');
+        }
+        await aprobarHorasExtra(id);
+        // Actualizar registro en enriched y re-render
+        const idx = enriched.findIndex(r => r.id === id);
+        if (idx >= 0) enriched[idx] = { ...enriched[idx], estado: 'aprobado', aprobado_por: 'Planificador', fecha_aprobacion: new Date().toISOString() };
+        renderTabla();
+        actualizarBadgeHE();
+    };
+
+    // Rechazar — abre modal
+    window._heRechazar = (id) => {
+        const modal = document.getElementById('modal-he-rechazo');
+        document.getElementById('he-rechazo-motivo').value = '';
+        document.getElementById('he-rechazo-error').style.display = 'none';
+        modal.style.display = 'flex';
+
+        document.getElementById('btn-he-rechazo-cancelar').onclick = () => { modal.style.display = 'none'; };
+        document.getElementById('btn-he-rechazo-confirmar').onclick = async () => {
+            const motivo = document.getElementById('he-rechazo-motivo').value.trim();
+            if (!motivo) { document.getElementById('he-rechazo-error').style.display = 'block'; return; }
+            document.getElementById('btn-he-rechazo-confirmar').textContent = 'Guardando...';
+            document.getElementById('btn-he-rechazo-confirmar').disabled = true;
+            await rechazarHorasExtra(id, motivo);
+            modal.style.display = 'none';
+            document.getElementById('btn-he-rechazo-confirmar').textContent = 'Confirmar Rechazo';
+            document.getElementById('btn-he-rechazo-confirmar').disabled = false;
+            const idx = enriched.findIndex(r => r.id === id);
+            if (idx >= 0) enriched[idx] = { ...enriched[idx], estado: 'rechazado', motivo_rechazo: motivo };
+            renderTabla();
+            actualizarBadgeHE();
+        };
+    };
+}
+
+// ── HORAS EXTRA: cargar del trabajador (local + remoto si online) ────────────
+async function cargarHorasExtraTrabajador(trabajadorId) {
+    let registros = [];
+    if (window.localDB) {
+        registros = await window.localDB.horas_extra.getByTrabajador(trabajadorId).catch(() => []);
+    }
+    if (navigator.onLine && supabaseClient) {
+        const { data } = await supabaseClient
+            .from('horas_extra')
+            .select('*')
+            .eq('trabajador_id', trabajadorId)
+            .order('fecha', { ascending: false });
+        if (data && data.length > 0) {
+            await window.localDB?.horas_extra.bulk(data.map(r => ({ ...r, synced: true }))).catch(() => {});
+            registros = data;
+        }
+    }
+    return registros.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+}
+
+// ── HORAS EXTRA: helper para resetear estado del modal ───────────────────────
+function _resetModalHE() {
+    document.getElementById('he-pregunta').style.display = 'block';
+    document.getElementById('he-form').style.display = 'none';
+    document.getElementById('he-horas').value = '';
+    document.getElementById('he-motivo').value = '';
+    document.getElementById('he-fecha').value = new Date().toISOString().split('T')[0];
+    document.getElementById('he-error').style.display = 'none';
+    const btn = document.getElementById('btn-he-guardar');
+    btn.disabled = false;
+    btn.textContent = 'Guardar';
+}
+
+// ── HORAS EXTRA: modal de checkout (pregunta si tiene HE antes de cerrar) ────
+function mostrarModalHorasExtra(trabajadorId) {
+    _resetModalHE();
+    document.getElementById('modal-horas-extra').style.display = 'flex';
+
+    document.getElementById('btn-he-no').onclick = () => {
+        document.getElementById('modal-horas-extra').style.display = 'none';
+        _volverAlLogin();
+    };
+
+    document.getElementById('btn-he-si').onclick = () => {
+        document.getElementById('he-pregunta').style.display = 'none';
+        document.getElementById('he-form').style.display = 'block';
+    };
+
+    document.getElementById('btn-he-guardar').onclick = async () => {
+        const horas = parseFloat(document.getElementById('he-horas').value);
+        const fecha = document.getElementById('he-fecha').value;
+        const motivo = document.getElementById('he-motivo').value.trim();
+        if (!fecha || isNaN(horas) || horas <= 0) {
+            document.getElementById('he-error').style.display = 'block';
+            return;
+        }
+        const btn = document.getElementById('btn-he-guardar');
+        btn.disabled = true; btn.textContent = 'Guardando...';
+        await guardarHorasExtra(trabajadorId, fecha, horas, motivo);
+        document.getElementById('modal-horas-extra').style.display = 'none';
+        _volverAlLogin();
+    };
+
+    document.getElementById('btn-he-cancelar').onclick = () => {
+        document.getElementById('he-pregunta').style.display = 'block';
+        document.getElementById('he-form').style.display = 'none';
+    };
+}
+
+// ── HORAS EXTRA: agregar desde perfil (sin cerrar sesión) ────────────────────
+window.abrirModalHorasExtraManual = function(trabajadorId) {
+    _resetModalHE();
+    // Ir directo al formulario, sin mostrar la pregunta
+    document.getElementById('he-pregunta').style.display = 'none';
+    document.getElementById('he-form').style.display = 'block';
+    document.getElementById('modal-horas-extra').style.display = 'flex';
+
+    document.getElementById('btn-he-si').onclick = null;
+
+    // "No, salir" no aplica aquí — el botón visible es "Volver" (btn-he-cancelar)
+    document.getElementById('btn-he-no').onclick = () => {
+        document.getElementById('modal-horas-extra').style.display = 'none';
+        _resetModalHE();
+    };
+
+    document.getElementById('btn-he-guardar').onclick = async () => {
+        const horas = parseFloat(document.getElementById('he-horas').value);
+        const fecha = document.getElementById('he-fecha').value;
+        const motivo = document.getElementById('he-motivo').value.trim();
+        if (!fecha || isNaN(horas) || horas <= 0) {
+            document.getElementById('he-error').style.display = 'block';
+            return;
+        }
+        const btn = document.getElementById('btn-he-guardar');
+        btn.disabled = true; btn.textContent = 'Guardando...';
+        await guardarHorasExtra(trabajadorId, fecha, horas, motivo);
+        document.getElementById('modal-horas-extra').style.display = 'none';
+        _resetModalHE();
+        renderPerfilView(); // refrescar sección, sesión intacta
+    };
+
+    document.getElementById('btn-he-cancelar').onclick = () => {
+        document.getElementById('modal-horas-extra').style.display = 'none';
+        _resetModalHE();
+    };
+};
+
+// ── HORAS EXTRA: Vista Calendario ────────────────────────────────────────────
+window.mostrarCalendarioHorasExtra = function(trabajadorId, registros) {
+    // Cargar fresh si no se pasan registros
+    if (!registros) {
+        cargarHorasExtraTrabajador(trabajadorId).then(r => window.mostrarCalendarioHorasExtra(trabajadorId, r));
+        return;
+    }
+
+    // Eliminar modal anterior si existe
+    const viejo = document.getElementById('modal-he-calendario');
+    if (viejo) viejo.remove();
+
+    let mesViendo = new Date();
+    mesViendo.setDate(1);
+
+    function renderCalendario() {
+        const anio = mesViendo.getFullYear();
+        const mes = mesViendo.getMonth(); // 0-indexed
+        const mesStr = `${anio}-${String(mes + 1).padStart(2, '0')}`;
+        const nombresMes = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const diasSemana = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+
+        // Indexar horas por día del mes visible
+        const porDia = {};
+        registros.forEach(r => {
+            if (r.fecha && r.fecha.startsWith(mesStr)) {
+                const dia = parseInt(r.fecha.split('-')[2]);
+                porDia[dia] = (porDia[dia] || 0) + (parseFloat(r.horas) || 0);
+            }
+        });
+
+        const totalMes = Object.values(porDia).reduce((s, v) => s + v, 0);
+        const primerDia = new Date(anio, mes, 1).getDay(); // 0=Dom
+        const offsetLunes = (primerDia === 0 ? 6 : primerDia - 1); // ajustar a Lun=0
+        const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+
+        // Cabecera días semana
+        const cabeceraHTML = diasSemana.map(d =>
+            `<div style="text-align:center;font-size:0.72rem;font-weight:600;color:var(--text-muted);padding:0.3rem 0;">${d}</div>`
+        ).join('');
+
+        // Celdas vacías iniciales
+        let celdasHTML = '';
+        for (let i = 0; i < offsetLunes; i++) {
+            celdasHTML += `<div></div>`;
+        }
+
+        // Días del mes
+        for (let d = 1; d <= diasEnMes; d++) {
+            const hrs = porDia[d];
+            const tieneHoras = hrs !== undefined;
+            celdasHTML += `
+                <div style="
+                    aspect-ratio:1;
+                    display:flex;
+                    flex-direction:column;
+                    align-items:center;
+                    justify-content:center;
+                    border-radius:8px;
+                    font-size:0.82rem;
+                    font-weight:${tieneHoras ? '700' : '400'};
+                    background:${tieneHoras ? 'var(--primary-color)' : 'transparent'};
+                    color:${tieneHoras ? 'white' : 'var(--text-main)'};
+                    cursor:${tieneHoras ? 'default' : 'default'};
+                    position:relative;
+                ">
+                    <span>${d}</span>
+                    ${tieneHoras ? `<span style="font-size:0.6rem;margin-top:1px;">${hrs.toFixed(1)}h</span>` : ''}
+                </div>`;
+        }
+
+        const modal = document.getElementById('modal-he-calendario');
+        modal.querySelector('#cal-titulo').textContent = `${nombresMes[mes]} ${anio}`;
+        modal.querySelector('#cal-total-mes').textContent = `${totalMes.toFixed(1)} hrs en ${nombresMes[mes]}`;
+        modal.querySelector('#cal-grid').innerHTML = cabeceraHTML + celdasHTML;
+    }
+
+    // Crear modal
+    const modal = document.createElement('div');
+    modal.id = 'modal-he-calendario';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:1.5rem;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                <button id="cal-prev" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8592;</button>
+                <div style="text-align:center;">
+                    <div id="cal-titulo" style="font-weight:700;font-size:1rem;"></div>
+                    <div id="cal-total-mes" style="font-size:0.75rem;color:var(--primary-color);margin-top:0.1rem;"></div>
+                </div>
+                <button id="cal-next" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8594;</button>
+            </div>
+            <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
+            <button id="cal-cerrar" style="width:100%;margin-top:1.2rem;padding:0.65rem;border-radius:10px;border:1px solid #e5e7eb;background:transparent;color:var(--text-muted);cursor:pointer;font-size:0.88rem;">Cerrar</button>
+        </div>`;
+    document.body.appendChild(modal);
+
+    renderCalendario();
+
+    modal.querySelector('#cal-prev').onclick = () => { mesViendo.setMonth(mesViendo.getMonth() - 1); renderCalendario(); };
+    modal.querySelector('#cal-next').onclick = () => { mesViendo.setMonth(mesViendo.getMonth() + 1); renderCalendario(); };
+    modal.querySelector('#cal-cerrar').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
 };
 
 // COMPONENTE: Vista Trabajadores (2 tabs: Equipo Disponible | Equipo Trabajando)
 function renderTrabajadoresView() {
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
-    const disponibles = estado.trabajadores.filter(t => t.disponible && !t.ocupado);
-    const ocupados    = estado.trabajadores.filter(t => t.ocupado);
-    const ausentes    = estado.trabajadores.filter(t => !t.disponible && !t.ocupado);
+
+    // IDs de todos los que tienen al menos una tarea activa (como lider o ayudante)
+    const idsEnTarea = new Set(tareasActivas.flatMap(t =>
+        [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
+    ));
+
+    // "Trabajando" = tiene tarea activa Y hizo check-in
+    const ocupados    = estado.trabajadores.filter(t => t.disponible && idsEnTarea.has(t.id));
+    // "Disponible" = hizo check-in Y NO tiene tarea activa
+    const disponibles = estado.trabajadores.filter(t => t.disponible && !idsEnTarea.has(t.id));
+    const ausentes    = estado.trabajadores.filter(t => !t.disponible);
 
 
     function cardWorker(t, borderColor, badge, badgeBg, opacity = '1', extra = '') {
@@ -984,9 +1693,20 @@ function renderHistorialView() {
                     </div>
                 </div>
                 <div style="display:flex; gap:1.2rem; flex-wrap:wrap; align-items:center;">
-                    <span style="color:var(--text-muted); font-size:0.78rem;"><i class="fa-regular fa-clock"></i> ${tarea.hora_asignacion}</span>
-                    <span style="color:var(--success-color); font-size:0.78rem; font-weight:600;"><i class="fa-solid fa-flag-checkered"></i> ${tarea.hora_termino}</span>
-                    <span style="color:var(--text-muted); font-size:0.78rem;"><i class="fa-regular fa-calendar"></i> ${new Date(tarea.created_at).toLocaleDateString('es-CL')}</span>
+                    <span style="color:var(--text-muted); font-size:0.78rem;">
+                        <i class="fa-regular fa-clock"></i> Inicio:
+                        <strong>${tarea.fecha_inicio
+                            ? new Date(tarea.fecha_inicio).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
+                            : (new Date(tarea.created_at).toLocaleDateString('es-CL') + ' ' + (tarea.hora_asignacion || '—'))
+                        }</strong>
+                    </span>
+                    <span style="color:var(--success-color); font-size:0.78rem; font-weight:600;">
+                        <i class="fa-solid fa-flag-checkered"></i> Fin:
+                        <strong>${tarea.fecha_termino
+                            ? new Date(tarea.fecha_termino).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
+                            : (new Date(tarea.created_at).toLocaleDateString('es-CL') + ' ' + (tarea.hora_termino || '—'))
+                        }</strong>
+                    </span>
                     <button onclick="window._generarInformeTarea('${tarea.id}')" style="margin-left:auto; padding:0.3rem 0.85rem; background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; border:none; border-radius:8px; font-size:0.78rem; cursor:pointer; font-weight:600;">
                         <i class="fa-solid fa-file-lines"></i> Informe
                     </button>
@@ -1691,7 +2411,11 @@ function renderFichaTecnicaModal() {
 function renderDashboardView() {
     // Todos los trabajadores son asignables — los ocupados/sin check-in van automáticamente a cola
     const trabajadoresValidados = estado.trabajadores;
-    const tareasDiarias = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
+    // Incluye activas + en cola (programada_semana con personal ya asignado)
+    const tareasDiarias = estado.tareas.filter(t =>
+        t.estadoTarea === 'en_curso' ||
+        (t.estadoTarea === 'programada_semana' && t.liderId)
+    );
     
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
@@ -1792,7 +2516,7 @@ function renderDashboardView() {
                         `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>` : 
                         `<div class="items-list">
                             ${tareasDiarias.map(tarea => `
-                                <div class="list-item" style="border-left: 3px solid var(--warning-color)">
+                                <div class="list-item" style="border-left: 3px solid ${tarea.estadoTarea === 'programada_semana' ? '#9ca3af' : 'var(--warning-color)'}">
                                     <div class="item-info">
                                         <h4>
                                             ${(() => {
@@ -1833,6 +2557,7 @@ function renderDashboardView() {
                                                 return tarea.tipo;
                                             })()}
                                             ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color); margin-left:0.5rem"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
+                                            ${tarea.estadoTarea === 'programada_semana' ? `<span class="badge" style="background:#6b7280; margin-left:0.5rem; font-size:0.7rem;">⏳ EN COLA</span>` : ''}
                                         </h4>
                                         <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                             <div>
@@ -1857,9 +2582,23 @@ function renderDashboardView() {
                                         <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
                                             <i class="fa-solid fa-trash"></i>
                                         </button>
+                                        ${tarea.estadoTarea === 'programada_semana' ? `
+                                        <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar
+                                        </button>` : `
                                         <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId}', '${tarea.ayudantesIds ? tarea.ayudantesIds.join(',') : ''}')">
                                             <i class="fa-solid fa-check"></i> Terminar
-                                        </button>
+                                        </button>`}
+                                    </div>
+                                    ` : estado.usuarioActual === 'trabajador' && (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id)) ? `
+                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem;">
+                                        ${tarea.estadoTarea === 'programada_semana' ? `
+                                        <button class="btn btn-primary" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar
+                                        </button>` : `
+                                        <button class="btn btn-success" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+                                            <i class="fa-solid fa-flag-checkered"></i> Finalizar
+                                        </button>`}
                                     </div>
                                     ` : ''}
                                 </div>
@@ -2054,7 +2793,16 @@ function renderDashboardView() {
 function renderSemanalView() {
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
-    const tareasSemanales = estado.tareas.filter(t => t.estadoTarea === 'programada_semana');
+    const trabajador = estado.trabajadorLogueado;
+
+    // Workers solo ven SUS tareas; admin ve todas
+    // Excluir tareas con personal asignado: ya aparecen en Diario como "En Cola"
+    const tareasSemanales = estado.tareas.filter(t => {
+        if (t.estadoTarea !== 'programada_semana') return false;
+        if (t.liderId) return false; // tiene personal asignado → aparece en Diario
+        if (isAdmin) return true;
+        return t.liderId === trabajador?.id || (t.ayudantesIds || []).includes(trabajador?.id);
+    });
     
     // Panel de Asignación Semanal (Solo para Admin)
     let panelAsignacionHtml = '';
@@ -2185,7 +2933,16 @@ function renderSemanalView() {
                                             <i class="fa-solid fa-play"></i> Iniciar Hoy
                                         </button>
                                     </div>
-                                    ` : ''}
+                                    ` : `
+                                    <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
+                                        <button class="btn btn-primary" style="font-size:0.85rem; padding:0.4rem 1rem;" onclick="iniciarTareaDirecto('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar Hoy
+                                        </button>
+                                        <button class="btn btn-success" style="font-size:0.85rem; padding:0.4rem 1rem;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+                                            <i class="fa-solid fa-flag-checkered"></i> Finalizar
+                                        </button>
+                                    </div>
+                                    `}
                                 </div>
                             `).join('')}
                         </div>`
@@ -2353,6 +3110,20 @@ function asignarPersonalATarea(id) {
     _abrirModalIniciar(id, false);
 }
 
+// Para trabajadores: iniciar directo sin modal, usando asignación ya existente
+async function iniciarTareaDirecto(id) {
+    const tarea = estado.tareas.find(t => t.id === id);
+    if (!tarea) return;
+    const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    estado.tareas = estado.tareas.map(t => t.id === id
+        ? { ...t, estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora }
+        : t
+    );
+    vistaActual = 'dashboard';
+    renderizarVistaActual();
+    await _db.update('tareas', id, { estado_tarea: 'en_curso', hora_asignacion: hora });
+}
+
 function comenzarTrabajoProgramado(id) {
     _abrirModalIniciar(id, true);
 }
@@ -2374,14 +3145,41 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     ).join('');
 
     const todos = estado.trabajadores.filter(t => t.disponible);
-    const disponibles = estado.trabajadores.filter(t => t.disponible && !t.ocupado);
+
+    // IDs con tarea activa (calculado en tiempo real)
+    const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
+    const idsEnTarea = new Set(tareasActivas.flatMap(t =>
+        [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
+    ));
 
     const liderSel = document.getElementById('modal-iniciar-lider');
+    // El lider puede ser cualquier trabajador con check-in (supervisor no se bloquea)
     liderSel.innerHTML = '<option value="">— Seleccionar —</option>' +
-        todos.map(t => `<option value="${t.id}">${t.nombre} — ${t.cargo || ''}</option>`).join('');
+        todos.map(t => {
+            const enTarea = idsEnTarea.has(t.id);
+            return `<option value="${t.id}">${t.nombre} — ${t.cargo || ''}${enTarea ? ' ⚡ trabajando' : ''}</option>`;
+        }).join('');
 
-    const ayudSel = document.getElementById('modal-iniciar-ayudantes');
-    ayudSel.innerHTML = disponibles.map(t => `<option value="${t.id}">${t.nombre} — ${t.cargo || ''}</option>`).join('');
+    const ayudContainer = document.getElementById('modal-iniciar-ayudantes');
+
+    function poblarAyudantes(liderIdActual) {
+        const lista = todos.filter(t => t.id !== liderIdActual);
+        ayudContainer.innerHTML = lista.map(t => {
+            const enTarea = idsEnTarea.has(t.id);
+            return `
+                <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer; font-size:0.88rem; color:#374151; transition:background 150ms;"
+                    onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+                    <input type="checkbox" value="${t.id}" style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer;">
+                    ${t.nombre}${t.cargo ? ` <span style="color:#9ca3af; font-size:0.78rem;">— ${t.cargo}</span>` : ''}
+                    ${enTarea ? `<span style="font-size:0.72rem; color:#f59e0b; font-weight:600; margin-left:auto;">⚡ trabajando → cola</span>` : ''}
+                </label>`;
+        }).join('');
+        if (!lista.length)
+            ayudContainer.innerHTML = '<p style="padding:0.6rem 0.9rem; font-size:0.83rem; color:#9ca3af; margin:0;">Sin trabajadores disponibles</p>';
+    }
+
+    liderSel.onchange = () => poblarAyudantes(liderSel.value);
+    poblarAyudantes(liderSel.value);
 
     modal.style.display = 'flex';
 
@@ -2390,34 +3188,58 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         if (!liderId) { alert('Selecciona un líder.'); return; }
 
         const tipoTrabajo = tipoSel.value;
-        const ayudantesIds = [...ayudSel.selectedOptions].map(o => o.value).filter(v => v !== liderId);
+        const ayudantesIds = [...ayudContainer.querySelectorAll('input[type=checkbox]:checked')]
+            .map(cb => cb.value).filter(v => v !== liderId);
         const lider = estado.trabajadores.find(t => t.id === liderId);
         const ayudantesNombres = ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '');
         const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
 
+        // Si algún ayudante ya tiene tarea activa → la tarea COMPLETA va a cola (ninguno inicia)
+        const tareasActivasActual = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
+        const idsEnTareaActual = new Set(tareasActivasActual.flatMap(t =>
+            [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
+        ));
+        const ayudantesOcupados = ayudantesIds.filter(aid => idsEnTareaActual.has(aid));
+        const hayOcupados = ayudantesOcupados.length > 0;
+
+        // Si se pidió "Iniciar Hoy" pero algún ayudante está ocupado → forzar cola
+        let iniciarAhora = cambiarADashboard && !hayOcupados;
+
         modal.style.display = 'none';
+
+        if (hayOcupados && cambiarADashboard) {
+            const nombres = ayudantesOcupados
+                .map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
+            // Notificación visual breve (no alert nativo)
+            const toast = document.createElement('div');
+            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea asignada en cola para todos.`;
+            Object.assign(toast.style, {
+                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
+                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
+                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
+                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
+            });
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
 
         estado.tareas = estado.tareas.map(t => t.id === id ? {
             ...t,
-            ...(cambiarADashboard ? { estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora } : {}),
+            ...(iniciarAhora ? { estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora } : {}),
             liderId, liderNombre: lider?.nombre || '',
             ayudantesIds, ayudantesNombres,
             tipo: tarea.tipo.includes(tipoTrabajo) ? tarea.tipo : `${tarea.tipo} (${tipoTrabajo})`
         } : t);
-        estado.trabajadores = estado.trabajadores.map(w =>
-            ayudantesIds.includes(w.id) ? { ...w, ocupado: true } : w
-        );
-        if (cambiarADashboard) vistaActual = 'dashboard';
+
+        if (iniciarAhora) vistaActual = 'dashboard';
         renderizarVistaActual();
 
         const dbUpdate = {
             lider_id: liderId, lider_nombre: lider?.nombre || '',
             ayudantes_ids: ayudantesIds, ayudantes_nombres: ayudantesNombres,
-            ...(cambiarADashboard ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
+            ...(iniciarAhora ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
         };
         await _db.update('tareas', id, dbUpdate);
-        if (ayudantesIds.length > 0)
-            await Promise.all(ayudantesIds.map(aid => _db.update('trabajadores', aid, { ocupado: true })));
     };
 }
 
@@ -2429,6 +3251,7 @@ const navConfig = {
     'nav-semanal': 'semanal',
     'nav-historial': 'historial',
     'nav-trabajadores': 'trabajadores',
+    'nav-horas-extra-admin': 'horas_extra_admin',
     'nav-perfil': 'perfil',
     'nav-checkin': 'checkin'
 };
@@ -2459,6 +3282,9 @@ function renderizarVistaActual() {
             break;
         case 'semanal':
             renderSemanalView();
+            break;
+        case 'horas_extra_admin':
+            renderHorasExtraAdminView();
             break;
         case 'perfil':
             renderPerfilView();
@@ -2937,14 +3763,14 @@ const pinInput = document.getElementById('input-pin');
 // Botón Planificador
 document.getElementById('btn-login-admin')?.addEventListener('click', () => {
     pinModal.style.display = 'block';
-    document.querySelector('.role-buttons').style.display = 'none';
+    document.querySelector('.role-cards').style.display = 'none';
     pinInput?.focus();
 });
 
 // Cancelar PIN planificador
 document.getElementById('btn-cancel-pin')?.addEventListener('click', () => {
     pinModal.style.display = 'none';
-    document.querySelector('.role-buttons').style.display = 'block';
+    document.querySelector('.role-cards').style.display = 'block';
     if (pinInput) pinInput.value = '';
     const err = document.getElementById('pin-error');
     if (err) err.style.display = 'none';
@@ -2972,60 +3798,61 @@ function validarPin() {
 
 // ── LOGIN TRABAJADOR con RUT + PIN ──────────────────────────────────────────
 
-document.getElementById('btn-login-worker')?.addEventListener('click', () => {
+document.getElementById('btn-login-worker')?.addEventListener('click', async () => {
+    const sel = document.getElementById('select-worker-login');
+    sel.innerHTML = '<option value="">Cargando...</option>';
     document.getElementById('worker-login-container').style.display = 'block';
-    document.querySelector('.role-buttons').style.display = 'none';
+    document.querySelector('.role-cards').style.display = 'none';
     document.getElementById('worker-login-error').style.display = 'none';
-    document.getElementById('input-worker-rut')?.focus();
+
+    // Si no hay trabajadores en memoria, intentar cargar desde localDB
+    if (!estado.trabajadores || estado.trabajadores.length === 0) {
+        const local = await window.localDB?.trabajadores.getAll().catch(() => []) || [];
+        if (local.length > 0) estado.trabajadores = local;
+    }
+
+    // Poblar selector con trabajadores cargados
+    sel.innerHTML = '<option value="">-- Selecciona tu nombre --</option>';
+    estado.trabajadores
+        .slice()
+        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `${t.nombre} — ${t.puesto}`;
+            sel.appendChild(opt);
+        });
 });
 
 document.getElementById('btn-cancel-worker')?.addEventListener('click', () => {
     document.getElementById('worker-login-container').style.display = 'none';
-    document.querySelector('.role-buttons').style.display = 'block';
-    document.getElementById('input-worker-rut').value = '';
-    document.getElementById('input-worker-pin').value = '';
+    document.querySelector('.role-cards').style.display = 'block';
     document.getElementById('worker-login-error').style.display = 'none';
+    document.getElementById('select-worker-login').value = '';
 });
 
 document.getElementById('btn-submit-worker')?.addEventListener('click', validarWorkerLogin);
-document.getElementById('input-worker-pin')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') validarWorkerLogin();
-});
 
 async function validarWorkerLogin() {
-    const rut = document.getElementById('input-worker-rut')?.value.trim() || '';
-    const pin = document.getElementById('input-worker-pin')?.value.trim() || '';
+    const sel = document.getElementById('select-worker-login');
+    const trabajadorId = sel?.value;
     const errEl = document.getElementById('worker-login-error');
     const btn = document.getElementById('btn-submit-worker');
 
-    if (!rut || !pin) {
-        errEl.textContent = 'Ingresa tu RUT y PIN.';
+    if (!trabajadorId) {
         errEl.style.display = 'block';
         return;
     }
 
-    // Normalizar RUT: quitar puntos, guión y espacios para comparación flexible
-    function normRut(r) { return r.replace(/[\.\-\s]/g, '').toLowerCase(); }
-    const rutNorm = normRut(rut);
-
-    const trabajador = estado.trabajadores.find(t => {
-        if (!t.rut || !t.pin_acceso) return false;
-        return normRut(t.rut) === rutNorm && t.pin_acceso === pin;
-    });
-
+    const trabajador = estado.trabajadores.find(t => String(t.id) === String(trabajadorId));
     if (!trabajador) {
-        errEl.textContent = 'RUT o PIN incorrecto. Consulta al planificador.';
         errEl.style.display = 'block';
-        document.getElementById('input-worker-pin').value = '';
         return;
     }
 
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...'; }
 
-    // Auto check-in
     await updateTrabajadorDisponibilidad(trabajador.id, true);
-
-    // Actualizar estado local
     estado.trabajadores = estado.trabajadores.map(t =>
         t.id === trabajador.id ? { ...t, disponible: true } : t
     );
@@ -3043,16 +3870,21 @@ function accederApp(rol, trabajadorObj = null) {
 
     // Visibilidad de nav según rol
     const navRoles = {
-        'nav-semanal':      ['admin'],
-        'nav-trabajadores': ['admin'],
-        'nav-checkin':      ['admin'],
-        'nav-perfil':       ['admin', 'trabajador'],
-        'btn-copy-link':    ['admin']
+        'nav-semanal':            ['admin', 'trabajador'],
+        'nav-trabajadores':       ['admin'],
+        'nav-checkin':            ['admin'],
+        'nav-horas-extra-admin':  ['admin'],
+        'nav-perfil':             ['admin', 'trabajador'],
+        'btn-copy-link':          ['admin']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
-        if (el) el.style.display = roles.includes(rol) ? '' : 'none';
+        if (!el) return;
+        el.style.display = roles.includes(rol) ? 'inline-block' : 'none';
     });
+
+    // Badge de pendientes solo para planificador
+    if (rol === 'admin') actualizarBadgeHE();
 
     vistaActual = 'dashboard';
     renderizarVistaActual();
@@ -3067,8 +3899,26 @@ window.addEventListener('DOMContentLoaded', () => {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('SW registrado', reg))
-            .catch(err => console.log('Error SW', err));
+            .then(reg => {
+                console.log('SW registrado:', reg.scope);
+                // Activar inmediatamente si hay un SW nuevo esperando
+                if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+                reg.addEventListener('updatefound', () => {
+                    const nw = reg.installing;
+                    nw?.addEventListener('statechange', () => {
+                        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                            nw.postMessage('SKIP_WAITING');
+                        }
+                    });
+                });
+            })
+            .catch(err => console.warn('Error SW:', err));
+
+        // Recargar automáticamente cuando el SW activo cambia (toma archivos nuevos)
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) { refreshing = true; window.location.reload(); }
+        });
     });
 }
 

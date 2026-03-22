@@ -1,8 +1,11 @@
-// Service Worker — Planify Offline v2
-const CACHE_NAME = 'planify-offline-v2';
+// Service Worker — Planify Offline v5
+const CACHE_NAME = 'planify-offline-v5';
 
-// Assets que se cachean en el install (shell de la app)
-const STATIC_SHELL = [
+// En localhost no cacheamos nada — siempre red directa
+const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
+
+// Archivos locales: se cachean atómicamente (si uno falla, todo falla — intencional)
+const LOCAL_SHELL = [
   './',
   './index.html',
   './styles.css',
@@ -12,23 +15,40 @@ const STATIC_SHELL = [
   './favicon.ico',
   './icon-512.png',
   './manifest.json',
-  // JS desde CDN
+];
+
+// Librerías de CDN: se cachean individualmente (best-effort, un fallo no rompe el install)
+const CDN_RESOURCES = [
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/pizzip@3.1.1/dist/pizzip.min.js',
   'https://cdn.jsdelivr.net/npm/docxtemplater@3.37.2/build/docxtemplater.js',
-  // CSS desde CDN
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
 ];
 
 // ── INSTALL: precachear shell ────────────────────────────────────────────────
 self.addEventListener('install', event => {
+  // En localhost: activar inmediatamente sin cachear nada
+  if (IS_LOCAL) { self.skipWaiting(); return; }
+
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(async cache => {
+      // 1) Archivos locales: atómico (crítico)
+      await cache.addAll(LOCAL_SHELL);
+
+      // 2) CDN: cada URL se cachea por separado — un fallo no cancela el resto
+      await Promise.allSettled(
+        CDN_RESOURCES.map(url =>
+          fetch(url, { mode: 'cors', credentials: 'omit' })
+            .then(res => {
+              if (res.ok || res.type === 'opaque') return cache.put(url, res);
+            })
+            .catch(err => console.warn('[SW] No se pudo cachear CDN:', url, err.message))
+        )
+      );
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -47,6 +67,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
+  // En localhost: pasar todo directo a la red, sin interceptar
+  if (IS_LOCAL) return;
+
   const url = new URL(event.request.url);
 
   // ① Supabase API → NetworkFirst (datos frescos, caché como fallback)
@@ -58,14 +81,19 @@ self.addEventListener('fetch', event => {
   // ② Navegación (HTML) → NetworkFirst con fallback a index.html cacheado
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request).catch(() =>
-        caches.match('./index.html')
-      )
+      fetch(event.request).catch(() => caches.match('./index.html'))
     );
     return;
   }
 
-  // ③ Assets estáticos (JS, CSS, imágenes, fonts) → CacheFirst
+  // ③ Assets locales (JS/CSS) → NetworkFirst para capturar cambios
+  const isLocalAsset = url.hostname === self.location.hostname;
+  if (isLocalAsset) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  // ④ CDN externos (fonts, FontAwesome, librerías) → CacheFirst
   event.respondWith(cacheFirst(event.request));
 });
 
