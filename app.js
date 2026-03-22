@@ -3913,12 +3913,7 @@ if ('serviceWorker' in navigator) {
                 });
             })
             .catch(err => console.warn('Error SW:', err));
-
-        // Recargar automáticamente cuando el SW activo cambia (toma archivos nuevos)
-        let refreshing = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (!refreshing) { refreshing = true; window.location.reload(); }
-        });
+        // Sin reload automático — evita race condition que vacía el estado
     });
 }
 
