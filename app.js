@@ -3899,8 +3899,26 @@ window.addEventListener('DOMContentLoaded', () => {
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('SW registrado', reg))
-            .catch(err => console.log('Error SW', err));
+            .then(reg => {
+                console.log('SW registrado:', reg.scope);
+                // Activar inmediatamente si hay un SW nuevo esperando
+                if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+                reg.addEventListener('updatefound', () => {
+                    const nw = reg.installing;
+                    nw?.addEventListener('statechange', () => {
+                        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+                            nw.postMessage('SKIP_WAITING');
+                        }
+                    });
+                });
+            })
+            .catch(err => console.warn('Error SW:', err));
+
+        // Recargar automáticamente cuando el SW activo cambia (toma archivos nuevos)
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) { refreshing = true; window.location.reload(); }
+        });
     });
 }
 
