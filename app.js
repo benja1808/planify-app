@@ -128,6 +128,23 @@ function esErrorTablaNoExiste(error) {
     );
 }
 
+async function fetchAllEquipos() {
+    const pageSize = 1000;
+    let all = [];
+    let from = 0;
+    while (true) {
+        const { data, error } = await supabaseClient
+            .from('equipos')
+            .select('*')
+            .range(from, from + pageSize - 1);
+        if (error || !data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < pageSize) break;
+        from += pageSize;
+    }
+    return all;
+}
+
 async function resolverTabla(candidatas) {
     for (const nombre of candidatas) {
         const { error } = await supabaseClient.from(nombre).select('*').limit(1);
@@ -158,18 +175,17 @@ async function inicializarDatos() {
         const [
             { data: trabajadores, error: errT },
             { data: tareas,       error: errTr },
-            { data: equipos,      error: errEq }
+            equipos
         ] = await Promise.race([
             Promise.all([
                 supabaseClient.from('trabajadores').select('*'),
                 supabaseClient.from('tareas').select('*'),
-                supabaseClient.from('equipos').select('*')
+                fetchAllEquipos()
             ]),
             _timeout(8000)
         ]);
         if (errT)  throw errT;
         if (errTr) throw errTr;
-        if (errEq) throw errEq;
 
         estado.trabajadores = trabajadores || [];
         estado.tareas = (tareas || []).map(t => ({
@@ -180,7 +196,11 @@ async function inicializarDatos() {
             horaAsignacion: t.hora_asignacion,
             fechaAsignacion: t.created_at || null,
             estadoEjecucion: t.estado_ejecucion || 'activo',
-            fechaExpiracion: t.fecha_expiracion || null
+            fechaExpiracion: t.fecha_expiracion || null,
+            equipoId: t.equipo_id || null,
+            tiposSeleccionados: t.tipos_trabajo || [],
+            componentesSeleccionados: t.componentes_trabajo || [],
+            orden: t.orden || 0
         }));
         estado.equipos = equipos || [];
 
@@ -246,7 +266,10 @@ async function inicializarDatos() {
                     horaAsignacion: t.hora_asignacion || t.horaAsignacion,
                     fechaAsignacion: t.created_at || t.fechaAsignacion || null,
                     estadoEjecucion: t.estado_ejecucion || t.estadoEjecucion || 'activo',
-                    fechaExpiracion: t.fecha_expiracion || t.fechaExpiracion || null
+                    fechaExpiracion: t.fecha_expiracion || t.fechaExpiracion || null,
+                    equipoId: t.equipo_id || t.equipoId || null,
+                    tiposSeleccionados: t.tipos_trabajo || t.tiposSeleccionados || [],
+                    componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || []
                 }));
                 estado.equipos            = equipos    || [];
                 estado.historialTareas    = historial  || [];
@@ -304,7 +327,10 @@ function configurarRealtime() {
                     estadoTarea: t.estado_tarea, otNumero: t.ot_numero,
                     horaAsignacion: t.hora_asignacion,
                     fechaAsignacion: t.created_at || null,
-                    estadoEjecucion: t.estado_ejecucion || 'activo'
+                    estadoEjecucion: t.estado_ejecucion || 'activo',
+                    equipoId: t.equipo_id || null,
+                    tiposSeleccionados: t.tipos_trabajo || [],
+                    componentesSeleccionados: t.componentes_trabajo || []
                 }));
             })
         );
@@ -335,7 +361,7 @@ function configurarRealtime() {
             scheduleFlush();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'equipos' }, async () => {
-            const { data: equipos } = await supabaseClient.from('equipos').select('*');
+            const equipos = await fetchAllEquipos();
             estado.equipos = equipos || [];
         })
         .subscribe();
@@ -345,7 +371,7 @@ async function updateTrabajadorDisponibilidad(id, disponible) {
     await _db.update('trabajadores', id, { disponible, ocupado: false });
 }
 
-async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null) {
+async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = []) {
     const lider = estado.trabajadores.find(t => t.id === liderId);
     const ayudantesNombres = ayudantesIds.map(id => {
         const t = estado.trabajadores.find(x => x.id === id);
@@ -395,6 +421,9 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
     };
     if (estadoEjecucion && estadoEjecucion !== 'activo') nuevaTarea.estado_ejecucion = estadoEjecucion;
     if (fechaExpiracion) nuevaTarea.fecha_expiracion = fechaExpiracion;
+    if (equipoId) nuevaTarea.equipo_id = equipoId;
+    if (tiposSeleccionados.length) nuevaTarea.tipos_trabajo = tiposSeleccionados;
+    if (componentesSeleccionados.length) nuevaTarea.componentes_trabajo = componentesSeleccionados;
 
     // Optimistic update: actualizar UI inmediatamente
     const tareaLocal = {
@@ -404,7 +433,11 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         horaAsignacion: hora,
         fechaAsignacion: new Date().toISOString(),
         estadoEjecucion: estadoEjecucion || 'activo',
-        fechaExpiracion: fechaExpiracion || null
+        fechaExpiracion: fechaExpiracion || null,
+        equipoId: equipoId || null,
+        tiposSeleccionados,
+        componentesSeleccionados,
+        orden: 0
     };
     estado.tareas.push(tareaLocal);
     // Solo los ayudantes se bloquean — el líder puede estar en múltiples tareas
@@ -474,6 +507,10 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
     document.getElementById('modal-observaciones').value = '';
     document.getElementById('modal-analisis').value = '';
     document.getElementById('modal-recomendacion-analista').value = '';
+
+    // Construir formulario dinámico de mediciones
+    _buildMedicionesForm(tarea.tiposSeleccionados || [], tarea.componentesSeleccionados || []);
+
     modal.style.display = 'flex';
 }
 
@@ -504,10 +541,22 @@ async function guardarTareaFinalizada({
     numeroAviso,
     hhTrabajo,
     analisisTecnico,
-    recomendacionAnalista
+    recomendacionAnalista,
+    medicionesData = []
 }) {
     const tarea = estado.tareas.find(t => t.id === id);
     if (!tarea) return;
+
+    // Combinar acciones por componente con las acciones globales
+    const accionesComp = medicionesData
+        .filter(m => m.activo !== false && m.acciones)
+        .map(m => m.componente ? `[${m.componente}] ${m.acciones}` : m.acciones)
+        .join('\n');
+    if (accionesComp && !accionesRealizadas) {
+        accionesRealizadas = accionesComp;
+    } else if (accionesComp) {
+        accionesRealizadas = accionesComp + '\n\n' + accionesRealizadas;
+    }
 
     const ayudantesIds = ayudantesIdsStr ? ayudantesIdsStr.split(',').filter(Boolean) : [];
     const histId = crypto.randomUUID();
@@ -567,6 +616,70 @@ async function guardarTareaFinalizada({
         if (errH) await window.syncQueue?.add(tablasDb.historial, 'INSERT', registroHistorial);
     } else {
         await window.syncQueue?.add(tablasDb.historial, 'INSERT', registroHistorial);
+    }
+
+    // ── Guardar mediciones numéricas (vibración / temperatura) ───────────────
+    const equipoIdMed = tarea.equipoId || tarea.equipo_id;
+    if (equipoIdMed && medicionesData.length > 0) {
+        const fechaHoy = new Date().toISOString().slice(0, 10);
+        const equipoObj = estado.equipos.find(e => e.id === equipoIdMed);
+        const equipoBase = equipoObj?.activo || '';
+        const equipoUbic = equipoObj?.ubicacion || '';
+        await Promise.all(
+            medicionesData.filter(m => m.activo !== false).map(async m => {
+                // Buscar la fila exacta: mismo nombre, misma ubicación, mismo componente
+                const eqParaComp = m.componente
+                    ? estado.equipos.find(e =>
+                        e.activo === equipoBase &&
+                        e.ubicacion === equipoUbic &&
+                        e.componente === m.componente)
+                    : null;
+                const equipoIdComp = eqParaComp?.id || equipoIdMed;
+
+                if (m.vibracion !== null && m.vibracion !== '') {
+                    await guardarMedicion({
+                        equipo_id: equipoIdComp,
+                        tipo: 'vibracion',
+                        valor: parseFloat(m.vibracion),
+                        punto_medicion: m.componente || equipoBase || 'General',
+                        componente: m.componente || null,
+                        fecha: fechaHoy
+                    });
+                }
+                if (m.temperatura !== null && m.temperatura !== '') {
+                    await guardarMedicion({
+                        equipo_id: equipoIdComp,
+                        tipo: 'termografia',
+                        valor: parseFloat(m.temperatura),
+                        punto_medicion: m.componente || equipoBase || 'General',
+                        componente: m.componente || null,
+                        fecha: fechaHoy
+                    });
+                }
+            })
+        );
+    }
+}
+
+// ── Guardar una medición en Supabase + localDB ────────────────────────────────
+async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha }) {
+    const unidad = tipo === 'vibracion' ? 'mm/s' : tipo === 'termografia' ? '°C' : '';
+    const id = crypto.randomUUID();
+    const payload = { id, equipo_id, tipo, valor, unidad, punto_medicion, componente: componente || null, fecha, synced: false };
+    if (window.localDB) await window.localDB.mediciones.upsert(payload).catch(() => {});
+    estado.historialMediciones = [payload, ...estado.historialMediciones];
+
+    if (navigator.onLine && supabaseClient) {
+        const insertData = { equipo_id, tipo, valor, unidad, punto_medicion, fecha };
+        if (componente) insertData.componente = componente;
+        const { error } = await supabaseClient.from(tablasDb.mediciones).insert([insertData]);
+        if (error) {
+            await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', payload);
+        } else {
+            await window.localDB?.mediciones.upsert({ ...payload, synced: true }).catch(() => {});
+        }
+    } else {
+        await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', payload);
     }
 }
 
@@ -701,6 +814,97 @@ function renderCheckInView() {
 }
 
 // COMPONENTE: Vista Perfil
+async function renderMisHorasView() {
+    const trabajador = estado.trabajadorLogueado;
+    if (!trabajador) return;
+    mainContent.innerHTML = `
+        <div style="max-width:700px; margin:0 auto; padding:1.5rem 1rem;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; flex-wrap:wrap; gap:0.8rem;">
+                <h2 style="margin:0; font-size:1.2rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
+                    <i class="fa-regular fa-clock"></i> Mis Horas Extra
+                </h2>
+                <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+                    <button onclick="window.mostrarCalendarioHorasExtra('${trabajador.id}')"
+                        style="background:transparent; border:1px solid var(--border-color); color:var(--text-muted); border-radius:8px; padding:0.5rem 1rem; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:0.4rem;">
+                        <i class="fa-regular fa-calendar"></i> Calendario
+                    </button>
+                    <button onclick="window.abrirModalHorasExtraManual('${trabajador.id}')"
+                        class="btn btn-primary" style="font-size:0.85rem; padding:0.5rem 1.1rem; border-radius:8px;">
+                        + Agregar horas extra
+                    </button>
+                </div>
+            </div>
+            <div class="panel" id="mis-horas-contenido">
+                <p style="color:var(--text-muted); font-size:0.85rem;">Cargando...</p>
+            </div>
+        </div>`;
+
+    const registros = await cargarHorasExtraTrabajador(trabajador.id);
+    const contenedor = document.getElementById('mis-horas-contenido');
+    if (!contenedor) return;
+
+    if (registros.length === 0) {
+        contenedor.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:1rem 0;">Sin horas extra registradas.</p>`;
+        return;
+    }
+
+    const ahora = new Date();
+    const mesActual = ahora.getFullYear() + '-' + String(ahora.getMonth() + 1).padStart(2, '0');
+    const totalMes = registros
+        .filter(r => r.fecha && r.fecha.startsWith(mesActual) && r.estado === 'aprobado')
+        .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+    const totalHistorico = registros
+        .filter(r => r.estado === 'aprobado')
+        .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
+
+    const filas = registros.map(r => {
+        const fechaFmt = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+        const est = r.estado || 'pendiente';
+        const badgeStyle = est === 'aprobado'
+            ? 'background:#dcfce7; color:#16a34a;'
+            : est === 'rechazado'
+            ? 'background:#fee2e2; color:#dc2626;'
+            : 'background:#fef9c3; color:#b45309;';
+        const badgeLabel = est === 'aprobado' ? 'Aprobado' : est === 'rechazado' ? 'Rechazado' : 'Pendiente';
+        const notaRechazo = est === 'rechazado' && r.motivo_rechazo
+            ? `<div style="font-size:0.7rem; color:#dc2626; margin-top:0.2rem;"><i class="fa-solid fa-circle-info"></i> ${r.motivo_rechazo}</div>` : '';
+        return `<tr style="${est === 'rechazado' ? 'opacity:0.65;' : ''}">
+            <td style="font-size:0.83rem; padding:0.5rem 0.6rem; color:var(--text-muted);">${fechaFmt}</td>
+            <td style="font-size:0.83rem; padding:0.5rem 0.6rem; font-weight:600; color:var(--primary-color); ${est === 'rechazado' ? 'text-decoration:line-through; color:var(--text-muted);' : ''}">${r.horas} hrs</td>
+            <td style="font-size:0.83rem; padding:0.5rem 0.6rem; color:var(--text-muted);">${r.motivo || '—'}</td>
+            <td style="font-size:0.83rem; padding:0.5rem 0.6rem;">
+                <span style="border-radius:6px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:600; ${badgeStyle}">${badgeLabel}</span>
+                ${notaRechazo}
+            </td>
+        </tr>`;
+    }).join('');
+
+    contenedor.innerHTML = `
+        <div style="display:flex; gap:1.5rem; margin-bottom:1.2rem; flex-wrap:wrap;">
+            <div style="background:var(--glass-bg); border-radius:8px; padding:0.8rem 1.1rem; min-width:130px;">
+                <div style="font-size:1.5rem; font-weight:700; color:var(--primary-color);">${totalMes.toFixed(1)} hrs</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Este mes (aprobadas)</div>
+            </div>
+            <div style="background:var(--glass-bg); border-radius:8px; padding:0.8rem 1.1rem; min-width:130px;">
+                <div style="font-size:1.5rem; font-weight:700; color:var(--text-main);">${totalHistorico.toFixed(1)} hrs</div>
+                <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Histórico aprobado</div>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+                <thead>
+                    <tr style="border-bottom:1px solid var(--border-color);">
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.4rem 0.6rem; font-weight:600;">Fecha</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.4rem 0.6rem; font-weight:600;">Horas</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.4rem 0.6rem; font-weight:600;">Motivo</th>
+                        <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.4rem 0.6rem; font-weight:600;">Estado</th>
+                    </tr>
+                </thead>
+                <tbody>${filas}</tbody>
+            </table>
+        </div>`;
+}
+
 function renderPerfilView() {
     const trabajador = estado.trabajadorLogueado;
 
@@ -904,86 +1108,9 @@ function renderPerfilView() {
 
             </div>
 
-            <!-- Sección Horas Extra -->
-            <div class="panel" id="panel-horas-extra" style="margin-top:1.2rem;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
-                    <h3 style="margin:0; font-size:1rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
-                        <i class="fa-regular fa-clock"></i> Mis Horas Extra
-                    </h3>
-                    <button onclick="window.abrirModalHorasExtraManual('${trabajador.id}')"
-                        class="btn btn-primary" style="font-size:0.82rem; padding:0.4rem 0.9rem; border-radius:8px;">
-                        + Agregar horas extra
-                    </button>
-                </div>
-                <div id="he-contenido"><p style="color:var(--text-muted); font-size:0.85rem;">Cargando...</p></div>
-            </div>
 
         </div>`;
     mainContent.innerHTML = html;
-
-    // Cargar horas extra de forma asíncrona
-    cargarHorasExtraTrabajador(trabajador.id).then(registros => {
-        const contenedor = document.getElementById('he-contenido');
-        if (!contenedor) return;
-        if (registros.length === 0) {
-            contenedor.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:0.5rem 0;">Sin horas extra registradas.</p>`;
-            return;
-        }
-        const ahora = new Date();
-        const mesActual = ahora.getFullYear() + '-' + String(ahora.getMonth() + 1).padStart(2, '0');
-        // Solo contar horas aprobadas en totales
-        const totalMes = registros
-            .filter(r => r.fecha && r.fecha.startsWith(mesActual) && r.estado === 'aprobado')
-            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
-        const totalHistorico = registros
-            .filter(r => r.estado === 'aprobado')
-            .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
-        const filas = registros.map(r => {
-            const fechaFmt = r.fecha ? new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' }) : '—';
-            const est = r.estado || 'pendiente';
-            const badgeStyle = est === 'aprobado'
-                ? 'background:#dcfce7; color:#16a34a;'
-                : est === 'rechazado'
-                ? 'background:#fee2e2; color:#dc2626;'
-                : 'background:#fef9c3; color:#b45309;';
-            const badgeLabel = est === 'aprobado' ? 'Aprobado' : est === 'rechazado' ? 'Rechazado' : 'Pendiente';
-            const notaRechazo = est === 'rechazado' && r.motivo_rechazo
-                ? `<div style="font-size:0.7rem; color:#dc2626; margin-top:0.2rem;"><i class="fa-solid fa-circle-info"></i> ${r.motivo_rechazo}</div>` : '';
-            return `<tr style="${est === 'rechazado' ? 'opacity:0.65;' : ''}">
-                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; color:var(--text-muted);">${fechaFmt}</td>
-                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; font-weight:600; color:var(--primary-color); ${est === 'rechazado' ? 'text-decoration:line-through; color:var(--text-muted);' : ''}">${r.horas} hrs</td>
-                <td style="font-size:0.83rem; padding:0.4rem 0.5rem; color:var(--text-muted);">${r.motivo || '—'}</td>
-                <td style="font-size:0.83rem; padding:0.4rem 0.5rem;">
-                    <span style="border-radius:6px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:600; ${badgeStyle}">${badgeLabel}</span>
-                    ${notaRechazo}
-                </td>
-            </tr>`;
-        }).join('');
-        contenedor.innerHTML = `
-            <div style="display:flex; gap:1.5rem; margin-bottom:1rem; flex-wrap:wrap;">
-                <div style="background:var(--glass-bg); border-radius:8px; padding:0.7rem 1rem; min-width:120px;">
-                    <div style="font-size:1.4rem; font-weight:700; color:var(--primary-color);">${totalMes.toFixed(1)} hrs</div>
-                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Este mes (aprobadas)</div>
-                </div>
-                <div style="background:var(--glass-bg); border-radius:8px; padding:0.7rem 1rem; min-width:120px;">
-                    <div style="font-size:1.4rem; font-weight:700; color:var(--text-main);">${totalHistorico.toFixed(1)} hrs</div>
-                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Histórico aprobado</div>
-                </div>
-            </div>
-            <div style="overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse;">
-                    <thead>
-                        <tr style="border-bottom:1px solid var(--border-color);">
-                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Fecha</th>
-                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Horas</th>
-                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Motivo</th>
-                            <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.3rem 0.5rem; font-weight:600;">Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>${filas}</tbody>
-                </table>
-            </div>`;
-    });
 }
 
 // ── Helper: volver al login limpiando estado ─────────────────────────────────
@@ -993,10 +1120,12 @@ function _volverAlLogin() {
     document.getElementById('login-overlay').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     document.querySelector('.role-cards').style.display = 'block';
-    if (document.getElementById('worker-login-container'))
-        document.getElementById('worker-login-container').style.display = 'none';
-    const selWorker = document.getElementById('select-worker-login');
-    if (selWorker) selWorker.value = '';
+    const wlc = document.getElementById('worker-login-container');
+    if (wlc) wlc.style.display = 'none';
+    const rutEl = document.getElementById('input-worker-rut');
+    const pinEl = document.getElementById('input-worker-pin');
+    if (rutEl) rutEl.value = '';
+    if (pinEl) pinEl.value = '';
 }
 
 window.marcarSalidaTrabajador = async function(id) {
@@ -1407,7 +1536,8 @@ window.abrirModalHorasExtraManual = function(trabajadorId) {
         await guardarHorasExtra(trabajadorId, fecha, horas, motivo);
         document.getElementById('modal-horas-extra').style.display = 'none';
         _resetModalHE();
-        renderPerfilView(); // refrescar sección, sesión intacta
+        vistaActual = 'mis_horas';
+        renderizarVistaActual();
     };
 
     document.getElementById('btn-he-cancelar').onclick = () => {
@@ -2415,7 +2545,20 @@ function renderDashboardView() {
     const tareasDiarias = estado.tareas.filter(t =>
         t.estadoTarea === 'en_curso' ||
         (t.estadoTarea === 'programada_semana' && t.liderId)
-    );
+    ).sort((a, b) => {
+        // Activas primero, luego cola por orden
+        const aEnCola = a.estadoEjecucion === 'en_cola' || a.estadoTarea === 'programada_semana';
+        const bEnCola = b.estadoEjecucion === 'en_cola' || b.estadoTarea === 'programada_semana';
+        if (!aEnCola && bEnCola) return -1;
+        if (aEnCola && !bEnCola) return 1;
+        return (a.orden || 0) - (b.orden || 0);
+    });
+    // Calcular posición en cola para cada tarea
+    let _colaPosCounter = 0;
+    const _tareasConPos = tareasDiarias.map(t => {
+        const enCola = t.estadoEjecucion === 'en_cola' || t.estadoTarea === 'programada_semana';
+        return { ...t, _enCola: enCola, _pos: enCola ? ++_colaPosCounter : 0 };
+    });
     
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
@@ -2445,20 +2588,31 @@ function renderDashboardView() {
 
                 <div class="form-group">
                     <label><i class="fa-solid fa-gears"></i> Equipo / Activo</label>
-                    <select id="select-equipo" class="form-control" disabled>
-                        <option value="">Seleccione ubicación primero...</option>
-                    </select>
+                    <div style="position:relative;">
+                        <div style="position:relative;">
+                            <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); pointer-events:none; font-size:0.85rem;"></i>
+                            <input type="text" id="equipo-search" placeholder="Seleccione ubicación primero..." disabled autocomplete="off"
+                                style="width:100%; padding:0.6rem 0.8rem 0.6rem 2.2rem; border:1px solid rgba(255,255,255,0.12); border-radius:8px; font-size:0.9rem; background:rgba(0,0,0,0.2); color:var(--text-main); box-sizing:border-box;">
+                        </div>
+                        <div id="equipo-dropdown" style="display:none; position:absolute; z-index:200; width:100%; background:#ffffff; border:1px solid rgba(0,0,0,0.12); border-radius:8px; max-height:240px; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); margin-top:3px;"></div>
+                        <input type="hidden" id="select-equipo" value="">
+                    </div>
                     <button id="btn-agregar-equipo" type="button" class="btn btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.85rem; border-color: rgba(99,102,241,0.5); color: #a5b4fc;">
                         <i class="fa-solid fa-plus"></i> No encuentro el equipo, agregar nuevo
                     </button>
                 </div>
                 
                 <div class="form-group">
-                    <label>Tipo de Especialidad / Habilidad Requerida</label>
-                    <select id="select-trabajo" class="form-control">
-                        <option value="">Seleccione un trabajo...</option>
-                        ${tipicosTrabajos.map(t => `<option value="${t}">${t}</option>`).join('')}
-                    </select>
+                    <label>Tipo de Especialidad / Habilidad Requerida <span style="font-weight:400; color:var(--text-muted); font-size:0.82rem;">(elige uno o varios)</span></label>
+                    <div id="select-trabajo" style="border:1px solid rgba(255,255,255,0.12); border-radius:8px; max-height:210px; overflow-y:auto; padding:0.3rem 0; background:rgba(0,0,0,0.2);"></div>
+                    <div id="tipos-trabajo-badges" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.5rem; min-height:20px;"></div>
+                </div>
+
+                <div id="dashboard-comp-section" style="display:none; margin-bottom:0.8rem;">
+                    <label style="font-size:0.85rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.4rem;">
+                        Componentes <span style="font-weight:400;">(desmarcar los que no aplican)</span>
+                    </label>
+                    <div id="dashboard-comp-list" style="display:flex; flex-wrap:wrap; gap:0.5rem; padding:0.6rem; background:rgba(0,0,0,0.15); border-radius:8px; border:1px solid rgba(255,255,255,0.08);"></div>
                 </div>
 
                 <div class="form-group">
@@ -2512,52 +2666,44 @@ function renderDashboardView() {
                             </button>
                         ` : ''}
                     </div>
-                    ${tareasDiarias.length === 0 ? 
-                        `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>` : 
+                    ${_tareasConPos.length === 0 ?
+                        `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>` :
                         `<div class="items-list">
-                            ${tareasDiarias.map(tarea => `
-                                <div class="list-item" style="border-left: 3px solid ${tarea.estadoTarea === 'programada_semana' ? '#9ca3af' : 'var(--warning-color)'}">
+                            ${_tareasConPos.map(tarea => {
+                                // ── Resolver enlace a equipo ─────────────────────────────────────────
+                                let eqId = "", nombreEqEncontrado = "";
+                                const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
+                                for(const match of matches) {
+                                    const candidato = match[1];
+                                    const res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
+                                    if(res) { eqId = res.id; nombreEqEncontrado = candidato; break; }
+                                }
+                                if(!eqId) {
+                                    const res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
+                                    if(res) { eqId = res.id; nombreEqEncontrado = res.activo; }
+                                }
+                                let tituloHtml = tarea.tipo;
+                                if (eqId) {
+                                    const partes = tarea.tipo.split(new RegExp('(\\[?' + nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]?)', 'i'));
+                                    tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
+                                        ? '<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica(\'' + eqId + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
+                                        : p).join('');
+                                }
+                                // ── ¿El usuario actual participa en esta tarea? ──────────────────────
+                                const esParticipante = estado.usuarioActual === 'trabajador' &&
+                                    (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id));
+                                const puedeGestionar = isAdmin || esParticipante;
+                                // ── Tareas en cola para reordenar ────────────────────────────────────
+                                const colaTareas = _tareasConPos.filter(t => t._enCola);
+                                const posActual = colaTareas.findIndex(t => t.id === tarea.id);
+                                return `
+                                <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}">
                                     <div class="item-info">
-                                        <h4>
-                                            ${(() => {
-                                                // Intentar encontrar el equipo de forma robusta
-                                                let eqId = "";
-                                                let nombreEqEncontrado = "";
-                                                
-                                                // Estrategia 1: Buscar si alguna parte entre corchetes coincide con un equipo (Excel)
-                                                const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
-                                                for(const match of matches) {
-                                                    const candidato = match[1];
-                                                    const res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
-                                                    if(res) {
-                                                        eqId = res.id;
-                                                        nombreEqEncontrado = candidato;
-                                                        break;
-                                                    }
-                                                }
-
-                                                // Estrategia 2: Si no funcionó, buscar si el nombre de algún equipo está contenido en el texto (Manual)
-                                                if(!eqId) {
-                                                    const res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
-                                                    if(res) {
-                                                        eqId = res.id;
-                                                        nombreEqEncontrado = res.activo;
-                                                    }
-                                                }
-
-                                                if (eqId) {
-                                                    const partes = tarea.tipo.split(new RegExp(`(\\[?${nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]?)`, 'i'));
-                                                    return partes.map(p => {
-                                                        if(p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === `[${nombreEqEncontrado.toLowerCase()}]`) {
-                                                            return `<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica('${eqId}')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">${p}</a>`;
-                                                        }
-                                                        return p;
-                                                    }).join('');
-                                                }
-                                                return tarea.tipo;
-                                            })()}
-                                            ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color); margin-left:0.5rem"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
-                                            ${tarea.estadoTarea === 'programada_semana' ? `<span class="badge" style="background:#6b7280; margin-left:0.5rem; font-size:0.7rem;">⏳ EN COLA</span>` : ''}
+                                        <h4 style="display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+                                            ${tarea._enCola ? `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.78rem; font-weight:700; flex-shrink:0;">${tarea._pos}</span>` : ''}
+                                            <span style="flex:1;">${tituloHtml}</span>
+                                            ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color);"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
+                                            ${tarea._enCola ? `<span class="badge" style="background:#6b7280; font-size:0.7rem;">⏳ EN COLA</span>` : `<span class="badge" style="background:#FF6900; font-size:0.7rem;"><i class="fa-solid fa-circle-play"></i> ACTIVO</span>`}
                                         </h4>
                                         <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
                                             <div>
@@ -2567,42 +2713,40 @@ function renderDashboardView() {
                                                 ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
                                                 <p style="color:var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
                                                     <i class="fa-solid fa-users"></i> Ayudantes: ${tarea.ayudantesNombres.join(', ')}
-                                                </p>
-                                                ` : ''}
+                                                </p>` : ''}
                                             </div>
                                             ${isAdmin && !tarea.liderId ? `
                                             <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap;">
                                                 <i class="fa-solid fa-user-plus"></i> Asignar personal
                                             </button>` : ''}
                                         </div>
-                                        <p style="margin-top: 0.8rem"><i class="fa-regular fa-clock"></i> Iniciado: ${tarea.fechaAsignacion ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : tarea.horaAsignacion}</p>
+                                        <p style="margin-top: 0.8rem"><i class="fa-regular fa-clock"></i> Asignado: ${tarea.fechaAsignacion ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : tarea.horaAsignacion}</p>
                                     </div>
-                                    ${isAdmin ? `
-                                    <div style="display:flex; gap:0.5rem; margin-top:1rem; align-items:center;">
+                                    <div style="display:flex; gap:0.5rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
+                                        ${isAdmin ? `
                                         <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
                                             <i class="fa-solid fa-trash"></i>
+                                        </button>` : ''}
+                                        ${tarea._enCola && puedeGestionar ? `
+                                        <div style="display:flex; flex-direction:column; gap:2px;">
+                                            <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▲</button>
+                                            <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▼</button>
+                                        </div>
+                                        <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
+                                            <i class="fa-solid fa-play"></i> Iniciar
+                                        </button>` : ''}
+                                        ${!tarea._enCola && puedeGestionar ? `
+                                        <button onclick="window.ponerEnColaExposed('${tarea.id}')" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
+                                            <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
                                         </button>
-                                        ${tarea.estadoTarea === 'programada_semana' ? `
-                                        <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
-                                            <i class="fa-solid fa-play"></i> Iniciar
-                                        </button>` : `
-                                        <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId}', '${tarea.ayudantesIds ? tarea.ayudantesIds.join(',') : ''}')">
-                                            <i class="fa-solid fa-check"></i> Terminar
-                                        </button>`}
+                                        <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+                                            <i class="fa-solid fa-flag-checkered"></i> Terminar
+                                        </button>` : ''}
+                                        ${tarea._enCola && !puedeGestionar ? `
+                                        <span style="font-size:0.8rem; color:var(--text-muted);">Posición #${tarea._pos} en cola</span>` : ''}
                                     </div>
-                                    ` : estado.usuarioActual === 'trabajador' && (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id)) ? `
-                                    <div style="margin-top:0.8rem; display:flex; gap:0.5rem;">
-                                        ${tarea.estadoTarea === 'programada_semana' ? `
-                                        <button class="btn btn-primary" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.iniciarTareaColaExposed('${tarea.id}')">
-                                            <i class="fa-solid fa-play"></i> Iniciar
-                                        </button>` : `
-                                        <button class="btn btn-success" style="font-size:0.88rem; padding:0.45rem 1.1rem;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
-                                            <i class="fa-solid fa-flag-checkered"></i> Finalizar
-                                        </button>`}
-                                    </div>
-                                    ` : ''}
-                                </div>
-                            `).join('')}
+                                </div>`;
+                            }).join('')}
                         </div>`
                     }
                 </div>
@@ -2615,39 +2759,119 @@ function renderDashboardView() {
     // --- LOGICA DE FORMULARIO DE ASIGNACIÓN (Solo si existe) ---
     if (isAdmin) {
         const selectUbicacion = document.getElementById('select-ubicacion');
-        const selectEquipo = document.getElementById('select-equipo');
-        const selectTrabajo = document.getElementById('select-trabajo');
+        const selectEquipo   = document.getElementById('select-equipo');   // hidden input
+        const equipoSearch   = document.getElementById('equipo-search');
+        const equipoDropdown = document.getElementById('equipo-dropdown');
+        let equipoGruposData = [];     // [{id, activo, ids, componentes:[]}]
+        let selectedEquipoData = null; // el grupo actualmente seleccionado
+
+        const selectTrabajoContainer = document.getElementById('select-trabajo');
+        const tiposBadgesEl = document.getElementById('tipos-trabajo-badges');
         const selectEmpleado = document.getElementById('select-empleado');
         const hintEmpleado = document.getElementById('empleado-hint');
         const btnAsignar = document.getElementById('btn-asignar');
         const btnAgregarEquipo = document.getElementById('btn-agregar-equipo');
         const inputOt = document.getElementById('input-ot-trabajo');
 
+        // Estado local de tipos seleccionados
+        let tiposSeleccionados = [];
+
+        // ── Chips multi-select para tipos de trabajo ──────────────────────────
+        function buildTipoChips() {
+            selectTrabajoContainer.innerHTML = tipicosTrabajos.map(t => {
+                const sel = tiposSeleccionados.includes(t);
+                return `<label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer;
+                        font-size:0.88rem; color:var(--text-main); background:${sel ? 'rgba(255,105,0,0.15)' : ''}; transition:background 120ms;"
+                        onmouseover="this.style.background='${sel ? 'rgba(255,105,0,0.2)' : 'rgba(255,255,255,0.05)'}'"
+                        onmouseout="this.style.background='${sel ? 'rgba(255,105,0,0.15)' : ''}'">
+                    <input type="checkbox" class="tipo-chip-check" value="${t}" ${sel ? 'checked' : ''}
+                        style="accent-color:#FF6900; width:15px; height:15px; flex-shrink:0; cursor:pointer;">
+                    <span style="flex:1;">${t}</span>
+                    ${sel ? '<span style="font-size:0.7rem; color:#FF6900; font-weight:700;">✓</span>' : ''}
+                </label>`;
+            }).join('');
+            selectTrabajoContainer.querySelectorAll('.tipo-chip-check').forEach(cb => {
+                cb.addEventListener('change', onTipoChange);
+            });
+        }
+
+        function renderTiposBadges() {
+            tiposBadgesEl.innerHTML = tiposSeleccionados.map(t =>
+                `<span style="display:inline-flex; align-items:center; background:rgba(255,105,0,0.15);
+                    color:#FF6900; border:1px solid rgba(255,105,0,0.4); border-radius:999px;
+                    font-size:0.75rem; font-weight:600; padding:2px 10px;">${t}</span>`
+            ).join('');
+        }
+
+        function onTipoChange(e) {
+            if (e.target.checked) {
+                if (!tiposSeleccionados.includes(e.target.value)) tiposSeleccionados.push(e.target.value);
+            } else {
+                tiposSeleccionados = tiposSeleccionados.filter(t => t !== e.target.value);
+            }
+            buildTipoChips();
+            renderTiposBadges();
+            onTipoSelectionChange();
+        }
+
+        function onTipoSelectionChange() {
+            if (tiposSeleccionados.length === 0) {
+                selectEmpleado.innerHTML = '<option value="">Seleccione trabajo primero...</option>';
+                selectEmpleado.disabled = true;
+                hintEmpleado.textContent = '';
+                actualizarAyudantes('');
+                validarFormulario();
+                return;
+            }
+            const aptos = trabajadoresValidados.filter(t =>
+                tiposSeleccionados.some(tipo => t.habilidades.includes(tipo))
+            );
+            if (aptos.length > 0) {
+                selectEmpleado.disabled = false;
+                selectEmpleado.innerHTML = `<option value="">-- Elija al Líder / Responsable --</option>` +
+                    aptos.map(t => {
+                        const sufijo = t.ocupado ? ' ⚠ (Trabajando→Cola)' : (!t.disponible ? ' ○ (Sin check-in→Cola)' : '');
+                        return `<option value="${t.id}">${t.nombre}${sufijo}</option>`;
+                    }).join('');
+                hintEmpleado.innerHTML = `<span style="color:var(--success-color)"><i class="fa-solid fa-circle-check"></i> ${aptos.length} persona(s) capacitada(s).</span>`;
+                actualizarAyudantes('');
+            } else {
+                selectEmpleado.disabled = true;
+                selectEmpleado.innerHTML = '<option value="">Sin empleados capacitados para este trabajo</option>';
+                hintEmpleado.innerHTML = `<span style="color:var(--danger-color)"><i class="fa-solid fa-triangle-exclamation"></i> Nadie tiene esta especialidad.</span>`;
+                actualizarAyudantes('');
+                validarFormulario();
+            }
+        }
+
+        buildTipoChips();
+
         // Validación para habilitar el botón de asignar
         function validarFormulario() {
             const ubicacionValid = selectUbicacion.value !== '';
             const equipoValid = selectEquipo.value !== '';
             const empleadoValid = selectEmpleado.value !== '';
-            btnAsignar.disabled = !(ubicacionValid && equipoValid && empleadoValid);
+            const tipoValid = tiposSeleccionados.length > 0;
+            btnAsignar.disabled = !(ubicacionValid && equipoValid && empleadoValid && tipoValid);
         }
 
-        // Actualizar la lista de ayudantes filtrada por habilidad del trabajo seleccionado
+        // Actualizar la lista de ayudantes
         function actualizarAyudantes(liderIdSeleccionado) {
             const container = document.getElementById('ayudantes-container');
             const lista = document.getElementById('lista-ayudantes');
-            
+
             if (!liderIdSeleccionado) {
                 container.style.display = 'none';
                 lista.innerHTML = '';
                 return;
             }
 
-            const trabajoRequerido = selectTrabajo.value;
-            // Mostrar todos los validados (excepto el líder seleccionado)
-            const elegibles = trabajadoresValidados.filter(t =>
-                t.id !== liderIdSeleccionado &&
-                (!trabajoRequerido || t.habilidades.includes(trabajoRequerido))
-            );
+            // Mostrar todos los validados (excepto el líder) con habilidad en al menos un tipo
+            const elegibles = trabajadoresValidados.filter(t => {
+                if (t.id === liderIdSeleccionado) return false;
+                if (tiposSeleccionados.length === 0) return true;
+                return tiposSeleccionados.some(tipo => t.habilidades.includes(tipo));
+            });
 
             if (elegibles.length === 0) {
                 lista.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem; text-align:center; margin:0;">No hay personal con esta especialidad.</p>';
@@ -2694,60 +2918,133 @@ function renderDashboardView() {
             }
         }
 
-        // Cascade: Ubicación → cargar equipos de esa ubicación
+        // ── Mostrar componentes al seleccionar un equipo ──────────────────────
+        function onEquipoSelected(data) {
+            selectedEquipoData = data;
+            selectEquipo.value  = data.id;
+            equipoSearch.value  = data.activo;
+            equipoDropdown.style.display = 'none';
+            validarFormulario();
+
+            const compSection = document.getElementById('dashboard-comp-section');
+            const compList    = document.getElementById('dashboard-comp-list');
+            if (data.componentes.length > 0) {
+                compList.innerHTML = data.componentes.map(c =>
+                    `<label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.65rem;
+                        background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1);
+                        border-radius:6px; cursor:pointer; font-size:0.88rem; color:var(--text-main); font-weight:500;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.1)'"
+                        onmouseout="this.style.background='rgba(255,255,255,0.05)'">
+                        <input type="checkbox" class="comp-dash-check" value="${c}" checked
+                            style="accent-color:#FF6900; width:14px; height:14px;">
+                        ${c}
+                    </label>`
+                ).join('');
+                compSection.style.display = 'block';
+            } else {
+                compSection.style.display = 'none';
+                compList.innerHTML = '';
+            }
+        }
+
+        // ── Renderizar lista filtrada en el dropdown ──────────────────────────
+        function renderDropdown(query) {
+            const q = query.toLowerCase().trim();
+            const filtrados = q
+                ? equipoGruposData.filter(d => d.activo.toLowerCase().includes(q))
+                : equipoGruposData;
+
+            if (filtrados.length === 0) {
+                equipoDropdown.innerHTML = `<div style="padding:0.7rem 1rem; font-size:0.88rem; color:var(--text-muted);">Sin resultados</div>`;
+            } else {
+                equipoDropdown.innerHTML = filtrados.map(d =>
+                    `<div class="eq-opt" data-id="${d.id}" style="padding:0.5rem 1rem; cursor:pointer; font-size:0.9rem; color:#111827; border-bottom:1px solid rgba(0,0,0,0.06);"
+                        onmouseover="this.style.background='rgba(255,105,0,0.1)'"
+                        onmouseout="this.style.background=''">
+                        ${d.activo}
+                        ${d.componentes.length ? `<span style="font-size:0.75rem; color:#6b7280; margin-left:0.4rem;">${d.componentes.join(' · ')}</span>` : ''}
+                    </div>`
+                ).join('');
+                equipoDropdown.querySelectorAll('.eq-opt').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const data = equipoGruposData.find(d => d.id === el.dataset.id);
+                        if (data) onEquipoSelected(data);
+                    });
+                });
+            }
+            equipoDropdown.style.display = 'block';
+        }
+
+        // Cerrar dropdown al hacer click fuera
+        document.addEventListener('click', (e) => {
+            if (!equipoSearch.contains(e.target) && !equipoDropdown.contains(e.target)) {
+                equipoDropdown.style.display = 'none';
+            }
+        }, true);
+
+        equipoSearch.addEventListener('input', () => {
+            selectEquipo.value = '';
+            selectedEquipoData = null;
+            validarFormulario();
+            renderDropdown(equipoSearch.value);
+        });
+
+        equipoSearch.addEventListener('focus', () => {
+            if (equipoGruposData.length > 0) renderDropdown(equipoSearch.value);
+        });
+
+        // ── Cascade: Ubicación → poblar grupos ───────────────────────────────
         selectUbicacion.addEventListener('change', (e) => {
             const ubicacion = e.target.value;
+            const compSection = document.getElementById('dashboard-comp-section');
+            const compList    = document.getElementById('dashboard-comp-list');
+
+            // Reset equipo
+            equipoSearch.value  = '';
+            selectEquipo.value  = '';
+            selectedEquipoData  = null;
+            equipoDropdown.style.display = 'none';
+            compSection.style.display = 'none';
+            compList.innerHTML = '';
+
             if (!ubicacion) {
-                selectEquipo.innerHTML = '<option value="">Seleccione ubicación primero...</option>';
-                selectEquipo.disabled = true;
+                equipoSearch.placeholder = 'Seleccione ubicación primero...';
+                equipoSearch.disabled = true;
+                equipoGruposData = [];
                 validarFormulario();
                 return;
             }
 
             const equiposDeLaUbicacion = estado.equipos.filter(eq => eq.ubicacion === ubicacion);
-            selectEquipo.disabled = false;
-            selectEquipo.innerHTML = `<option value="">-- Seleccione un equipo --</option>` +
-                equiposDeLaUbicacion.map(eq => `<option value="${eq.id}" data-activo="${eq.activo}" data-componente="${eq.componente || ''}" data-kks="${eq.kks || ''}">${eq.activo}${eq.componente ? ' · ' + eq.componente : ''}</option>`).join('');
+
+            // Agrupar por nombre de activo
+            const grupos = {};
+            equiposDeLaUbicacion.forEach(eq => {
+                if (!grupos[eq.activo]) grupos[eq.activo] = [];
+                grupos[eq.activo].push(eq);
+            });
+
+            equipoGruposData = Object.entries(grupos)
+                .sort(([a],[b]) => a.localeCompare(b))
+                .map(([activo, eqs]) => ({
+                    id: eqs[0].id,
+                    activo,
+                    ids: eqs.map(e => e.id),
+                    componentes: [...new Set(
+                        eqs.flatMap(eq => (eq.componente || '').split(',').map(c => c.trim()).filter(Boolean))
+                    )]
+                }));
+
+            equipoSearch.placeholder = `Buscar entre ${equipoGruposData.length} equipos...`;
+            equipoSearch.disabled = false;
+            equipoSearch.focus();
             validarFormulario();
         });
-
-        selectEquipo.addEventListener('change', validarFormulario);
 
         selectEmpleado.addEventListener('change', (e) => {
             validarFormulario();
             actualizarAyudantes(e.target.value);
             verificarNecesidadCola();
-        });
-
-        selectTrabajo.addEventListener('change', (e) => {
-            const trabajoRequerido = e.target.value;
-            if (!trabajoRequerido) {
-                selectEmpleado.innerHTML = '<option value="">Seleccione trabajo primero...</option>';
-                selectEmpleado.disabled = true;
-                hintEmpleado.textContent = '';
-                actualizarAyudantes('');
-                validarFormulario();
-                return;
-            }
-
-            const aptos = trabajadoresValidados.filter(t => t.habilidades.includes(trabajoRequerido));
-
-            if (aptos.length > 0) {
-                selectEmpleado.disabled = false;
-                selectEmpleado.innerHTML = `<option value="">-- Elija al Líder / Responsable --</option>` +
-                    aptos.map(t => {
-                        const sufijo = t.ocupado ? ' ⚠ (Trabajando→Cola)' : (!t.disponible ? ' ○ (Sin check-in→Cola)' : '');
-                        return `<option value="${t.id}">${t.nombre}${sufijo}</option>`;
-                    }).join('');
-                hintEmpleado.innerHTML = `<span style="color:var(--success-color)"><i class="fa-solid fa-circle-check"></i> ${aptos.length} persona(s) capacitada(s). Ocupados o sin check-in irán a cola.</span>`;
-                actualizarAyudantes('');
-            } else {
-                selectEmpleado.disabled = true;
-                selectEmpleado.innerHTML = '<option value="">Sin empleados capacitados para este trabajo</option>';
-                hintEmpleado.innerHTML = `<span style="color:var(--danger-color)"><i class="fa-solid fa-triangle-exclamation"></i> Nadie tiene esta especialidad.</span>`;
-                actualizarAyudantes('');
-                validarFormulario();
-            }
         });
 
         // Botón "Agregar nuevo equipo"
@@ -2759,31 +3056,29 @@ function renderDashboardView() {
 
         btnAsignar.addEventListener('click', () => {
             const ubicacion = selectUbicacion.value;
-            const trabajo = selectTrabajo.value;
             const liderId = selectEmpleado.value;
             const otNumero = inputOt.value.trim().toUpperCase();
             const equipoId = selectEquipo.value;
 
-            // Buscar el equipo en estado para obtener con seguridad nombre y componente
-            const equipoObj = estado.equipos.find(e => e.id === equipoId);
-            const activo = equipoObj ? equipoObj.activo : '';
-            const componente = equipoObj ? (equipoObj.componente || '') : '';
+            const activo = selectedEquipoData?.activo || '';
+
+            // Componentes seleccionados (checkboxes de la sección dinámica)
+            const componentesSeleccionados = [...document.querySelectorAll('.comp-dash-check:checked')].map(cb => cb.value);
 
             const checkboxes = document.querySelectorAll('.ayudante-checkbox:checked');
             const ayudantesIds = Array.from(checkboxes).map(cb => cb.value);
 
-            console.log('[Asignar] ubicacion:', ubicacion, 'equipo:', equipoId, 'trabajo:', trabajo, 'lider:', liderId);
+            if (ubicacion && equipoId && liderId && tiposSeleccionados.length > 0) {
+                const tiposStr = tiposSeleccionados.join(', ');
+                // Título sin componente: los componentes se registran por separado
+                const tituloFinal = `[${ubicacion}] ${activo} (${tiposStr})`;
 
-            if (ubicacion && equipoId && liderId) {
-                const habilidadParte = trabajo ? ` (${trabajo})` : '';
-                const tituloFinal = `[${ubicacion}] ${activo}${componente ? ' - ' + componente : ''}${habilidadParte}`;
-                
                 const enCola = document.getElementById('check-poner-en-cola').checked;
                 const estadoEjecucion = enCola ? 'en_cola' : 'activo';
-                
-                asignarTarea(tituloFinal, liderId, ayudantesIds, 'en_curso', otNumero, estadoEjecucion);
+
+                asignarTarea(tituloFinal, liderId, ayudantesIds, 'en_curso', otNumero, estadoEjecucion, null, equipoId, tiposSeleccionados, componentesSeleccionados);
             } else {
-                console.warn('[Asignar] Faltan campos:', { ubicacion, equipoId, liderId });
+                if (tiposSeleccionados.length === 0) alert('Selecciona al menos un tipo de trabajo.');
             }
         });
     }
@@ -3010,7 +3305,7 @@ function renderSemanalView() {
              const ays = Array.from(document.querySelectorAll('.sem-ay-check:checked')).map(cb => cb.value);
              const tit = `[${sUbic.value}] ${eqObj.activo}${eqObj.componente ? ' - ' + eqObj.componente : ''}${sTrab.value ? ' ('+sTrab.value+')' : ''}`;
              const fechaExp = document.getElementById('semanal-fecha-exp')?.value || null;
-             asignarTarea(tit, sEmpl.value, ays, 'programada_semana', sInputOt.value.trim().toUpperCase(), 'activo', fechaExp);
+             asignarTarea(tit, sEmpl.value, ays, 'programada_semana', sInputOt.value.trim().toUpperCase(), 'activo', fechaExp, sEq.value);
         });
 
         // Lógica de Carga de Excel (Simplificada para el ejemplo)
@@ -3124,6 +3419,73 @@ async function iniciarTareaDirecto(id) {
     await _db.update('tareas', id, { estado_tarea: 'en_curso', hora_asignacion: hora });
 }
 
+// Iniciar desde cola diaria (estadoEjecucion en_cola → activo)
+async function iniciarDesdeColaExposed(id) {
+    const tarea = estado.tareas.find(t => t.id === id);
+    if (!tarea) return;
+    // Si es programada_semana, usar el flujo existente
+    if (tarea.estadoTarea === 'programada_semana') {
+        return window.iniciarTareaColaExposed(id);
+    }
+    const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    estado.tareas = estado.tareas.map(t => t.id === id
+        ? { ...t, estadoEjecucion: 'activo', horaAsignacion: hora }
+        : t
+    );
+    renderizarVistaActual();
+    await _db.update('tareas', id, { estado_ejecucion: 'activo', hora_asignacion: hora });
+}
+window.iniciarDesdeColaExposed = iniciarDesdeColaExposed;
+
+// Poner tarea activa en cola
+async function ponerEnColaExposed(id) {
+    const tarea = estado.tareas.find(t => t.id === id);
+    if (!tarea) return;
+    // Calcular el próximo número de orden
+    const maxOrden = estado.tareas
+        .filter(t => t._enCola || t.estadoEjecucion === 'en_cola' || t.estadoTarea === 'programada_semana')
+        .reduce((max, t) => Math.max(max, t.orden || 0), 0);
+    const nuevoOrden = maxOrden + 1;
+    estado.tareas = estado.tareas.map(t => t.id === id
+        ? { ...t, estadoEjecucion: 'en_cola', orden: nuevoOrden }
+        : t
+    );
+    renderizarVistaActual();
+    await _db.update('tareas', id, { estado_ejecucion: 'en_cola', orden: nuevoOrden });
+}
+window.ponerEnColaExposed = ponerEnColaExposed;
+
+// Mover tarea en la cola (up/down)
+async function moverOrdenExposed(id, direccion) {
+    // Solo tareas en cola, ordenadas
+    const enCola = estado.tareas
+        .filter(t => t.estadoEjecucion === 'en_cola' || t.estadoTarea === 'programada_semana')
+        .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    const idx = enCola.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const idxDestino = direccion === 'up' ? idx - 1 : idx + 1;
+    if (idxDestino < 0 || idxDestino >= enCola.length) return;
+    // Intercambiar órdenes
+    const ordenA = enCola[idx].orden || 0;
+    const ordenB = enCola[idxDestino].orden || 0;
+    const idA = enCola[idx].id;
+    const idB = enCola[idxDestino].id;
+    // Si los órdenes son iguales, asignar valores distintos
+    const nuevoA = ordenB === ordenA ? ordenA + (direccion === 'up' ? -1 : 1) : ordenB;
+    const nuevoB = ordenA;
+    estado.tareas = estado.tareas.map(t => {
+        if (t.id === idA) return { ...t, orden: nuevoA };
+        if (t.id === idB) return { ...t, orden: nuevoB };
+        return t;
+    });
+    renderizarVistaActual();
+    await Promise.all([
+        _db.update('tareas', idA, { orden: nuevoA }),
+        _db.update('tareas', idB, { orden: nuevoB })
+    ]);
+}
+window.moverOrdenExposed = moverOrdenExposed;
+
 function comenzarTrabajoProgramado(id) {
     _abrirModalIniciar(id, true);
 }
@@ -3136,24 +3498,102 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     document.getElementById('modal-iniciar-tarea-id').value = id;
     document.getElementById('modal-iniciar-tipo').textContent = tarea.tipo;
 
-    // Poblar tipo de trabajo
-    const tipoSel = document.getElementById('modal-iniciar-tipo-trabajo');
-    // Detectar tipo actual desde el nombre de la tarea
-    const tipoActual = tipicosTrabajos.find(t => tarea.tipo.toLowerCase().includes(t.toLowerCase())) || '';
-    tipoSel.innerHTML = tipicosTrabajos.map(t =>
-        `<option value="${t}" ${t === tipoActual ? 'selected' : ''}>${t}</option>`
-    ).join('');
+    // ── Encontrar equipo asociado a esta tarea ────────────────────────────────
+    let equipo = null;
+    const eqIdGuardado = tarea.equipoId || tarea.equipo_id;
+    if (eqIdGuardado) {
+        equipo = estado.equipos.find(e => e.id === eqIdGuardado);
+    }
+    if (!equipo) {
+        // Fallback: intentar encontrar por prefijo del título
+        equipo = estado.equipos.find(e => {
+            const pref = `[${e.ubicacion}] ${e.activo}`;
+            return tarea.tipo.startsWith(pref);
+        });
+    }
+    document.getElementById('modal-iniciar-equipo-id').value = equipo?.id || '';
 
+    // ── TIPOS DE TRABAJO: multi-select chips ──────────────────────────────────
+    const tipoContainer = document.getElementById('modal-iniciar-tipo-trabajo');
+    const tiposBadges  = document.getElementById('modal-iniciar-tipos-badges');
+
+    // Pre-seleccionar tipos ya guardados en la tarea, o detectar del título
+    let tiposSeleccionados = tarea.tiposSeleccionados?.length
+        ? [...tarea.tiposSeleccionados]
+        : tipicosTrabajos.filter(t => tarea.tipo.toLowerCase().includes(t.toLowerCase()));
+
+    function renderTipoChips() {
+        tipoContainer.innerHTML = tipicosTrabajos.map(t => {
+            const sel = tiposSeleccionados.includes(t);
+            return `<label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer;
+                    font-size:0.88rem; color:#374151; background:${sel ? '#fff7f0' : ''}; transition:background 150ms;"
+                    onmouseover="this.style.background='${sel ? '#ffecd9' : '#f9fafb'}'"
+                    onmouseout="this.style.background='${sel ? '#fff7f0' : ''}'">
+                <input type="checkbox" class="tipo-trabajo-check" value="${t}" ${sel ? 'checked' : ''}
+                    style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer; flex-shrink:0;">
+                <span style="flex:1;">${t}</span>
+                ${sel ? '<span style="font-size:0.7rem; color:#FF6900; font-weight:700; white-space:nowrap;">✓</span>' : ''}
+            </label>`;
+        }).join('');
+
+        tipoContainer.querySelectorAll('.tipo-trabajo-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                if (cb.checked) {
+                    if (!tiposSeleccionados.includes(cb.value)) tiposSeleccionados.push(cb.value);
+                } else {
+                    tiposSeleccionados = tiposSeleccionados.filter(t => t !== cb.value);
+                }
+                renderTipoChips();
+                renderTiposBadges();
+            });
+        });
+    }
+
+    function renderTiposBadges() {
+        tiposBadges.innerHTML = tiposSeleccionados.map(t =>
+            `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#fff7f0;
+                color:#FF6900; border:1px solid #fdc898; border-radius:999px;
+                font-size:0.75rem; font-weight:600; padding:2px 10px;">${t}</span>`
+        ).join('');
+    }
+
+    renderTipoChips();
+    renderTiposBadges();
+
+    // ── COMPONENTES: checkboxes si el equipo tiene componentes ────────────────
+    const compContainer = document.getElementById('modal-iniciar-componentes');
+    const compList      = document.getElementById('modal-iniciar-comp-list');
+
+    const componentesStr  = equipo?.componente || '';
+    const componentesDisp = componentesStr.split(',').map(c => c.trim()).filter(Boolean);
+    // Pre-seleccionar componentes guardados
+    const compPrevios = tarea.componentesSeleccionados || [];
+
+    if (componentesDisp.length > 0) {
+        compList.innerHTML = componentesDisp.map(c => {
+            const checked = compPrevios.length === 0 || compPrevios.includes(c);
+            return `<label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.65rem;
+                    background:#fff; border:1px solid #d1d5db; border-radius:6px; cursor:pointer;
+                    font-size:0.88rem; color:#374151; font-weight:500; transition:background 150ms;"
+                    onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='#fff'">
+                <input type="checkbox" class="comp-check" value="${c}" ${checked ? 'checked' : ''}
+                    style="accent-color:#FF6900; width:14px; height:14px;">
+                ${c}
+            </label>`;
+        }).join('');
+        compContainer.style.display = 'block';
+    } else {
+        compContainer.style.display = 'none';
+    }
+
+    // ── LÍDER Y AYUDANTES ─────────────────────────────────────────────────────
     const todos = estado.trabajadores.filter(t => t.disponible);
-
-    // IDs con tarea activa (calculado en tiempo real)
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t =>
         [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
     ));
 
     const liderSel = document.getElementById('modal-iniciar-lider');
-    // El lider puede ser cualquier trabajador con check-in (supervisor no se bloquea)
     liderSel.innerHTML = '<option value="">— Seleccionar —</option>' +
         todos.map(t => {
             const enTarea = idsEnTarea.has(t.id);
@@ -3167,7 +3607,8 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         ayudContainer.innerHTML = lista.map(t => {
             const enTarea = idsEnTarea.has(t.id);
             return `
-                <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer; font-size:0.88rem; color:#374151; transition:background 150ms;"
+                <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer;
+                    font-size:0.88rem; color:#374151; transition:background 150ms;"
                     onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
                     <input type="checkbox" value="${t.id}" style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer;">
                     ${t.nombre}${t.cargo ? ` <span style="color:#9ca3af; font-size:0.78rem;">— ${t.cargo}</span>` : ''}
@@ -3180,37 +3621,35 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
     liderSel.onchange = () => poblarAyudantes(liderSel.value);
     poblarAyudantes(liderSel.value);
-
     modal.style.display = 'flex';
 
+    // ── CONFIRMAR ─────────────────────────────────────────────────────────────
     document.getElementById('modal-iniciar-confirmar').onclick = async () => {
         const liderId = liderSel.value;
         if (!liderId) { alert('Selecciona un líder.'); return; }
+        if (tiposSeleccionados.length === 0) { alert('Selecciona al menos un tipo de trabajo.'); return; }
 
-        const tipoTrabajo = tipoSel.value;
+        const componentesSeleccionados = [...compList.querySelectorAll('.comp-check:checked')].map(cb => cb.value);
         const ayudantesIds = [...ayudContainer.querySelectorAll('input[type=checkbox]:checked')]
             .map(cb => cb.value).filter(v => v !== liderId);
         const lider = estado.trabajadores.find(t => t.id === liderId);
         const ayudantesNombres = ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '');
         const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        const eqId = document.getElementById('modal-iniciar-equipo-id').value || null;
 
-        // Si algún ayudante ya tiene tarea activa → la tarea COMPLETA va a cola (ninguno inicia)
+        // Cola: si algún ayudante ya tiene tarea activa → forzar cola
         const tareasActivasActual = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
         const idsEnTareaActual = new Set(tareasActivasActual.flatMap(t =>
             [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
         ));
         const ayudantesOcupados = ayudantesIds.filter(aid => idsEnTareaActual.has(aid));
         const hayOcupados = ayudantesOcupados.length > 0;
-
-        // Si se pidió "Iniciar Hoy" pero algún ayudante está ocupado → forzar cola
         let iniciarAhora = cambiarADashboard && !hayOcupados;
 
         modal.style.display = 'none';
 
         if (hayOcupados && cambiarADashboard) {
-            const nombres = ayudantesOcupados
-                .map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
-            // Notificación visual breve (no alert nativo)
+            const nombres = ayudantesOcupados.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
             const toast = document.createElement('div');
             toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea asignada en cola para todos.`;
             Object.assign(toast.style, {
@@ -3223,12 +3662,20 @@ function _abrirModalIniciar(id, cambiarADashboard) {
             setTimeout(() => toast.remove(), 4000);
         }
 
+        // Construir nuevo título incorporando todos los tipos seleccionados
+        const tiposStr  = tiposSeleccionados.join(', ');
+        const tipoBase  = tarea.tipo.replace(/\s*\([^)]*\)\s*$/, '').trim();
+        const nuevoTipo = `${tipoBase} (${tiposStr})`;
+
         estado.tareas = estado.tareas.map(t => t.id === id ? {
             ...t,
             ...(iniciarAhora ? { estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora } : {}),
             liderId, liderNombre: lider?.nombre || '',
             ayudantesIds, ayudantesNombres,
-            tipo: tarea.tipo.includes(tipoTrabajo) ? tarea.tipo : `${tarea.tipo} (${tipoTrabajo})`
+            tipo: nuevoTipo,
+            tiposSeleccionados,
+            componentesSeleccionados,
+            equipoId: eqId
         } : t);
 
         if (iniciarAhora) vistaActual = 'dashboard';
@@ -3237,6 +3684,10 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         const dbUpdate = {
             lider_id: liderId, lider_nombre: lider?.nombre || '',
             ayudantes_ids: ayudantesIds, ayudantes_nombres: ayudantesNombres,
+            tipo: nuevoTipo,
+            tipos_trabajo: tiposSeleccionados,
+            componentes_trabajo: componentesSeleccionados,
+            ...(eqId ? { equipo_id: eqId } : {}),
             ...(iniciarAhora ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
         };
         await _db.update('tareas', id, dbUpdate);
@@ -3248,6 +3699,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 // Eventos de Navegación
 const navConfig = {
     'nav-dashboard': 'dashboard',
+    'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
     'nav-historial': 'historial',
     'nav-trabajadores': 'trabajadores',
@@ -3282,6 +3734,9 @@ function renderizarVistaActual() {
             break;
         case 'semanal':
             renderSemanalView();
+            break;
+        case 'mis_horas':
+            renderMisHorasView();
             break;
         case 'horas_extra_admin':
             renderHorasExtraAdminView();
@@ -3364,8 +3819,8 @@ if (btnGuardarEq) {
 
         // Refrescar equipos
         if (navigator.onLine) {
-            const { data } = await supabaseClient.from('equipos').select('*');
-            estado.equipos = data || [];
+            const equiposAll = await fetchAllEquipos();
+            estado.equipos = equiposAll || [];
         } else {
             estado.equipos = [...estado.equipos, equipoGuardado];
         }
@@ -3377,6 +3832,99 @@ if (btnGuardarEq) {
 
 
 // --- LÓGICA DE FICHA TÉCNICA (DETALLES Y GRÁFICOS) ---
+
+// ── Construir formulario dinámico de mediciones en modal-finalizar ────────────
+function _buildMedicionesForm(tipos, componentes) {
+    const container = document.getElementById('modal-mediciones-container');
+    if (!container) return;
+
+    const necesitaVibr    = tipos.some(t => t.toLowerCase().includes('vibrac'));
+    const necesitaTermo   = tipos.some(t => t.toLowerCase().includes('termog'));
+    const necesitaAccComp = tipos.some(t => !t.toLowerCase().includes('vibrac') && !t.toLowerCase().includes('termog'));
+
+    // Si no hay mediciones numéricas y no hay componentes con acciones → contenedor vacío
+    const showContainer = necesitaVibr || necesitaTermo || (necesitaAccComp && componentes.length > 0);
+    if (!showContainer) { container.innerHTML = ''; return; }
+
+    const items = componentes.length > 0 ? componentes : [null];
+
+    let html = `<div>
+        <div style="font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:0.9rem;
+            padding-bottom:0.45rem; border-bottom:2px solid #FF6900; display:flex; align-items:center; gap:0.5rem;">
+            <i class="fa-solid fa-chart-line" style="color:#FF6900;"></i>
+            Mediciones y Registros${componentes.length > 0 ? ' por Componente' : ''}
+        </div>`;
+
+    for (const comp of items) {
+        html += `<div class="med-comp-section" data-comp="${comp || ''}"
+            style="margin-bottom:0.9rem; padding:1rem; background:#f9fafb; border-radius:10px; border:1px solid #e5e7eb;">`;
+
+        if (comp) {
+            html += `<div style="margin-bottom:0.8rem;">
+                <label style="display:flex; align-items:center; gap:0.55rem; cursor:pointer;
+                    font-weight:600; color:#374151; font-size:0.92rem;">
+                    <input type="checkbox" class="comp-activo-check" data-comp="${comp}" checked
+                        style="width:15px; height:15px; accent-color:#FF6900;">
+                    <i class="fa-solid fa-cog" style="color:#FF6900; font-size:0.82rem;"></i> ${comp}
+                </label>
+            </div>`;
+        }
+
+        html += `<div class="comp-fields" data-comp="${comp || ''}">`;
+
+        if (necesitaVibr) {
+            html += `<div style="margin-bottom:0.65rem;">
+                <label style="font-size:0.8rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                    <i class="fa-solid fa-wave-square" style="color:#6366f1;"></i> Vibración máx. (mm/s)
+                </label>
+                <input type="number" class="form-control med-vibr" data-comp="${comp || ''}"
+                    min="0" step="0.01" placeholder="Ej: 4.50" style="font-size:0.9rem;">
+            </div>`;
+        }
+
+        if (necesitaTermo) {
+            html += `<div style="margin-bottom:0.65rem;">
+                <label style="font-size:0.8rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                    <i class="fa-solid fa-temperature-half" style="color:#ef4444;"></i> Temperatura máx. (°C)
+                </label>
+                <input type="number" class="form-control med-termo" data-comp="${comp || ''}"
+                    min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem;">
+            </div>`;
+        }
+
+        if (necesitaAccComp && comp !== null) {
+            html += `<div>
+                <label style="font-size:0.8rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                    <i class="fa-solid fa-wrench" style="color:#f59e0b;"></i> Acciones en este componente
+                </label>
+                <textarea class="form-control med-acciones" data-comp="${comp}"
+                    rows="2" placeholder="Ej: Lubricación realizada, ajuste de pernos..."
+                    style="font-size:0.85rem; resize:vertical;"></textarea>
+            </div>`;
+        }
+
+        html += `</div></div>`; // .comp-fields  .med-comp-section
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
+
+    // Toggle colapsar/expandir sección de componente al desmarcar
+    container.querySelectorAll('.comp-activo-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const fields = container.querySelector(`.comp-fields[data-comp="${cb.dataset.comp}"]`);
+            if (!fields) return;
+            const on = cb.checked;
+            fields.style.opacity  = on ? '1' : '0.4';
+            fields.style.pointerEvents = on ? '' : 'none';
+            fields.querySelectorAll('input, textarea').forEach(el => {
+                el.disabled = !on;
+                if (!on) el.value = '';
+            });
+            cb.closest('.med-comp-section').style.borderColor = on ? '#e5e7eb' : '#d1d5db';
+        });
+    });
+}
 
 const modalFinalizar = document.getElementById('modal-finalizar-tarea');
 const btnCerrarModalFinalizar = document.getElementById('btn-cerrar-modal-finalizar');
@@ -3394,7 +3942,31 @@ if (btnCerrarModalFinalizar) {
 if (btnConfirmarFinalizar) {
     btnConfirmarFinalizar.addEventListener('click', async () => {
         const acciones = document.getElementById('modal-acciones').value.trim();
-        if (!acciones) {
+
+        // Recolectar datos de medición del formulario dinámico
+        const medicionesData = [];
+        const medContainer = document.getElementById('modal-mediciones-container');
+        if (medContainer) {
+            medContainer.querySelectorAll('.med-comp-section').forEach(section => {
+                const comp = section.dataset.comp || null;
+                const activoChk = section.querySelector('.comp-activo-check');
+                const activo = activoChk ? activoChk.checked : true;
+                const vibrInput  = section.querySelector('.med-vibr');
+                const termoInput = section.querySelector('.med-termo');
+                const accionesInput = section.querySelector('.med-acciones');
+                medicionesData.push({
+                    componente: comp || null,
+                    activo,
+                    vibracion:   vibrInput  && vibrInput.value  !== '' ? vibrInput.value  : null,
+                    temperatura: termoInput && termoInput.value !== '' ? termoInput.value : null,
+                    acciones: accionesInput ? accionesInput.value.trim() : null
+                });
+            });
+        }
+
+        // Acciones requeridas si no hay campos de acciones por componente con contenido
+        const tieneAccionesComp = medicionesData.some(m => m.activo && m.acciones);
+        if (!acciones && !tieneAccionesComp) {
             alert("Debes ingresar las acciones realizadas.");
             return;
         }
@@ -3413,7 +3985,8 @@ if (btnConfirmarFinalizar) {
                 numeroAviso: document.getElementById('modal-numero-aviso').value.trim(),
                 hhTrabajo: document.getElementById('modal-hh-trabajo').value.trim(),
                 analisisTecnico: document.getElementById('modal-analisis').value.trim(),
-                recomendacionAnalista: document.getElementById('modal-recomendacion-analista').value.trim()
+                recomendacionAnalista: document.getElementById('modal-recomendacion-analista').value.trim(),
+                medicionesData
             });
             cerrarModalFinalizarTarea();
         } finally {
@@ -3454,10 +4027,47 @@ window.abrirFichaTecnica = async function(equipoId) {
         ].filter(Boolean).join('');
     }
 
-    // 3. Obtener mediciones desde Supabase (o estado local)
-    // Para simplificar, usamos estado.historialMediciones filtrado
-    const mediciones = estado.historialMediciones.filter(m => m.equipo_id === equipoId);
-    
+    // 3. Obtener mediciones — fetch directo a Supabase, caché local como fallback
+    const equipoNombre = equipo.activo;
+    const equipoUbicacion = equipo.ubicacion;
+    // Solo IDs del mismo equipo (mismo nombre Y misma ubicación)
+    const idsDelGrupo = [...estado.equipos
+        .filter(e => e.activo === equipoNombre && e.ubicacion === equipoUbicacion)
+        .map(e => e.id)];
+    if (!idsDelGrupo.includes(equipoId)) idsDelGrupo.push(equipoId);
+
+    let mediciones = [];
+    if (navigator.onLine && supabaseClient) {
+        // Intentar las dos variantes de nombre de tabla
+        for (const tabla of ['mediciones', 'historial_mediciones']) {
+            const { data, error } = await supabaseClient
+                .from(tabla)
+                .select('*')
+                .in('equipo_id', idsDelGrupo)
+                .order('fecha', { ascending: false })
+                .limit(100);
+            if (!error && data) { mediciones = data; break; }
+            console.warn('[Ficha] Error fetching', tabla, error?.message);
+        }
+    }
+    // Fallback 1: estado en memoria
+    if (mediciones.length === 0) {
+        const idsSet = new Set(idsDelGrupo);
+        mediciones = estado.historialMediciones.filter(m => idsSet.has(m.equipo_id));
+    }
+    // Fallback 2: IndexedDB local
+    if (mediciones.length === 0 && window.localDB) {
+        try {
+            const todas = await window.localDB.mediciones.getAll();
+            const idsSet = new Set(idsDelGrupo);
+            mediciones = (todas || []).filter(m => idsSet.has(m.equipo_id));
+        } catch(e) { /* localDB no disponible */ }
+    }
+    // Filtrar por componente si corresponde (solo cuando la medición tiene campo componente)
+    if (equipo.componente) {
+        mediciones = mediciones.filter(m => !m.componente || m.componente === equipo.componente);
+    }
+
     // 4. Renderizar listas de mediciones según tipo
     renderListasFicha(mediciones);
 
@@ -3481,7 +4091,7 @@ function renderListasFicha(mediciones) {
     listVib.innerHTML = vibs.length > 0 ? vibs.map(m => `
         <div style="background:#f1f5f9; padding:0.6rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <span style="font-weight:700; color:var(--primary-color)">${m.valor} ${m.unidad}</span>
+                <span style="font-weight:700; color:var(--primary-color)">${m.valor} ${m.unidad || 'mm/s'}</span>
                 <div style="font-size:0.75rem; color:var(--text-muted)">${new Date(m.fecha).toLocaleDateString()} · ${m.punto_medicion}</div>
             </div>
             <i class="fa-solid fa-chart-line" style="color:#cbd5e1"></i>
@@ -3677,7 +4287,19 @@ if (searchInput) {
                 grupos[key].push(eq);
             });
 
-            const tarjetas = Object.entries(grupos).map(([_key, eqs]) => {
+            // Ordenar: primero por nombre de activo, luego por número de unidad (menor primero)
+            const extractUnitNum = ubicacion => {
+                const m = (ubicacion || '').match(/(\d+)/);
+                return m ? parseInt(m[1]) : 9999;
+            };
+            const gruposOrdenados = Object.entries(grupos).sort(([keyA, eqsA], [keyB, eqsB]) => {
+                const nombreA = eqsA[0].activo || '';
+                const nombreB = eqsB[0].activo || '';
+                if (nombreA !== nombreB) return nombreA.localeCompare(nombreB);
+                return extractUnitNum(eqsA[0].ubicacion) - extractUnitNum(eqsB[0].ubicacion);
+            });
+
+            const tarjetas = gruposOrdenados.map(([_key, eqs]) => {
                 const nombre = eqs[0].activo;
                 const eq0 = eqs[0];
                 const crit = (eq0.criticidad || '').toUpperCase();
@@ -3798,66 +4420,120 @@ function validarPin() {
 
 // ── LOGIN TRABAJADOR con RUT + PIN ──────────────────────────────────────────
 
-document.getElementById('btn-login-worker')?.addEventListener('click', async () => {
-    const sel = document.getElementById('select-worker-login');
-    sel.innerHTML = '<option value="">Cargando...</option>';
+document.getElementById('btn-login-worker')?.addEventListener('click', () => {
     document.getElementById('worker-login-container').style.display = 'block';
     document.querySelector('.role-cards').style.display = 'none';
     document.getElementById('worker-login-error').style.display = 'none';
-
-    // Si no hay trabajadores en memoria, intentar cargar desde localDB
-    if (!estado.trabajadores || estado.trabajadores.length === 0) {
-        const local = await window.localDB?.trabajadores.getAll().catch(() => []) || [];
-        if (local.length > 0) estado.trabajadores = local;
-    }
-
-    // Poblar selector con trabajadores cargados
-    sel.innerHTML = '<option value="">-- Selecciona tu nombre --</option>';
-    estado.trabajadores
-        .slice()
-        .sort((a, b) => a.nombre.localeCompare(b.nombre))
-        .forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t.id;
-            opt.textContent = `${t.nombre} — ${t.puesto}`;
-            sel.appendChild(opt);
-        });
+    document.getElementById('input-worker-rut').value = '';
+    document.getElementById('input-worker-pin').value = '';
+    setTimeout(() => document.getElementById('input-worker-rut').focus(), 100);
 });
 
 document.getElementById('btn-cancel-worker')?.addEventListener('click', () => {
     document.getElementById('worker-login-container').style.display = 'none';
     document.querySelector('.role-cards').style.display = 'block';
     document.getElementById('worker-login-error').style.display = 'none';
-    document.getElementById('select-worker-login').value = '';
+    document.getElementById('input-worker-rut').value = '';
+    document.getElementById('input-worker-pin').value = '';
+});
+
+// Permitir Enter en el campo PIN para enviar
+document.getElementById('input-worker-pin')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') validarWorkerLogin();
 });
 
 document.getElementById('btn-submit-worker')?.addEventListener('click', validarWorkerLogin);
 
 async function validarWorkerLogin() {
-    const sel = document.getElementById('select-worker-login');
-    const trabajadorId = sel?.value;
-    const errEl = document.getElementById('worker-login-error');
-    const btn = document.getElementById('btn-submit-worker');
+    const rutInput = (document.getElementById('input-worker-rut')?.value || '').trim().replace(/[.\-\s]/g, '');
+    const pinInput = (document.getElementById('input-worker-pin')?.value || '').trim();
+    const errEl   = document.getElementById('worker-login-error');
+    const btn     = document.getElementById('btn-submit-worker');
 
-    if (!trabajadorId) {
+    // Verificar bloqueo por intentos fallidos
+    const lockedUntil = parseInt(localStorage.getItem('worker_login_locked_until') || '0');
+    if (Date.now() < lockedUntil) {
+        const min = Math.ceil((lockedUntil - Date.now()) / 60000);
+        errEl.textContent = `Demasiados intentos fallidos. Intenta en ${min} min.`;
         errEl.style.display = 'block';
         return;
     }
 
-    const trabajador = estado.trabajadores.find(t => String(t.id) === String(trabajadorId));
-    if (!trabajador) {
+    if (!rutInput || !pinInput) {
+        errEl.textContent = 'Ingresa tu RUT y PIN.';
+        errEl.style.display = 'block';
+        return;
+    }
+    if (pinInput.length !== 4) {
+        errEl.textContent = 'El PIN debe ser de 4 dígitos.';
         errEl.style.display = 'block';
         return;
     }
 
-    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Registrando...'; }
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verificando...';
+    errEl.style.display = 'none';
+
+    // Buscar trabajador por RUT (local primero, luego Supabase)
+    let trabajador = estado.trabajadores.find(t =>
+        String(t.rut || '').replace(/[.\-\s]/g, '') === rutInput
+    );
+
+    if (!trabajador && navigator.onLine && supabaseClient) {
+        try {
+            const { data } = await supabaseClient
+                .from('trabajadores')
+                .select('*')
+                .eq('rut', rutInput)
+                .maybeSingle();
+            if (data) {
+                trabajador = data;
+                // Incorporar al estado local si no estaba
+                if (!estado.trabajadores.find(t => t.id === data.id)) {
+                    estado.trabajadores = [...estado.trabajadores, data];
+                }
+            }
+        } catch(e) { /* sin conexión */ }
+    }
+
+    // Calcular PIN esperado desde fecha_nacimiento (formato: YYYY-MM-DD → DDMM)
+    let pinCorrecto = false;
+    if (trabajador?.fecha_nacimiento) {
+        const partes = trabajador.fecha_nacimiento.split('-'); // ['YYYY','MM','DD']
+        const dia = (partes[2] || '').substring(0, 2).padStart(2, '0');
+        const mes = (partes[1] || '').padStart(2, '0');
+        pinCorrecto = pinInput === `${dia}${mes}`;
+    }
+
+    if (!trabajador || !pinCorrecto) {
+        const intentos = parseInt(localStorage.getItem('worker_login_attempts') || '0') + 1;
+        if (intentos >= 3) {
+            localStorage.setItem('worker_login_locked_until', String(Date.now() + 5 * 60 * 1000));
+            localStorage.removeItem('worker_login_attempts');
+            errEl.textContent = 'Demasiados intentos fallidos. Cuenta bloqueada por 5 minutos.';
+        } else {
+            localStorage.setItem('worker_login_attempts', String(intentos));
+            errEl.textContent = `RUT o PIN incorrecto. Consulta al planificador. (${intentos}/3 intentos)`;
+        }
+        errEl.style.display = 'block';
+        document.getElementById('input-worker-pin').value = '';
+        document.getElementById('input-worker-pin').focus();
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Ingresar y hacer Check-in';
+        return;
+    }
+
+    // Login exitoso — limpiar contadores
+    localStorage.removeItem('worker_login_attempts');
+    localStorage.removeItem('worker_login_locked_until');
 
     await updateTrabajadorDisponibilidad(trabajador.id, true);
     estado.trabajadores = estado.trabajadores.map(t =>
         t.id === trabajador.id ? { ...t, disponible: true } : t
     );
 
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Ingresar y hacer Check-in'; }
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Ingresar y hacer Check-in';
 
     accederApp('trabajador', { ...trabajador, disponible: true });
 }
@@ -3870,6 +4546,7 @@ function accederApp(rol, trabajadorObj = null) {
 
     // Visibilidad de nav según rol
     const navRoles = {
+        'nav-mis-horas':          ['trabajador'],
         'nav-semanal':            ['admin', 'trabajador'],
         'nav-trabajadores':       ['admin'],
         'nav-checkin':            ['admin'],
