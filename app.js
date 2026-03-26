@@ -401,7 +401,7 @@ async function updateTrabajadorDisponibilidad(id, disponible) {
     await _db.update('trabajadores', id, payload);
 }
 
-async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = []) {
+async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null) {
     const lider = estado.trabajadores.find(t => t.id === liderId);
     const ayudantesNombres = ayudantesIds.map(id => {
         const t = estado.trabajadores.find(x => x.id === id);
@@ -454,6 +454,7 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
     if (equipoId) nuevaTarea.equipo_id = equipoId;
     if (tiposSeleccionados.length) nuevaTarea.tipos_trabajo = tiposSeleccionados;
     if (componentesSeleccionados.length) nuevaTarea.componentes_trabajo = componentesSeleccionados;
+    if (ubicacion) nuevaTarea.ubicacion = ubicacion;
 
     // Optimistic update: actualizar UI inmediatamente
     const tareaLocal = {
@@ -467,6 +468,7 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         equipoId: equipoId || null,
         tiposSeleccionados,
         componentesSeleccionados,
+        ubicacion: ubicacion || null,
         orden: 0
     };
     estado.tareas.push(tareaLocal);
@@ -2552,23 +2554,34 @@ function _clasificarTareasPorEspecialidad(tareas) {
 }
 
 function _htmlTareaCard(tarea, isAdmin, colaTareas) {
+    // Extraer ubicación primero (se usa tanto en el link como en el HTML)
+    let ubicacionTexto = tarea.ubicacion || '';
+    if (!ubicacionTexto) {
+        const bracketMatch = tarea.tipo.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) ubicacionTexto = bracketMatch[1];
+    }
     // Resolver enlace a equipo en el título
     let eqId = '', nombreEqEncontrado = '';
+    const _ubicTarea = ubicacionTexto.toLowerCase();
     const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
     for (const match of matches) {
         const candidato = match[1];
-        const res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
+        let res = estado.equipos.find(e => (e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato) && e.ubicacion && e.ubicacion.toLowerCase() === _ubicTarea);
+        if (!res) res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
         if (res) { eqId = res.id; nombreEqEncontrado = candidato; break; }
     }
     if (!eqId) {
-        const res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
+        let res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()) && e.ubicacion && e.ubicacion.toLowerCase() === _ubicTarea);
+        if (!res) res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
         if (res) { eqId = res.id; nombreEqEncontrado = res.activo; }
     }
     let tituloHtml = tarea.tipo;
     if (eqId) {
         const partes = tarea.tipo.split(new RegExp('(\\[?' + nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]?)', 'i'));
+        // ubicacionTexto ya está disponible aquí
+        const _ubSafe = ubicacionTexto.replace(/'/g, '');
         tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
-            ? '<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica(\'' + eqId + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
+            ? '<a href="#" onclick="event.preventDefault(); window.elegirComponenteYAbrirFicha(\'' + eqId + '\',\'' + _ubSafe + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
             : p).join('');
     }
     // Strip [Unidad] prefix and (Tipo de trabajo) suffix from displayed title
@@ -2587,16 +2600,11 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
     const tiposBadgesHtml = tipos.map(t =>
         `<span style="display:inline-block; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 10px; letter-spacing:0.01em;">${t}</span>`
     ).join('');
-    // Extract unit/location — use tarea.ubicacion or extract [bracketed] text from title
-    let ubicacionTexto = tarea.ubicacion || '';
-    if (!ubicacionTexto) {
-        const bracketMatch = tarea.tipo.match(/^\[([^\]]+)\]/);
-        if (bracketMatch) ubicacionTexto = bracketMatch[1];
-    }
+    const _ubSafeHtml = ubicacionTexto.replace(/'/g, '');
     const ubicacionHtml = ubicacionTexto
         ? `<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-               <span>${ubicacionTexto}</span>
+               <a href="#" onclick="event.preventDefault(); window.abrirVistaUnidad('${_ubSafeHtml}')" style="color:#64748b; text-decoration:none; font-weight:600;" onmouseover="this.style.color='#FF6900'" onmouseout="this.style.color='#64748b'">${ubicacionTexto}</a>
            </div>` : '';
     const fechaStr = tarea.fechaAsignacion
         ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
@@ -3333,47 +3341,62 @@ function renderSemanalView() {
                         <input type="text" id="input-buscar-semanal" placeholder="Buscar OT, equipo..." class="form-control" style="max-width:200px; font-size:0.8rem;">
                     </div>
                     
-                    ${tareasSemanales.length === 0 ? 
-                        `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos programados para la semana.</p>` : 
-                        `<div class="items-list" id="lista-semanal-items">
-                            ${tareasSemanales.map(tarea => `
-                                <div class="list-item" style="border-left: 3px solid var(--primary-color)">
-                                    <div class="item-info">
-                                        <h4 style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
-                                            ${tarea.tipo}
-                                            ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color); color:white; font-size:0.8rem;"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
-                                            ${tarea.fechaExpiracion && new Date(tarea.fechaExpiracion) < new Date() ? `<span class="badge" style="background:#ef4444; color:white; font-size:0.8rem;"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDO</span>` : ''}
-                                        </h4>
-                                        <p style="margin-top:0.5rem;"><i class="fa-solid fa-user-tie" style="color:var(--text-muted)"></i> Supervisor: <strong>${tarea.liderNombre || 'Pendiente por Asignar'}</strong></p>
-                                        ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `<p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;"><i class="fa-solid fa-users"></i> Apoyo: ${tarea.ayudantesNombres.join(', ')}</p>` : ''}
-                                        ${tarea.fechaExpiracion ? `<p style="font-size:0.8rem; color:${new Date(tarea.fechaExpiracion)<new Date()?'#ef4444':'var(--text-muted)'}; margin-top:0.2rem;"><i class="fa-solid fa-calendar-xmark"></i> Vence: ${new Date(tarea.fechaExpiracion).toLocaleDateString('es-CL')}</p>` : ''}
-                                    </div>
-                                    ${isAdmin ? `
-                                    <div style="display:flex; gap:0.5rem; margin-top:1rem; flex-wrap:wrap;">
-                                        <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color); padding: 0.4rem;" onclick="window.eliminarTareaExposed('${tarea.id}')">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>
-                                        <button style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.8rem; font-size:0.82rem; font-weight:600; cursor:pointer;" onclick="asignarPersonalATarea('${tarea.id}')">
-                                            <i class="fa-solid fa-user-plus"></i> Asignar
-                                        </button>
-                                        <button class="btn btn-primary" style="flex:1; padding: 0.4rem;" onclick="comenzarTrabajoProgramado('${tarea.id}')">
-                                            <i class="fa-solid fa-play"></i> Iniciar Hoy
-                                        </button>
-                                    </div>
-                                    ` : `
-                                    <div style="display:flex; gap:0.5rem; margin-top:0.8rem; flex-wrap:wrap;">
-                                        <button class="btn btn-primary" style="font-size:0.85rem; padding:0.4rem 1rem;" onclick="iniciarTareaDirecto('${tarea.id}')">
-                                            <i class="fa-solid fa-play"></i> Iniciar Hoy
-                                        </button>
-                                        <button class="btn btn-success" style="font-size:0.85rem; padding:0.4rem 1rem;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
-                                            <i class="fa-solid fa-flag-checkered"></i> Finalizar
-                                        </button>
-                                    </div>
-                                    `}
+                    ${(() => {
+                        if (tareasSemanales.length === 0) return `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos programados para la semana.</p>`;
+                        // Agrupar por ubicacion (campo guardado o extraído del título)
+                        const getUbic = t => t.ubicacion || (t.tipo.match(/^\[([^\]]+)\]/) || [])[1] || 'Sin unidad';
+                        const grupos = {};
+                        tareasSemanales.forEach(t => {
+                            const u = getUbic(t);
+                            if (!grupos[u]) grupos[u] = [];
+                            grupos[u].push(t);
+                        });
+                        const unidades = Object.keys(grupos).sort((a,b) => a.localeCompare(b));
+                        const cardSemanal = tarea => {
+                            const nombreLimpio = tarea.tipo.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '');
+                            const tipos = Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0
+                                ? tarea.tiposSeleccionados
+                                : (tarea.tipo.match(/\(([^)]+)\)/) ? [tarea.tipo.match(/\(([^)]+)\)/)[1]] : []);
+                            const vencido = tarea.fechaExpiracion && new Date(tarea.fechaExpiracion) < new Date();
+                            return `<div class="list-item" style="border-left:3px solid var(--primary-color); margin-bottom:0.5rem;">
+                                <div style="font-size:0.97rem; font-weight:700; color:var(--primary-color);">
+                                    ${nombreLimpio}
+                                    ${tarea.otNumero ? `<span style="font-size:0.75rem;font-weight:600;background:#fff3e0;color:#e65100;border-radius:6px;padding:1px 7px;margin-left:4px;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}
+                                    ${vencido ? `<span class="badge" style="background:#ef4444;color:#fff;font-size:0.72rem;margin-left:4px;"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDO</span>` : ''}
                                 </div>
-                            `).join('')}
-                        </div>`
-                    }
+                                ${tipos.length ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.35rem;">${tipos.map(t=>`<span style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:999px;font-size:0.7rem;font-weight:600;padding:1px 9px;">${t}</span>`).join('')}</div>` : ''}
+                                <div style="margin:0.55rem 0 0.4rem;border-top:1px solid #f1f5f9;"></div>
+                                <div style="font-size:0.88rem;color:var(--text-main);display:flex;align-items:center;gap:0.4rem;">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                    <span style="color:#64748b;font-size:0.8rem;">Supervisor</span>
+                                    <strong>${tarea.liderNombre || 'Pendiente por asignar'}</strong>
+                                </div>
+                                ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `<div style="font-size:0.82rem;color:#64748b;margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Apoyo: ${tarea.ayudantesNombres.join(', ')}</div>` : ''}
+                                ${tarea.fechaExpiracion ? `<div style="font-size:0.78rem;color:${vencido?'#ef4444':'#94a3b8'};margin-top:0.25rem;"><i class="fa-solid fa-calendar-xmark"></i> Vence: ${new Date(tarea.fechaExpiracion).toLocaleDateString('es-CL')}</div>` : ''}
+                                ${isAdmin ? `
+                                <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+                                    <button class="btn btn-outline" style="border-color:var(--danger-color);color:var(--danger-color);padding:0.4rem;" onclick="window.eliminarTareaExposed('${tarea.id}')"><i class="fa-solid fa-trash"></i></button>
+                                    <button style="background:#FF6900;color:#fff;border:none;border-radius:8px;padding:0.4rem 0.8rem;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="asignarPersonalATarea('${tarea.id}')"><i class="fa-solid fa-user-plus"></i> Asignar</button>
+                                    <button class="btn btn-primary" style="flex:1;padding:0.4rem;" onclick="comenzarTrabajoProgramado('${tarea.id}')"><i class="fa-solid fa-play"></i> Iniciar Hoy</button>
+                                </div>` : `
+                                <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
+                                    <button class="btn btn-primary" style="font-size:0.85rem;padding:0.4rem 1rem;" onclick="iniciarTareaDirecto('${tarea.id}')"><i class="fa-solid fa-play"></i> Iniciar Hoy</button>
+                                    <button class="btn btn-success" style="font-size:0.85rem;padding:0.4rem 1rem;" onclick="window.completarTareaExposed('${tarea.id}','${tarea.liderId||''}','${(tarea.ayudantesIds||[]).join(',')}')"><i class="fa-solid fa-flag-checkered"></i> Finalizar</button>
+                                </div>`}
+                            </div>`;
+                        };
+                        return `<div id="lista-semanal-items">
+                            ${unidades.map(u => `
+                                <div style="margin-bottom:1.2rem;">
+                                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;padding-bottom:0.4rem;border-bottom:2px solid var(--primary-color);">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                        <span style="font-weight:700;font-size:0.9rem;color:#1e293b;">${u}</span>
+                                        <span style="background:#FF6900;color:#fff;border-radius:999px;font-size:0.7rem;font-weight:700;padding:1px 8px;">${grupos[u].length}</span>
+                                    </div>
+                                    ${grupos[u].map(cardSemanal).join('')}
+                                </div>`).join('')}
+                        </div>`;
+                    })()}
                 </div>
             </div>
         </div>
@@ -3437,7 +3460,8 @@ function renderSemanalView() {
              const ays = Array.from(document.querySelectorAll('.sem-ay-check:checked')).map(cb => cb.value);
              const tit = `[${sUbic.value}] ${eqObj.activo}${eqObj.componente ? ' - ' + eqObj.componente : ''}${sTrab.value ? ' ('+sTrab.value+')' : ''}`;
              const fechaExp = document.getElementById('semanal-fecha-exp')?.value || null;
-             asignarTarea(tit, sEmpl.value, ays, 'programada_semana', sInputOt.value.trim().toUpperCase(), 'activo', fechaExp, sEq.value);
+             const tiposSel = sTrab.value ? [sTrab.value] : [];
+             asignarTarea(tit, sEmpl.value, ays, 'programada_semana', sInputOt.value.trim().toUpperCase(), 'activo', fechaExp, sEq.value, tiposSel, [], sUbic.value);
         });
 
         // Lógica de Carga de Excel (Simplificada para el ejemplo)
@@ -3645,6 +3669,13 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     }
     document.getElementById('modal-iniciar-equipo-id').value = equipo?.id || '';
 
+    // ── UBICACIÓN ─────────────────────────────────────────────────────────────
+    const ubicSel = document.getElementById('modal-iniciar-ubicacion');
+    const ubicaciones = [...new Set(estado.equipos.map(e => e.ubicacion).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    const ubicActual = tarea.ubicacion || equipo?.ubicacion || (tarea.tipo.match(/^\[([^\]]+)\]/) || [])[1] || '';
+    ubicSel.innerHTML = `<option value="">— Seleccionar —</option>` +
+        ubicaciones.map(u => `<option value="${u}" ${u === ubicActual ? 'selected' : ''}>${u}</option>`).join('');
+
     // ── TIPOS DE TRABAJO: multi-select chips ──────────────────────────────────
     const tipoContainer = document.getElementById('modal-iniciar-tipo-trabajo');
     const tiposBadges  = document.getElementById('modal-iniciar-tipos-badges');
@@ -3768,6 +3799,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         const ayudantesNombres = ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '');
         const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         const eqId = document.getElementById('modal-iniciar-equipo-id').value || null;
+        const ubicacionElegida = document.getElementById('modal-iniciar-ubicacion').value || null;
 
         // Cola: si algún ayudante ya tiene tarea activa → forzar cola
         const tareasActivasActual = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
@@ -3807,7 +3839,8 @@ function _abrirModalIniciar(id, cambiarADashboard) {
             tipo: nuevoTipo,
             tiposSeleccionados,
             componentesSeleccionados,
-            equipoId: eqId
+            equipoId: eqId,
+            ...(ubicacionElegida ? { ubicacion: ubicacionElegida } : {})
         } : t);
 
         if (iniciarAhora) vistaActual = 'dashboard';
@@ -3820,6 +3853,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
             tipos_trabajo: tiposSeleccionados,
             componentes_trabajo: componentesSeleccionados,
             ...(eqId ? { equipo_id: eqId } : {}),
+            ...(ubicacionElegida ? { ubicacion: ubicacionElegida } : {}),
             ...(iniciarAhora ? { estado_tarea: 'en_curso', hora_asignacion: hora } : {})
         };
         await _db.update('tareas', id, dbUpdate);
@@ -4127,6 +4161,97 @@ if (btnConfirmarFinalizar) {
         }
     });
 }
+
+// Muestra un selector de componentes del mismo equipo antes de abrir la ficha
+window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
+    const equipo = estado.equipos.find(e => e.id === eqId);
+    if (!equipo) return;
+    // Usar la ubicación de la tarea si fue pasada, si no la del equipo
+    const ubicFiltro = ubicacionForzada || equipo.ubicacion;
+    // Buscar todos los componentes del mismo activo y misma ubicación
+    const componentes = estado.equipos.filter(e => e.activo === equipo.activo && e.ubicacion === ubicFiltro);
+    if (componentes.length <= 1) {
+        window.abrirFichaTecnica(eqId);
+        return;
+    }
+    // Construir modal selector
+    let existente = document.getElementById('modal-selector-componente');
+    if (existente) existente.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-selector-componente';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:1.5rem 1.6rem;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+                <span style="font-weight:700;font-size:1rem;color:#1e293b;">Seleccionar componente</span>
+                <button onclick="document.getElementById('modal-selector-componente').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;line-height:1;">✕</button>
+            </div>
+            <p style="font-size:0.85rem;color:#64748b;margin:0 0 1rem;">${equipo.activo} · ${ubicFiltro}</p>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+                ${componentes.map(c => `
+                <button onclick="document.getElementById('modal-selector-componente').remove(); window.abrirFichaTecnica('${c.id}')"
+                    style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:0.7rem 1rem;text-align:left;cursor:pointer;font-size:0.92rem;font-weight:600;color:#1e293b;display:flex;align-items:center;gap:0.6rem;transition:border-color 0.15s;"
+                    onmouseover="this.style.borderColor='#FF6900';this.style.background='#fff7f0'"
+                    onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+                    ${c.componente || 'Sin componente'}
+                    ${c.kks ? `<span style="margin-left:auto;font-size:0.75rem;color:#94a3b8;font-weight:400;">${c.kks}</span>` : ''}
+                </button>`).join('')}
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
+
+// Modal con todos los equipos de una unidad
+window.abrirVistaUnidad = function(ubicacion) {
+    // Agrupar equipos por nombre (activo), ignorar duplicados por componente
+    const equiposDeLaUnidad = estado.equipos.filter(e => e.ubicacion === ubicacion);
+    const grupos = {};
+    equiposDeLaUnidad.forEach(e => {
+        if (!grupos[e.activo]) grupos[e.activo] = [];
+        grupos[e.activo].push(e);
+    });
+    const nombresUnicos = Object.keys(grupos).sort();
+
+    let existente = document.getElementById('modal-vista-unidad');
+    if (existente) existente.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-vista-unidad';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;padding:1.5rem 1.6rem;max-width:480px;width:92%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.3rem;flex-shrink:0;">
+                <div>
+                    <span style="font-weight:700;font-size:1rem;color:#1e293b;">Equipos · ${ubicacion}</span>
+                    <span style="margin-left:0.5rem;background:#FF6900;color:#fff;border-radius:999px;font-size:0.72rem;font-weight:700;padding:2px 9px;">${nombresUnicos.length}</span>
+                </div>
+                <button onclick="document.getElementById('modal-vista-unidad').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;line-height:1;">✕</button>
+            </div>
+            <p style="font-size:0.8rem;color:#94a3b8;margin:0 0 1rem;">Toca un equipo para ver su ficha técnica</p>
+            <div style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:0.45rem;padding-right:2px;">
+                ${nombresUnicos.map(nombre => {
+                    const comps = grupos[nombre];
+                    const primerEq = comps[0];
+                    const critColors = { 'A': '#ef4444', 'B': '#f59e0b', 'C': '#22c55e' };
+                    const critColor = critColors[primerEq.criticidad] || '#94a3b8';
+                    return `<button onclick="document.getElementById('modal-vista-unidad').remove(); ${comps.length > 1 ? `window.elegirComponenteYAbrirFicha('${primerEq.id}','${ubicacion.replace(/'/g,'')}')` : `window.abrirFichaTecnica('${primerEq.id}')`}"
+                        style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:0.65rem 1rem;text-align:left;cursor:pointer;display:flex;align-items:center;gap:0.7rem;transition:border-color 0.15s;"
+                        onmouseover="this.style.borderColor='#FF6900';this.style.background='#fff7f0'"
+                        onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;font-size:0.9rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nombre}</div>
+                            ${primerEq.kks ? `<div style="font-size:0.75rem;color:#94a3b8;margin-top:1px;">${primerEq.kks}</div>` : ''}
+                        </div>
+                        ${primerEq.criticidad ? `<span style="font-size:0.7rem;font-weight:700;color:${critColor};background:${critColor}18;border-radius:6px;padding:2px 7px;flex-shrink:0;">Crit. ${primerEq.criticidad}</span>` : ''}
+                        ${comps.length > 1 ? `<span style="font-size:0.72rem;color:#64748b;flex-shrink:0;">${comps.length} comp.</span>` : ''}
+                    </button>`;
+                }).join('')}
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
 
 window.abrirFichaTecnica = async function(equipoId) {
     console.log('Abriendo ficha técnica para equipo:', equipoId);
