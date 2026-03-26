@@ -187,7 +187,10 @@ async function inicializarDatos() {
         if (errT)  throw errT;
         if (errTr) throw errTr;
 
-        estado.trabajadores = trabajadores || [];
+        estado.trabajadores = (trabajadores || []).map(t => ({
+            ...t,
+            disponible: _checkinVigente(t)
+        }));
         estado.tareas = (tareas || []).map(t => ({
             id: t.id, tipo: t.tipo,
             liderId: t.lider_id, liderNombre: t.lider_nombre,
@@ -238,6 +241,19 @@ async function inicializarDatos() {
         // Reset automático del check-in pasadas las 20:00
         await resetCheckInSiNecesario();
 
+        // Timer: a las 20:00 hace el reset UNA SOLA VEZ por día (turnos de noche pueden loguear después)
+        setInterval(() => {
+            const ahora = new Date();
+            const hoy = ahora.toDateString();
+            const ultimoReset = localStorage.getItem('ultimo_reset_checkin');
+            if (ahora.getHours() >= 20 && ultimoReset !== hoy) {
+                // Primera vez que llegamos a las 20:00 hoy → reset
+                estado.trabajadores = estado.trabajadores.map(t => ({ ...t, disponible: false }));
+                resetCheckInSiNecesario();
+                renderizarVistaActual();
+            }
+        }, 60000);
+
         // Suscribirse a cambios en tiempo real
         configurarRealtime();
 
@@ -256,7 +272,10 @@ async function inicializarDatos() {
                     window.localDB.historial.getAll(),
                     window.localDB.mediciones.getAll(),
                 ]);
-                estado.trabajadores       = trabajadores || [];
+                estado.trabajadores = (trabajadores || []).map(t => ({
+                    ...t,
+                    disponible: _checkinVigente(t)
+                }));
                 estado.tareas             = (tareas || []).map(t => ({
                     id: t.id, tipo: t.tipo,
                     liderId: t.lider_id || t.liderId, liderNombre: t.lider_nombre || t.liderNombre,
@@ -285,6 +304,15 @@ async function inicializarDatos() {
         }
         alert('Hubo un error al conectar con la base de datos. Se usarán datos de respaldo.');
     }
+}
+
+// Verifica si el check-in de un trabajador sigue vigente (mismo día)
+// No bloquea por hora — el reset de las 20:00 ocurre una sola vez y permite turnos de noche
+function _checkinVigente(t) {
+    if (!t.disponible) return false;
+    if (!t.checkin_fecha) return false;
+    const hoy = new Date().toISOString().slice(0, 10);
+    return (t.checkin_fecha.slice(0, 10) === hoy);
 }
 
 // Resetea todos los check-in si estamos pasadas las 20:00 y no se ha reseteado hoy
@@ -368,7 +396,9 @@ function configurarRealtime() {
 }
 
 async function updateTrabajadorDisponibilidad(id, disponible) {
-    await _db.update('trabajadores', id, { disponible, ocupado: false });
+    const payload = { disponible, ocupado: false };
+    if (disponible) payload.checkin_fecha = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    await _db.update('trabajadores', id, payload);
 }
 
 async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = []) {
@@ -977,13 +1007,7 @@ function renderPerfilView() {
                     </div>
                 </div>
 
-                <!-- Horas Extra del mes (admin view) -->
-                <div class="panel" style="margin-top:1.2rem;">
-                    <h3 style="margin:0 0 0.7rem 0; font-size:0.95rem; color:var(--text-main); display:flex; align-items:center; gap:0.5rem;">
-                        <i class="fa-regular fa-clock"></i> Horas Extra
-                    </h3>
-                    <div id="he-admin-resumen"><p style="color:var(--text-muted);font-size:0.83rem;">Cargando...</p></div>
-                </div>` : `<p style="color:var(--text-muted); text-align:center; padding:2rem 0;">Selecciona un trabajador para ver su perfil.</p>`}
+` : `<p style="color:var(--text-muted); text-align:center; padding:2rem 0;">Selecciona un trabajador para ver su perfil.</p>`}
             </div>`;
 
             mainContent.innerHTML = html;
@@ -993,38 +1017,6 @@ function renderPerfilView() {
             });
 
             if (w) {
-                // Cargar horas extra del mes para admin
-                cargarHorasExtraTrabajador(w.id).then(registros => {
-                    const el = document.getElementById('he-admin-resumen');
-                    if (!el) return;
-                    const mesActual = new Date().toISOString().slice(0, 7);
-                    const totalMes = registros
-                        .filter(r => r.fecha && r.fecha.startsWith(mesActual))
-                        .reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
-                    const totalHistorico = registros.reduce((s, r) => s + (parseFloat(r.horas) || 0), 0);
-                    el.innerHTML = `
-                        <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
-                            <div style="background:var(--glass-bg); border-radius:8px; padding:0.5rem 0.9rem;">
-                                <span style="font-size:1.2rem; font-weight:700; color:var(--primary-color);">${totalMes.toFixed(1)} hrs</span>
-                                <span style="font-size:0.72rem; color:var(--text-muted); margin-left:0.4rem;">este mes</span>
-                            </div>
-                            <div style="background:var(--glass-bg); border-radius:8px; padding:0.5rem 0.9rem;">
-                                <span style="font-size:1.2rem; font-weight:700; color:var(--text-main);">${totalHistorico.toFixed(1)} hrs</span>
-                                <span style="font-size:0.72rem; color:var(--text-muted); margin-left:0.4rem;">histórico</span>
-                            </div>
-                            <div style="display:flex; gap:0.5rem; margin-left:auto;">
-                                <button onclick="window.abrirModalHorasExtraManual('${w.id}')"
-                                    class="btn btn-primary" style="font-size:0.78rem; padding:0.35rem 0.9rem; border-radius:8px;">
-                                    + Agregar
-                                </button>
-                                <button onclick="window.mostrarCalendarioHorasExtra('${w.id}')"
-                                    class="btn" style="font-size:0.78rem; padding:0.35rem 0.8rem; border-radius:8px; border:1px solid var(--primary-color); color:var(--primary-color); background:transparent;">
-                                    Ver detalle
-                                </button>
-                            </div>
-                        </div>`;
-                });
-
                 document.getElementById('btn-marcar-salida-admin').addEventListener('click', async () => {
                     await updateTrabajadorDisponibilidad(w.id, false);
                     estado.trabajadores = estado.trabajadores.map(t => t.id === w.id ? { ...t, disponible: false } : t);
@@ -2537,6 +2529,104 @@ function renderFichaTecnicaModal() {
     document.body.insertAdjacentHTML('beforeend', html);
 }
 
+// ── Helpers: clasificación y card para vista Diario ──────────────────────────
+
+function _clasificarTareasPorEspecialidad(tareas) {
+    const VIBR = ['medición de vibraciones','termografía','end','ensayos no destructivos','tintas penetrantes','medición de espesores','espesores','dureza','balanceo'];
+    const LUBR = ['lubricación','cambio de aceite','cambios de aceite','aceite','lubs','análisis de aceite','engrase','lubric'];
+    function getTipos(t) {
+        if (Array.isArray(t.tiposSeleccionados) && t.tiposSeleccionados.length > 0)
+            return t.tiposSeleccionados.map(x => x.toLowerCase());
+        return [(t.tipo || '').toLowerCase()];
+    }
+    const vibraciones = [], lubricacion = [], otros = [];
+    tareas.forEach(t => {
+        const tipos = getTipos(t);
+        const esVibr = tipos.some(tp => VIBR.some(v => tp.includes(v)));
+        const esLubr = tipos.some(tp => LUBR.some(l => tp.includes(l)));
+        if (esVibr) vibraciones.push(t);
+        if (esLubr) lubricacion.push(t);
+        if (!esVibr && !esLubr) otros.push(t);
+    });
+    return { vibraciones, lubricacion, otros };
+}
+
+function _htmlTareaCard(tarea, isAdmin, colaTareas) {
+    // Resolver enlace a equipo en el título
+    let eqId = '', nombreEqEncontrado = '';
+    const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
+    for (const match of matches) {
+        const candidato = match[1];
+        const res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
+        if (res) { eqId = res.id; nombreEqEncontrado = candidato; break; }
+    }
+    if (!eqId) {
+        const res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
+        if (res) { eqId = res.id; nombreEqEncontrado = res.activo; }
+    }
+    let tituloHtml = tarea.tipo;
+    if (eqId) {
+        const partes = tarea.tipo.split(new RegExp('(\\[?' + nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]?)', 'i'));
+        tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
+            ? '<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica(\'' + eqId + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
+            : p).join('');
+    }
+    const esParticipante = estado.usuarioActual === 'trabajador' &&
+        (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id));
+    const puedeGestionar = isAdmin || esParticipante;
+    const posActual = colaTareas.findIndex(t => t.id === tarea.id);
+    return `
+    <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}">
+        <div class="item-info">
+            <h4 style="display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
+                ${tarea._enCola ? `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.78rem; font-weight:700; flex-shrink:0;">${tarea._pos}</span>` : ''}
+                <span style="flex:1;">${tituloHtml}</span>
+                ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color);"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
+                ${tarea._enCola ? `<span class="badge" style="background:#6b7280; font-size:0.7rem;">⏳ EN COLA</span>` : `<span class="badge" style="background:#FF6900; font-size:0.7rem;"><i class="fa-solid fa-circle-play"></i> ACTIVO</span>`}
+            </h4>
+            <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+                <div>
+                    <p style="color:var(--text-main); margin: 0; font-size: 1.05rem;">
+                        <i class="fa-solid fa-user-tie" style="color:var(--primary-color)"></i> Líder: <strong>${tarea.liderNombre || 'Sin asignar'}</strong>
+                    </p>
+                    ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
+                    <p style="color:var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
+                        <i class="fa-solid fa-users"></i> Ayudantes: ${tarea.ayudantesNombres.join(', ')}
+                    </p>` : ''}
+                </div>
+                ${isAdmin && !tarea.liderId ? `
+                <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap;">
+                    <i class="fa-solid fa-user-plus"></i> Asignar personal
+                </button>` : ''}
+            </div>
+            <p style="margin-top: 0.8rem"><i class="fa-regular fa-clock"></i> Asignado: ${tarea.fechaAsignacion ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : tarea.horaAsignacion}</p>
+        </div>
+        <div style="display:flex; gap:0.5rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
+            ${isAdmin ? `
+            <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
+                <i class="fa-solid fa-trash"></i>
+            </button>` : ''}
+            ${tarea._enCola && puedeGestionar ? `
+            <div style="display:flex; flex-direction:column; gap:2px;">
+                <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▲</button>
+                <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▼</button>
+            </div>
+            <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
+                <i class="fa-solid fa-play"></i> Iniciar
+            </button>` : ''}
+            ${!tarea._enCola && puedeGestionar ? `
+            <button onclick="window.ponerEnColaExposed('${tarea.id}')" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
+                <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
+            </button>
+            <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+                <i class="fa-solid fa-flag-checkered"></i> Terminar
+            </button>` : ''}
+            ${tarea._enCola && !puedeGestionar ? `
+            <span style="font-size:0.8rem; color:var(--text-muted);">Posición #${tarea._pos} en cola</span>` : ''}
+        </div>
+    </div>`;
+}
+
 // COMPONENTE: Vista Dashboard
 function renderDashboardView() {
     // Todos los trabajadores son asignables — los ocupados/sin check-in van automáticamente a cola
@@ -2666,89 +2756,36 @@ function renderDashboardView() {
                             </button>
                         ` : ''}
                     </div>
-                    ${_tareasConPos.length === 0 ?
-                        `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>` :
-                        `<div class="items-list">
-                            ${_tareasConPos.map(tarea => {
-                                // ── Resolver enlace a equipo ─────────────────────────────────────────
-                                let eqId = "", nombreEqEncontrado = "";
-                                const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
-                                for(const match of matches) {
-                                    const candidato = match[1];
-                                    const res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
-                                    if(res) { eqId = res.id; nombreEqEncontrado = candidato; break; }
-                                }
-                                if(!eqId) {
-                                    const res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
-                                    if(res) { eqId = res.id; nombreEqEncontrado = res.activo; }
-                                }
-                                let tituloHtml = tarea.tipo;
-                                if (eqId) {
-                                    const partes = tarea.tipo.split(new RegExp('(\\[?' + nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]?)', 'i'));
-                                    tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
-                                        ? '<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica(\'' + eqId + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
-                                        : p).join('');
-                                }
-                                // ── ¿El usuario actual participa en esta tarea? ──────────────────────
-                                const esParticipante = estado.usuarioActual === 'trabajador' &&
-                                    (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id));
-                                const puedeGestionar = isAdmin || esParticipante;
-                                // ── Tareas en cola para reordenar ────────────────────────────────────
-                                const colaTareas = _tareasConPos.filter(t => t._enCola);
-                                const posActual = colaTareas.findIndex(t => t.id === tarea.id);
-                                return `
-                                <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}">
-                                    <div class="item-info">
-                                        <h4 style="display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
-                                            ${tarea._enCola ? `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.78rem; font-weight:700; flex-shrink:0;">${tarea._pos}</span>` : ''}
-                                            <span style="flex:1;">${tituloHtml}</span>
-                                            ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color);"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
-                                            ${tarea._enCola ? `<span class="badge" style="background:#6b7280; font-size:0.7rem;">⏳ EN COLA</span>` : `<span class="badge" style="background:#FF6900; font-size:0.7rem;"><i class="fa-solid fa-circle-play"></i> ACTIVO</span>`}
-                                        </h4>
-                                        <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-                                            <div>
-                                                <p style="color:var(--text-main); margin: 0; font-size: 1.05rem;">
-                                                    <i class="fa-solid fa-user-tie" style="color:var(--primary-color)"></i> Líder: <strong>${tarea.liderNombre || 'Sin asignar'}</strong>
-                                                </p>
-                                                ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
-                                                <p style="color:var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                                                    <i class="fa-solid fa-users"></i> Ayudantes: ${tarea.ayudantesNombres.join(', ')}
-                                                </p>` : ''}
-                                            </div>
-                                            ${isAdmin && !tarea.liderId ? `
-                                            <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-                                                <i class="fa-solid fa-user-plus"></i> Asignar personal
-                                            </button>` : ''}
-                                        </div>
-                                        <p style="margin-top: 0.8rem"><i class="fa-regular fa-clock"></i> Asignado: ${tarea.fechaAsignacion ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : tarea.horaAsignacion}</p>
-                                    </div>
-                                    <div style="display:flex; gap:0.5rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
-                                        ${isAdmin ? `
-                                        <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
-                                            <i class="fa-solid fa-trash"></i>
-                                        </button>` : ''}
-                                        ${tarea._enCola && puedeGestionar ? `
-                                        <div style="display:flex; flex-direction:column; gap:2px;">
-                                            <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▲</button>
-                                            <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▼</button>
-                                        </div>
-                                        <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
-                                            <i class="fa-solid fa-play"></i> Iniciar
-                                        </button>` : ''}
-                                        ${!tarea._enCola && puedeGestionar ? `
-                                        <button onclick="window.ponerEnColaExposed('${tarea.id}')" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
-                                            <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
-                                        </button>
-                                        <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
-                                            <i class="fa-solid fa-flag-checkered"></i> Terminar
-                                        </button>` : ''}
-                                        ${tarea._enCola && !puedeGestionar ? `
-                                        <span style="font-size:0.8rem; color:var(--text-muted);">Posición #${tarea._pos} en cola</span>` : ''}
-                                    </div>
-                                </div>`;
-                            }).join('')}
-                        </div>`
-                    }
+                    ${(() => {
+                        if (_tareasConPos.length === 0) return `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>`;
+                        const colaTareas = _tareasConPos.filter(t => t._enCola);
+                        const { vibraciones, lubricacion, otros } = _clasificarTareasPorEspecialidad(_tareasConPos);
+                        const _svgGear = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+                        const _svgDrop = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
+                        function colHTML(tareas, titulo, svgIcon, subtitulo, emptyMsg) {
+                            return `<div style="flex:1; min-width:280px; border-top:3px solid var(--primary-color); padding-top:1.1rem; padding-bottom:0.25rem;">
+                                <div style="display:flex; align-items:center; gap:0.55rem; margin-bottom:0.85rem;">
+                                    ${svgIcon}
+                                    <span style="font-weight:700; font-size:1rem; color:var(--text-main);">${titulo}</span>
+                                    <span style="background:var(--primary-color); color:#fff; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.72rem; font-weight:700; margin-left:0.1rem;">${tareas.length}</span>
+                                </div>
+                                ${tareas.length === 0
+                                    ? `<p style="color:var(--text-muted); font-size:0.85rem; padding:1rem 0; text-align:center;">${emptyMsg}</p>`
+                                    : `<div class="items-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
+                            </div>`;
+                        }
+                        return `<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">
+                            ${colHTML(vibraciones, 'Equipo Vibraciones', _svgGear, '', 'Sin trabajos de vibraciones')}
+                            ${colHTML(lubricacion, 'Equipo Lubricación', _svgDrop, '', 'Sin trabajos de lubricación')}
+                        </div>
+                        ${otros.length > 0 ? `<div style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:0.85rem;">
+                            <h3 style="font-size:0.95rem; margin:0 0 0.75rem 0; display:flex; align-items:center; gap:0.5rem; color:var(--text-muted);">
+                                <span>📋</span><span>Otros trabajos</span>
+                                <span style="background:#6b728022; color:#6b7280; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.75rem; font-weight:700;">${otros.length}</span>
+                            </h3>
+                            <div class="items-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>
+                        </div>` : ''}`;
+                    })()}
                 </div>
 
             </div>
@@ -4450,15 +4487,6 @@ async function validarWorkerLogin() {
     const errEl   = document.getElementById('worker-login-error');
     const btn     = document.getElementById('btn-submit-worker');
 
-    // Verificar bloqueo por intentos fallidos
-    const lockedUntil = parseInt(localStorage.getItem('worker_login_locked_until') || '0');
-    if (Date.now() < lockedUntil) {
-        const min = Math.ceil((lockedUntil - Date.now()) / 60000);
-        errEl.textContent = `Demasiados intentos fallidos. Intenta en ${min} min.`;
-        errEl.style.display = 'block';
-        return;
-    }
-
     if (!rutInput || !pinInput) {
         errEl.textContent = 'Ingresa tu RUT y PIN.';
         errEl.style.display = 'block';
@@ -4506,15 +4534,7 @@ async function validarWorkerLogin() {
     }
 
     if (!trabajador || !pinCorrecto) {
-        const intentos = parseInt(localStorage.getItem('worker_login_attempts') || '0') + 1;
-        if (intentos >= 3) {
-            localStorage.setItem('worker_login_locked_until', String(Date.now() + 5 * 60 * 1000));
-            localStorage.removeItem('worker_login_attempts');
-            errEl.textContent = 'Demasiados intentos fallidos. Cuenta bloqueada por 5 minutos.';
-        } else {
-            localStorage.setItem('worker_login_attempts', String(intentos));
-            errEl.textContent = `RUT o PIN incorrecto. Consulta al planificador. (${intentos}/3 intentos)`;
-        }
+        errEl.textContent = 'RUT o PIN incorrecto. Consulta al planificador.';
         errEl.style.display = 'block';
         document.getElementById('input-worker-pin').value = '';
         document.getElementById('input-worker-pin').focus();
@@ -4522,10 +4542,6 @@ async function validarWorkerLogin() {
         btn.innerHTML = '<i class="fa-solid fa-clipboard-check"></i> Ingresar y hacer Check-in';
         return;
     }
-
-    // Login exitoso — limpiar contadores
-    localStorage.removeItem('worker_login_attempts');
-    localStorage.removeItem('worker_login_locked_until');
 
     await updateTrabajadorDisponibilidad(trabajador.id, true);
     estado.trabajadores = estado.trabajadores.map(t =>
