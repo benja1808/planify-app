@@ -592,6 +592,7 @@ async function guardarTareaFinalizada({
 
     const ayudantesIds = ayudantesIdsStr ? ayudantesIdsStr.split(',').filter(Boolean) : [];
     const histId = crypto.randomUUID();
+    const fechaTermino = new Date().toISOString();
     const registroHistorial = {
         id: histId,
         tipo: tarea.tipo,
@@ -599,7 +600,7 @@ async function guardarTareaFinalizada({
         ayudantes_nombres: tarea.ayudantesNombres,
         hora_asignacion: tarea.horaAsignacion,
         fecha_inicio: tarea.fechaAsignacion || null,
-        fecha_termino: new Date().toISOString(),
+        fecha_termino: fechaTermino,
         hora_termino: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         acciones_realizadas: accionesRealizadas || '',
         observaciones: observaciones || '',
@@ -608,7 +609,9 @@ async function guardarTareaFinalizada({
         ot_numero: tarea.otNumero,
         analisis: analisisTecnico || '',
         recomendacion_analista: recomendacionAnalista || '',
-        created_at: new Date().toISOString()
+        equipo_id: tarea.equipoId || tarea.equipo_id || null,
+        fecha_med: fechaTermino.slice(0, 10),
+        created_at: fechaTermino
     };
 
     // Optimistic update: actualizar UI inmediatamente
@@ -1782,54 +1785,90 @@ function renderHistorialView() {
     }
 
     function renderTarjeta(tarea) {
-        const matchEq = tarea.tipo ? tarea.tipo.match(/\[(.*?)\]/) : null;
-        let tituloHtml = tarea.tipo || '';
-        if (matchEq) {
-            const eqObj = estado.equipos.find(e => e.activo.toLowerCase() === matchEq[1].toLowerCase() || e.kks === matchEq[1]);
-            if (eqObj) {
-                const resto = tarea.tipo.replace(`[${matchEq[1]}]`, '').trim();
-                tituloHtml = `[<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica('${eqObj.id}')" style="color:var(--primary-color); text-decoration:none;">${matchEq[1]}</a>] ${resto}`;
-            }
-        }
+        // ── Extraer partes del título ─────────────────────────────────────────
+        const tipoStr = tarea.tipo || '';
+        // Unidad: primer [...]
+        const matchUnidad = tipoStr.match(/^\[([^\]]+)\]/);
+        const ubicacion = tarea.ubicacion || (matchUnidad ? matchUnidad[1] : '');
+        // Tipos de trabajo: de tiposSeleccionados o de (...) al final
+        let tipos = tarea.tipos_trabajo?.length ? tarea.tipos_trabajo
+                  : tarea.tiposSeleccionados?.length ? tarea.tiposSeleccionados
+                  : (() => { const m = tipoStr.match(/\(([^)]+)\)\s*$/); return m ? m[1].split(',').map(s=>s.trim()) : []; })();
+        // Nombre limpio: sin [Unidad] prefijo ni (Tipo) sufijo
+        let nombreLimpio = tipoStr
+            .replace(/^\[[^\]]+\]\s*/, '')
+            .replace(/\s*\([^)]+\)\s*$/, '')
+            .trim();
+        // Enlace a ficha técnica si existe el equipo
+        const eqObj = estado.equipos.find(e =>
+            e.activo.toLowerCase() === nombreLimpio.toLowerCase() ||
+            (matchUnidad && e.activo.toLowerCase() === matchUnidad[1].toLowerCase())
+        );
+        const nombreHtml = eqObj
+            ? `<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica('${eqObj.id}')" style="color:var(--primary-color); text-decoration:none; font-weight:700;">${nombreLimpio || tipoStr}</a>`
+            : `<span style="font-weight:700; color:var(--text-main);">${nombreLimpio || tipoStr}</span>`;
+
+        // ── Acciones: tipos automáticos + texto manual ────────────────────────
+        const accionesAuto = tipos.length ? tipos.join(', ') : '';
+        const accionesManual = tarea.acciones_realizadas || '';
+        // Evitar duplicar si el texto manual ya es igual a los tipos
+        const mostrarManual = accionesManual && accionesManual !== accionesAuto;
+
+        // ── Fechas ────────────────────────────────────────────────────────────
+        const fmtFecha = (iso, fallbackDate, fallbackHora) => iso
+            ? new Date(iso).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
+            : (new Date(fallbackDate).toLocaleDateString('es-CL') + ' ' + (fallbackHora || '—'));
+
         return `
-        <div class="list-item" data-id="${tarea.id}" data-tipo="${tarea.tipo || ''}" style="border-left: 5px solid var(--success-color); display: block; background: #fff; position:relative;">
+        <div class="list-item" data-id="${tarea.id}" data-tipo="${tipoStr}" style="border-left: 5px solid var(--success-color); display:block; background:#fff; position:relative; padding:1rem 1rem 0.9rem 1.1rem;">
             <button onclick="window._borrarHistorial('${tarea.id}')"
                 title="Eliminar este registro"
-                style="position:absolute; top:0.6rem; right:0.6rem; background:none; border:none; cursor:pointer; color:#cbd5e1; font-size:1rem; padding:0.2rem 0.4rem; border-radius:4px; transition:color 0.2s;"
+                style="position:absolute; top:0.6rem; right:0.6rem; background:none; border:none; cursor:pointer; color:#cbd5e1; font-size:1rem; padding:0.2rem 0.4rem; border-radius:4px;"
                 onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#cbd5e1'">
                 <i class="fa-solid fa-trash"></i>
             </button>
-            <div style="flex:1; padding-right:2rem;">
-                <h4 style="margin:0 0 0.5rem 0; font-size:1.05rem; color:var(--text-main); display:flex; align-items:center; gap:0.6rem; flex-wrap:wrap;">
-                    ${tituloHtml}
-                    ${tarea.ot_numero ? `<span class="badge" style="background:var(--primary-color); color:white; font-size:0.75rem;"><i class="fa-solid fa-hashtag"></i> ${tarea.ot_numero}</span>` : ''}
-                </h4>
-                <div style="background: rgba(0,0,0,0.03); padding: 0.7rem; border-radius: 6px; margin-bottom: 0.6rem;">
-                    <p style="color:var(--text-main); margin:0 0 0.2rem 0; font-size:0.9rem;">
-                        <i class="fa-solid fa-user-tie" style="color:var(--text-muted)"></i> <strong>${tarea.lider_nombre}</strong>
-                        ${tarea.ayudantes_nombres && tarea.ayudantes_nombres.length > 0 ? `<span style="color:var(--text-muted); font-size:0.82rem;"> · ${tarea.ayudantes_nombres.join(', ')}</span>` : ''}
-                    </p>
-                    <div style="border-top: 1px solid #e5e7eb; padding-top: 0.4rem; margin-top: 0.4rem;">
-                        <p style="color: var(--text-main); font-size: 0.85rem; margin-bottom: 0.2rem;"><strong>Acciones:</strong> ${tarea.acciones_realizadas || '<em style="opacity:0.5">Sin documentar</em>'}</p>
-                        ${tarea.numero_aviso ? `<p style="color: var(--text-main); font-size: 0.82rem; margin-bottom: 0.2rem;"><strong>Aviso:</strong> ${tarea.numero_aviso} &nbsp;|&nbsp; <strong>HH:</strong> ${tarea.hh_trabajo || '-'}</p>` : ''}
-                        ${tarea.observaciones ? `<p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 0.2rem; font-style:italic;">${tarea.observaciones}</p>` : ''}
-                        ${tarea.analisis ? `<p style="color:#4b5563; font-size:0.82rem; margin-bottom:0.2rem;"><strong>Análisis:</strong> ${tarea.analisis}</p>` : ''}
-                    </div>
+
+            <div style="padding-right:2rem;">
+                <!-- 1. Nombre + OT -->
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.35rem;">
+                    <span style="font-size:1rem;">${nombreHtml}</span>
+                    ${tarea.ot_numero ? `<span class="badge" style="background:var(--primary-color); color:white; font-size:0.72rem;"><i class="fa-solid fa-hashtag"></i> ${tarea.ot_numero}</span>` : ''}
                 </div>
-                <div style="display:flex; gap:1.2rem; flex-wrap:wrap; align-items:center;">
-                    <span style="color:var(--text-muted); font-size:0.78rem;">
-                        <i class="fa-regular fa-clock"></i> Inicio:
-                        <strong>${tarea.fecha_inicio
-                            ? new Date(tarea.fecha_inicio).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
-                            : (new Date(tarea.created_at).toLocaleDateString('es-CL') + ' ' + (tarea.hora_asignacion || '—'))
-                        }</strong>
+
+                <!-- 2. Badges de tipo -->
+                ${tipos.length ? `<div style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.4rem;">
+                    ${tipos.map(t => `<span style="background:#f1f5f9; color:#475569; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 9px; border:1px solid #e2e8f0;">${t}</span>`).join('')}
+                </div>` : ''}
+
+                <!-- 3. Ubicación -->
+                ${ubicacion ? `<div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.4rem;">
+                    <i class="fa-solid fa-location-dot" style="font-size:0.75rem; margin-right:3px;"></i>${ubicacion}
+                </div>` : ''}
+
+                <!-- 4. Líder + apoyo -->
+                <div style="font-size:0.85rem; color:var(--text-main); margin-bottom:0.45rem;">
+                    <i class="fa-solid fa-user-tie" style="color:var(--text-muted); margin-right:3px;"></i>
+                    <strong>${tarea.lider_nombre || '—'}</strong>
+                    ${tarea.ayudantes_nombres?.length ? `<span style="color:var(--text-muted);"> · ${tarea.ayudantes_nombres.join(', ')}</span>` : ''}
+                </div>
+
+                <!-- 5. Acciones -->
+                <div style="font-size:0.82rem; color:var(--text-main); margin-bottom:0.45rem; padding:0.45rem 0.6rem; background:#f9fafb; border-radius:6px; border:1px solid #f1f5f9;">
+                    ${accionesAuto ? `<span style="color:#475569;"><strong>Acciones:</strong> ${accionesAuto}</span>` : ''}
+                    ${mostrarManual ? `<div style="margin-top:${accionesAuto ? '0.25rem' : '0'}; color:var(--text-muted); font-style:italic;">${accionesManual}</div>` : ''}
+                    ${!accionesAuto && !mostrarManual ? `<em style="opacity:0.5;">Sin documentar</em>` : ''}
+                    ${tarea.numero_aviso ? `<div style="margin-top:0.25rem;"><strong>Aviso:</strong> ${tarea.numero_aviso} &nbsp;|&nbsp; <strong>HH:</strong> ${tarea.hh_trabajo || '-'}</div>` : ''}
+                    ${tarea.observaciones ? `<div style="margin-top:0.25rem; color:var(--text-muted); font-style:italic;">${tarea.observaciones}</div>` : ''}
+                    ${tarea.analisis ? `<div style="margin-top:0.25rem;"><strong>Análisis:</strong> ${tarea.analisis}</div>` : ''}
+                </div>
+
+                <!-- 6. Fechas + 7. Botón Informe -->
+                <div style="display:flex; gap:1rem; flex-wrap:wrap; align-items:center;">
+                    <span style="color:var(--text-muted); font-size:0.75rem;">
+                        <i class="fa-regular fa-clock"></i> ${fmtFecha(tarea.fecha_inicio, tarea.created_at, tarea.hora_asignacion)}
                     </span>
-                    <span style="color:var(--success-color); font-size:0.78rem; font-weight:600;">
-                        <i class="fa-solid fa-flag-checkered"></i> Fin:
-                        <strong>${tarea.fecha_termino
-                            ? new Date(tarea.fecha_termino).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
-                            : (new Date(tarea.created_at).toLocaleDateString('es-CL') + ' ' + (tarea.hora_termino || '—'))
-                        }</strong>
+                    <span style="color:var(--success-color); font-size:0.75rem; font-weight:600;">
+                        <i class="fa-solid fa-flag-checkered"></i> ${fmtFecha(tarea.fecha_termino, tarea.created_at, tarea.hora_termino)}
                     </span>
                     <button onclick="window._generarInformeTarea('${tarea.id}')" style="margin-left:auto; padding:0.3rem 0.85rem; background:linear-gradient(135deg,#6366f1,#4f46e5); color:white; border:none; border-radius:8px; font-size:0.78rem; cursor:pointer; font-weight:600;">
                         <i class="fa-solid fa-file-lines"></i> Informe
@@ -1959,12 +1998,30 @@ function renderHistorialView() {
 
     // Borrar una entrada individual (llamado desde botón trash en tarjeta)
     window._borrarHistorial = async (id) => {
-        if (!confirm('¿Eliminar este registro del historial?')) return;
+        if (!confirm('¿Eliminar este registro del historial? También se borrarán las mediciones asociadas.')) return;
         if (!navigator.onLine) { alert('Se requiere conexión a internet para eliminar del historial.'); return; }
         const { error } = await supabaseClient.from(tablasDb.historial).delete().eq('id', id);
         if (error) { alert('Error al eliminar: ' + error.message); return; }
+
+        // Borrar mediciones asociadas si el registro tiene equipo_id y fecha_med
+        const registro = estado.historialTareas.find(t => t.id === id);
+        if (registro?.equipo_id && registro?.fecha_med) {
+            // Obtener todos los equipos con el mismo activo (para borrar mediciones de cualquier unidad)
+            const equipoObj = estado.equipos.find(e => e.id === registro.equipo_id);
+            const idsGrupo = equipoObj
+                ? estado.equipos.filter(e => e.activo === equipoObj.activo).map(e => e.id)
+                : [registro.equipo_id];
+            await supabaseClient.from(tablasDb.mediciones)
+                .delete()
+                .in('equipo_id', idsGrupo)
+                .eq('fecha', registro.fecha_med);
+            // Limpiar del estado local también
+            estado.historialMediciones = estado.historialMediciones.filter(
+                m => !(idsGrupo.includes(m.equipo_id) && m.fecha?.slice(0,10) === registro.fecha_med)
+            );
+        }
+
         estado.historialTareas = estado.historialTareas.filter(t => t.id !== id);
-        // Quitar la tarjeta del DOM sin re-renderizar todo
         const card = document.querySelector(`.list-item[data-id="${id}"]`);
         if (card) card.remove();
     };
@@ -4287,11 +4344,12 @@ window.abrirFichaTecnica = async function(equipoId) {
     // 3. Obtener mediciones — fetch directo a Supabase, caché local como fallback
     const equipoNombre = equipo.activo;
     const equipoUbicacion = equipo.ubicacion;
-    // Solo IDs del mismo equipo (mismo nombre Y misma ubicación)
-    const idsDelGrupo = [...estado.equipos
-        .filter(e => e.activo === equipoNombre && e.ubicacion === equipoUbicacion)
-        .map(e => e.id)];
-    if (!idsDelGrupo.includes(equipoId)) idsDelGrupo.push(equipoId);
+    // Incluir TODOS los IDs del mismo equipo (mismo nombre, cualquier unidad)
+    // para no perder mediciones guardadas bajo la unidad incorrecta por el bug anterior
+    const idsDelGrupo = [...new Set([
+        ...estado.equipos.filter(e => e.activo === equipoNombre).map(e => e.id),
+        equipoId
+    ])];
 
     let mediciones = [];
     if (navigator.onLine && supabaseClient) {
@@ -4343,40 +4401,65 @@ function renderListasFicha(mediciones) {
     const listTermo = document.getElementById('lista-mediciones-termografia');
     const listLid = document.getElementById('lista-mediciones-lubricacion');
 
+    const btnBorrarMed = (m) => `<button onclick="window._borrarMedicion('${m.id}')" title="Eliminar medición"
+        style="background:none;border:none;cursor:pointer;color:#cbd5e1;padding:2px 4px;font-size:0.8rem;line-height:1;"
+        onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#cbd5e1'">
+        <i class="fa-solid fa-trash"></i></button>`;
+
     // Vibraciones
     const vibs = mediciones.filter(m => m.tipo === 'vibracion').slice(0, 5);
     listVib.innerHTML = vibs.length > 0 ? vibs.map(m => `
-        <div style="background:#f1f5f9; padding:0.6rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div id="med-${m.id}" style="background:#f1f5f9; padding:0.6rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
             <div>
                 <span style="font-weight:700; color:var(--primary-color)">${m.valor} ${m.unidad || 'mm/s'}</span>
                 <div style="font-size:0.75rem; color:var(--text-muted)">${new Date(m.fecha).toLocaleDateString()} · ${m.punto_medicion}</div>
             </div>
-            <i class="fa-solid fa-chart-line" style="color:#cbd5e1"></i>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <i class="fa-solid fa-chart-line" style="color:#cbd5e1"></i>
+                ${btnBorrarMed(m)}
+            </div>
         </div>
     `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem">Sin mediciones recientes.</p>';
 
     // Termografía
     const termos = mediciones.filter(m => m.tipo === 'termografia').slice(0, 5);
     listTermo.innerHTML = termos.length > 0 ? termos.map(m => `
-        <div style="background:#fff1f2; padding:0.6rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center; border: 1px solid #fecdd3;">
+        <div id="med-${m.id}" style="background:#fff1f2; padding:0.6rem; border-radius:8px; display:flex; justify-content:space-between; align-items:center; border: 1px solid #fecdd3;">
             <div>
                 <span style="font-weight:700; color:#e11d48">${m.valor} °C</span>
                 <div style="font-size:0.75rem; color:var(--text-muted)">${new Date(m.fecha).toLocaleDateString()}</div>
             </div>
-            <i class="fa-solid fa-temperature-high" style="color:#fb7185"></i>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+                <i class="fa-solid fa-temperature-high" style="color:#fb7185"></i>
+                ${btnBorrarMed(m)}
+            </div>
         </div>
     `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem">Sin inspecciones térmicas.</p>';
 
     // Lubricación
     const lubs = mediciones.filter(m => m.tipo === 'lubricacion').slice(0, 4);
     listLid.innerHTML = lubs.length > 0 ? lubs.map(m => `
-        <div style="background:rgba(255,165,0,0.08); padding:0.8rem; border-radius:8px; border: 1px solid rgba(255,105,0,0.2); margin-bottom:0.5rem;">
-             <div style="font-weight:600; font-size:0.9rem; color:var(--text-main);">${m.punto_medicion}</div>
-             <p style="margin:0.25rem 0 0; font-size:0.85rem; color:var(--primary-color);">${m.valor}</p>
-             <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.4rem;">${new Date(m.fecha).toLocaleDateString()}</div>
+        <div id="med-${m.id}" style="background:rgba(255,165,0,0.08); padding:0.8rem; border-radius:8px; border: 1px solid rgba(255,105,0,0.2); margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <div style="font-weight:600; font-size:0.9rem; color:var(--text-main);">${m.punto_medicion}</div>
+                <p style="margin:0.25rem 0 0; font-size:0.85rem; color:var(--primary-color);">${m.valor}</p>
+                <div style="font-size:0.7rem; color:var(--text-muted); margin-top:0.4rem;">${new Date(m.fecha).toLocaleDateString()}</div>
+            </div>
+            ${btnBorrarMed(m)}
         </div>
     `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem; padding:0.5rem;">No se registran cambios de aceite o engrase.</p>';
 }
+
+window._borrarMedicion = async (id) => {
+    if (!confirm('¿Eliminar esta medición?')) return;
+    if (supabaseClient) {
+        await supabaseClient.from(tablasDb.mediciones).delete().eq('id', id);
+    }
+    estado.historialMediciones = estado.historialMediciones.filter(m => m.id !== id);
+    if (window.localDB) await window.localDB.mediciones.delete(id).catch(() => {});
+    const el = document.getElementById(`med-${id}`);
+    if (el) el.remove();
+};
 
 let activeCharts = []; // Para destruir antes de recrear
 
