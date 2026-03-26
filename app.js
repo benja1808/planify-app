@@ -2653,15 +2653,28 @@ function renderDashboardView() {
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
     
-    // Panel de Asignación (Oculto para Visita)
+    // Panel de Asignación — Drawer deslizable (solo admin)
     let panelAsignacionHtml = '';
     if (isAdmin) {
         panelAsignacionHtml = `
-            <!-- COLUMNA IZQUIERDA: Asignación -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h2><i class="fa-solid fa-clipboard-user"></i> Asignación Diaria</h2>
+            <!-- Backdrop -->
+            <div id="asign-backdrop" onclick="window.cerrarDrawerAsignacion()"
+                style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:499; backdrop-filter:blur(2px);"></div>
+
+            <!-- Drawer lateral -->
+            <div id="asign-drawer"
+                style="position:fixed; top:0; right:0; width:430px; max-width:96vw; height:100vh;
+                       background:var(--bg-secondary); z-index:500; transform:translateX(100%);
+                       transition:transform 0.3s cubic-bezier(.4,0,.2,1); overflow-y:auto;
+                       box-shadow:-6px 0 32px rgba(0,0,0,0.35); display:flex; flex-direction:column;">
+                <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
+                    <h2 style="margin:0; font-size:1.1rem;"><i class="fa-solid fa-clipboard-user"></i> Asignación Diaria</h2>
+                    <button onclick="window.cerrarDrawerAsignacion()"
+                        style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.3rem; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;"
+                        onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">✕</button>
                 </div>
+                <div style="padding:1.25rem 1.5rem; flex:1; overflow-y:auto;">
+            <!-- (contenido del formulario) -->
                 
                 <div class="form-group">
                     <label><i class="fa-solid fa-hashtag"></i> Número de OT (Opcional)</label>
@@ -2734,27 +2747,34 @@ function renderDashboardView() {
                         <i class="fa-solid fa-paper-plane"></i> Asignar Trabajo
                     </button>
                 </div>
-            </div>
+                </div><!-- /padding inner -->
+            </div><!-- /drawer -->
         `;
     }
 
     // Template
     let html = `
-        <div class="dashboard-grid fade-in" style="${isAdmin ? '' : 'grid-template-columns: 1fr; max-width: 800px; margin: 0 auto;'}">
-            
-            ${panelAsignacionHtml}
+        ${panelAsignacionHtml}
+        <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${!isAdmin ? 'max-width:800px; margin:0 auto;' : ''}">
 
-            <!-- COLUMNA DERECHA: Listas -->
+            <!-- Lista de trabajos (ocupa todo el ancho) -->
             <div class="dashboard-lists">
 
                 <div class="panel">
                     <div class="panel-header" style="justify-content: space-between;">
                         <h2><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Trabajos Efectivos (${tareasDiarias.length})</h2>
+                        <div style="display:flex; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+                        ${isAdmin ? `
+                            <button onclick="window.abrirDrawerAsignacion()" class="btn btn-primary" style="font-size:0.85rem; padding:0.45rem 1rem; border-radius:8px; display:flex; align-items:center; gap:0.4rem;">
+                                <i class="fa-solid fa-plus"></i> Asignar trabajo
+                            </button>
+                        ` : ''}
                         ${isAdmin && tareasDiarias.length > 0 ? `
                             <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color); font-size: 0.8rem; padding: 0.3rem 0.6rem;" onclick="window.eliminarTodasLasTareasExposed()">
                                 <i class="fa-solid fa-trash-can"></i> Vaciar Tablero
                             </button>
                         ` : ''}
+                        </div>
                     </div>
                     ${(() => {
                         if (_tareasConPos.length === 0) return `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>`;
@@ -2792,6 +2812,20 @@ function renderDashboardView() {
         </div>
     `;
     mainContent.innerHTML = html;
+
+    // --- Funciones del drawer de asignación ---
+    window.abrirDrawerAsignacion = function() {
+        const drawer   = document.getElementById('asign-drawer');
+        const backdrop = document.getElementById('asign-backdrop');
+        if (drawer)   drawer.style.transform   = 'translateX(0)';
+        if (backdrop) backdrop.style.display   = 'block';
+    };
+    window.cerrarDrawerAsignacion = function() {
+        const drawer   = document.getElementById('asign-drawer');
+        const backdrop = document.getElementById('asign-backdrop');
+        if (drawer)   drawer.style.transform   = 'translateX(100%)';
+        if (backdrop) backdrop.style.display   = 'none';
+    };
 
     // --- LOGICA DE FORMULARIO DE ASIGNACIÓN (Solo si existe) ---
     if (isAdmin) {
@@ -3114,6 +3148,7 @@ function renderDashboardView() {
                 const estadoEjecucion = enCola ? 'en_cola' : 'activo';
 
                 asignarTarea(tituloFinal, liderId, ayudantesIds, 'en_curso', otNumero, estadoEjecucion, null, equipoId, tiposSeleccionados, componentesSeleccionados);
+                window.cerrarDrawerAsignacion?.();
             } else {
                 if (tiposSeleccionados.length === 0) alert('Selecciona al menos un tipo de trabajo.');
             }
