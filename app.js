@@ -2571,37 +2571,86 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
             ? '<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica(\'' + eqId + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
             : p).join('');
     }
+    // Strip [Unidad] prefix and (Tipo de trabajo) suffix from displayed title
+    tituloHtml = tituloHtml.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '');
     const esParticipante = estado.usuarioActual === 'trabajador' &&
         (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id));
     const puedeGestionar = isAdmin || esParticipante;
     const posActual = colaTareas.findIndex(t => t.id === tarea.id);
+    // Build type badges — use tiposSeleccionados or extract from parentheses in title
+    let tipos = Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0
+        ? tarea.tiposSeleccionados : [];
+    if (tipos.length === 0) {
+        const parenMatches = [...tarea.tipo.matchAll(/\(([^)]+)\)/g)];
+        if (parenMatches.length > 0) tipos = parenMatches.map(m => m[1]);
+    }
+    const tiposBadgesHtml = tipos.map(t =>
+        `<span style="display:inline-block; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 10px; letter-spacing:0.01em;">${t}</span>`
+    ).join('');
+    // Extract unit/location — use tarea.ubicacion or extract [bracketed] text from title
+    let ubicacionTexto = tarea.ubicacion || '';
+    if (!ubicacionTexto) {
+        const bracketMatch = tarea.tipo.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) ubicacionTexto = bracketMatch[1];
+    }
+    const ubicacionHtml = ubicacionTexto
+        ? `<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
+               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+               <span>${ubicacionTexto}</span>
+           </div>` : '';
+    const fechaStr = tarea.fechaAsignacion
+        ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
+        : (tarea.horaAsignacion || '');
     return `
-    <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}">
-        <div class="item-info">
-            <h4 style="display:flex; align-items:center; flex-wrap:wrap; gap:0.4rem;">
-                ${tarea._enCola ? `<span style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.78rem; font-weight:700; flex-shrink:0;">${tarea._pos}</span>` : ''}
-                <span style="flex:1;">${tituloHtml}</span>
-                ${tarea.otNumero ? `<span class="badge" style="background:var(--primary-color);"><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero}</span>` : ''}
-                ${tarea._enCola ? `<span class="badge" style="background:#6b7280; font-size:0.7rem;">⏳ EN COLA</span>` : `<span class="badge" style="background:#FF6900; font-size:0.7rem;"><i class="fa-solid fa-circle-play"></i> ACTIVO</span>`}
-            </h4>
-            <div style="background: #f9fafb; padding: 0.8rem; border-radius: 8px; margin-top: 0.8rem; border: 1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
-                <div>
-                    <p style="color:var(--text-main); margin: 0; font-size: 1.05rem;">
-                        <i class="fa-solid fa-user-tie" style="color:var(--primary-color)"></i> Líder: <strong>${tarea.liderNombre || 'Sin asignar'}</strong>
-                    </p>
-                    ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
-                    <p style="color:var(--text-muted); margin: 0.5rem 0 0 0; font-size: 0.9rem;">
-                        <i class="fa-solid fa-users"></i> Ayudantes: ${tarea.ayudantesNombres.join(', ')}
-                    </p>` : ''}
+    <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}; padding: 1rem 1.1rem; display:flex; flex-direction:column; gap:0; align-items:stretch;">
+        <!-- 1. Nombre del equipo / trabajo -->
+        <div style="font-size:1.05rem; font-weight:700; color:var(--primary-color); line-height:1.3;">${tituloHtml}${tarea.otNumero ? `&nbsp;<span style="font-size:0.78rem; font-weight:600; background:#fff3e0; color:#e65100; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}</div>
+
+        <!-- 2. Tipos de trabajo (chips) -->
+        ${tiposBadgesHtml ? `<div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem;">${tiposBadgesHtml}</div>` : ''}
+
+        <!-- 3. Ubicación -->
+        ${ubicacionHtml}
+
+        <!-- Separator -->
+        <div style="margin:0.7rem 0 0.6rem; border-top:1px solid #f1f5f9;"></div>
+
+        <!-- 4. Líder -->
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+            <div>
+                <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; color:var(--text-main);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <span style="color:#64748b; font-size:0.82rem;">Líder</span>
+                    <strong style="font-size:0.92rem;">${tarea.liderNombre || 'Sin asignar'}</strong>
                 </div>
-                ${isAdmin && !tarea.liderId ? `
-                <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-                    <i class="fa-solid fa-user-plus"></i> Asignar personal
-                </button>` : ''}
+                <!-- 5. Apoyo -->
+                ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
+                <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    <span>Apoyo: ${tarea.ayudantesNombres.join(', ')}</span>
+                </div>` : ''}
             </div>
-            <p style="margin-top: 0.8rem"><i class="fa-regular fa-clock"></i> Asignado: ${tarea.fechaAsignacion ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : tarea.horaAsignacion}</p>
+            ${isAdmin && !tarea.liderId ? `
+            <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0;">
+                <i class="fa-solid fa-user-plus"></i> Asignar personal
+            </button>` : ''}
         </div>
-        <div style="display:flex; gap:0.5rem; margin-top:1rem; align-items:center; flex-wrap:wrap;">
+
+        <!-- 6. Fecha de asignación + badge de estado -->
+        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap;">
+            <span style="font-size:0.78rem; color:#94a3b8; display:flex; align-items:center; gap:0.3rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                ${fechaStr}
+            </span>
+            <span style="margin-left:auto;">
+                ${tarea._enCola
+                    ? `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#f3f4f6; color:#6b7280; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #e5e7eb;"><span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.68rem; font-weight:700;">${tarea._pos}</span> EN COLA</span>`
+                    : `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#fff3e0; color:#FF6900; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #ffd0a8;"><i class="fa-solid fa-circle-play" style="font-size:0.72rem;"></i> ACTIVO</span>`}
+            </span>
+        </div>
+
+        <!-- 7. Botones de acción -->
+        <div style="display:flex; gap:0.5rem; margin-top:0.75rem; align-items:center; flex-wrap:wrap;">
             ${isAdmin ? `
             <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
                 <i class="fa-solid fa-trash"></i>
@@ -2656,98 +2705,105 @@ function renderDashboardView() {
     // Panel de Asignación — Drawer deslizable (solo admin)
     let panelAsignacionHtml = '';
     if (isAdmin) {
+        const _lbl  = 'font-size:14px; font-weight:600; color:#1e293b; display:block; margin-bottom:0.4rem;';
+        const _div  = 'padding-top:1.1rem; margin-top:1.1rem; border-top:1px solid #e2e8f0;';
+        const _inp  = 'width:100%; padding:0.55rem 0.8rem; border:1.5px solid #cbd5e1; border-radius:8px; font-size:14px; color:#1e293b; background:#fff; box-sizing:border-box;';
         panelAsignacionHtml = `
             <!-- Backdrop -->
             <div id="asign-backdrop" onclick="window.cerrarDrawerAsignacion()"
-                style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:499; backdrop-filter:blur(2px);"></div>
+                style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:499;"></div>
 
-            <!-- Drawer lateral -->
+            <!-- Drawer lateral — desliza desde la IZQUIERDA -->
             <div id="asign-drawer"
-                style="position:fixed; top:0; right:0; width:430px; max-width:96vw; height:100vh;
-                       background:var(--bg-secondary); z-index:500; transform:translateX(100%);
-                       transition:transform 0.3s cubic-bezier(.4,0,.2,1); overflow-y:auto;
-                       box-shadow:-6px 0 32px rgba(0,0,0,0.35); display:flex; flex-direction:column;">
-                <div style="padding:1.25rem 1.5rem; border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;">
-                    <h2 style="margin:0; font-size:1.1rem;"><i class="fa-solid fa-clipboard-user"></i> Asignación Diaria</h2>
+                style="position:fixed; top:0; left:0; width:380px; max-width:100vw; height:100vh;
+                       background:#ffffff; z-index:500; transform:translateX(-100%);
+                       transition:transform 0.3s cubic-bezier(.4,0,.2,1);
+                       box-shadow:6px 0 32px rgba(0,0,0,0.18); display:flex; flex-direction:column;">
+
+                <!-- Header -->
+                <div style="padding:1.1rem 1.4rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:#fff;">
+                    <h2 style="margin:0; font-size:1.05rem; font-weight:700; color:#1e293b;">
+                        <i class="fa-solid fa-clipboard-user" style="color:var(--primary-color);"></i> Asignación Diaria
+                    </h2>
                     <button onclick="window.cerrarDrawerAsignacion()"
-                        style="background:none; border:none; cursor:pointer; color:var(--text-muted); font-size:1.3rem; line-height:1; padding:0.2rem 0.5rem; border-radius:6px;"
-                        onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='none'">✕</button>
-                </div>
-                <div style="padding:1.25rem 1.5rem; flex:1; overflow-y:auto;">
-            <!-- (contenido del formulario) -->
-                
-                <div class="form-group">
-                    <label><i class="fa-solid fa-hashtag"></i> Número de OT (Opcional)</label>
-                    <input type="text" id="input-ot-trabajo" class="form-control" placeholder="Ej: OT-1052" style="text-transform: uppercase;">
+                        style="background:#f1f5f9; border:none; cursor:pointer; color:#475569; font-size:1rem; font-weight:700; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;"
+                        onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
                 </div>
 
-                <div class="form-group">
-                    <label><i class="fa-solid fa-map-marker-alt"></i> Ubicación</label>
-                    <select id="select-ubicacion" class="form-control">
+                <!-- Cuerpo scrolleable -->
+                <div style="padding:1.2rem 1.4rem; flex:1; overflow-y:auto; background:#fff;">
+
+                <div style="margin-bottom:1rem;">
+                    <label style="${_lbl}"><i class="fa-solid fa-hashtag" style="color:var(--primary-color);"></i> Número de OT <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
+                    <input type="text" id="input-ot-trabajo" class="form-control" placeholder="Ej: OT-1052" style="${_inp} text-transform:uppercase;">
+                </div>
+
+                <div style="${_div}">
+                    <label style="${_lbl}"><i class="fa-solid fa-map-marker-alt" style="color:var(--primary-color);"></i> Ubicación</label>
+                    <select id="select-ubicacion" class="form-control" style="${_inp}">
                         <option value="">-- Seleccione una ubicación --</option>
                         ${[...new Set(estado.equipos.map(e => e.ubicacion).filter(Boolean))].sort((a,b) => a.localeCompare(b)).map(u => `<option value="${u}">${u}</option>`).join('')}
                     </select>
                 </div>
 
-                <div class="form-group">
-                    <label><i class="fa-solid fa-gears"></i> Equipo / Activo</label>
+                <div style="${_div}">
+                    <label style="${_lbl}"><i class="fa-solid fa-gears" style="color:var(--primary-color);"></i> Equipo / Activo</label>
                     <div style="position:relative;">
                         <div style="position:relative;">
-                            <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); color:var(--text-muted); pointer-events:none; font-size:0.85rem;"></i>
+                            <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:0.75rem; top:50%; transform:translateY(-50%); color:#94a3b8; pointer-events:none; font-size:0.85rem;"></i>
                             <input type="text" id="equipo-search" placeholder="Seleccione ubicación primero..." disabled autocomplete="off"
-                                style="width:100%; padding:0.6rem 0.8rem 0.6rem 2.2rem; border:1px solid rgba(255,255,255,0.12); border-radius:8px; font-size:0.9rem; background:rgba(0,0,0,0.2); color:var(--text-main); box-sizing:border-box;">
+                                style="${_inp} padding-left:2.2rem;">
                         </div>
-                        <div id="equipo-dropdown" style="display:none; position:absolute; z-index:200; width:100%; background:#ffffff; border:1px solid rgba(0,0,0,0.12); border-radius:8px; max-height:240px; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); margin-top:3px;"></div>
+                        <div id="equipo-dropdown" style="display:none; position:absolute; z-index:600; width:100%; background:#ffffff; border:1.5px solid #cbd5e1; border-radius:8px; max-height:240px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.12); margin-top:3px;"></div>
                         <input type="hidden" id="select-equipo" value="">
                     </div>
-                    <button id="btn-agregar-equipo" type="button" class="btn btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.85rem; border-color: rgba(99,102,241,0.5); color: #a5b4fc;">
+                    <button id="btn-agregar-equipo" type="button" class="btn btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.82rem; color:#6366f1; border-color:#a5b4fc;">
                         <i class="fa-solid fa-plus"></i> No encuentro el equipo, agregar nuevo
                     </button>
                 </div>
-                
-                <div class="form-group">
-                    <label>Tipo de Especialidad / Habilidad Requerida <span style="font-weight:400; color:var(--text-muted); font-size:0.82rem;">(elige uno o varios)</span></label>
-                    <div id="select-trabajo" style="border:1px solid rgba(255,255,255,0.12); border-radius:8px; max-height:210px; overflow-y:auto; padding:0.3rem 0; background:rgba(0,0,0,0.2);"></div>
+
+                <div style="${_div}">
+                    <label style="${_lbl}">Tipo de Especialidad <span style="font-weight:400; color:#64748b; font-size:13px;">(elige uno o varios)</span></label>
+                    <div id="select-trabajo" style="border:1.5px solid #e2e8f0; border-radius:8px; padding:0.3rem 0; background:#f8fafc;"></div>
                     <div id="tipos-trabajo-badges" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.5rem; min-height:20px;"></div>
                 </div>
 
-                <div id="dashboard-comp-section" style="display:none; margin-bottom:0.8rem;">
-                    <label style="font-size:0.85rem; font-weight:600; color:var(--text-muted); display:block; margin-bottom:0.4rem;">
-                        Componentes <span style="font-weight:400;">(desmarcar los que no aplican)</span>
-                    </label>
-                    <div id="dashboard-comp-list" style="display:flex; flex-wrap:wrap; gap:0.5rem; padding:0.6rem; background:rgba(0,0,0,0.15); border-radius:8px; border:1px solid rgba(255,255,255,0.08);"></div>
+                <div id="dashboard-comp-section" style="display:none; ${_div}">
+                    <label style="${_lbl}">Componentes <span style="font-weight:400; color:#64748b;">(desmarcar los que no aplican)</span></label>
+                    <div id="dashboard-comp-list" style="display:flex; flex-wrap:wrap; gap:0.5rem; padding:0.6rem; background:#f8fafc; border-radius:8px; border:1.5px solid #e2e8f0;"></div>
                 </div>
 
-                <div class="form-group">
-                    <label><i class="fa-solid fa-user-tie"></i> Empleado Recomendado (Supervisor)</label>
-                    <select id="select-empleado" class="form-control" disabled>
+                <div style="${_div}">
+                    <label style="${_lbl}"><i class="fa-solid fa-user-tie" style="color:var(--primary-color);"></i> Líder / Supervisor</label>
+                    <select id="select-empleado" class="form-control" disabled style="${_inp}">
                         <option value="">Seleccione trabajo primero...</option>
                     </select>
-                    <small id="empleado-hint" style="display:block; margin-top:0.5rem; color:var(--text-muted)"></small>
+                    <small id="empleado-hint" style="display:block; margin-top:0.4rem; color:#64748b; font-size:13px;"></small>
                 </div>
 
-                <div class="form-group" id="ayudantes-container" style="display: none; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); margin-top: 1rem;">
-                    <label><i class="fa-solid fa-users"></i> Trabajadores (Opcional)</label>
-                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Cualquier persona disponible hoy. Selecciona los que se necesiten.</p>
-                    <div id="lista-ayudantes" style="max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 0.5rem; border: 1px solid rgba(255,255,255,0.05);">
-                        <!-- Los checkboxes se añadirán por javascript -->
+                <div id="ayudantes-container" style="display:none; ${_div}">
+                    <label style="${_lbl}"><i class="fa-solid fa-users" style="color:var(--primary-color);"></i> Personal de Apoyo <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
+                    <p style="font-size:13px; color:#64748b; margin:0 0 0.5rem 0;">Personal disponible hoy con la especialidad requerida.</p>
+                    <div id="lista-ayudantes" style="background:#f8fafc; border-radius:8px; padding:0.5rem; border:1.5px solid #e2e8f0;">
+                        <!-- checkboxes via JS -->
                     </div>
                 </div>
 
-                <div class="form-group" id="queuing-option-container" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
-                    <label style="display:flex; align-items:center; cursor:pointer; gap:0.6rem;">
+                <div id="queuing-option-container" style="${_div}">
+                    <label style="display:flex; align-items:center; cursor:pointer; gap:0.6rem; font-size:14px; color:#1e293b;">
                         <input type="checkbox" id="check-poner-en-cola" style="transform: scale(1.3);">
                         <span><i class="fa-solid fa-clock-rotate-left" style="color:var(--warning-color)"></i> Poner esta tarea <strong>En Cola</strong></span>
                     </label>
                     <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.4rem;">Si marcas esto, los trabajadores verán la tarea pero no aparecerán como bloqueados.</p>
                 </div>
 
-                <div style="display:flex; gap: 0.8rem; margin-top: 1rem;">
-                    <button id="btn-asignar" class="btn btn-primary" style="flex:1;" disabled>
+                <div style="${_div} display:flex; gap:0.8rem;">
+                    <button id="btn-asignar" class="btn btn-primary" style="flex:1; font-size:15px; padding:0.65rem;" disabled>
                         <i class="fa-solid fa-paper-plane"></i> Asignar Trabajo
                     </button>
                 </div>
-                </div><!-- /padding inner -->
+
+                </div><!-- /body scroll -->
             </div><!-- /drawer -->
         `;
     }
@@ -2817,14 +2873,14 @@ function renderDashboardView() {
     window.abrirDrawerAsignacion = function() {
         const drawer   = document.getElementById('asign-drawer');
         const backdrop = document.getElementById('asign-backdrop');
-        if (drawer)   drawer.style.transform   = 'translateX(0)';
-        if (backdrop) backdrop.style.display   = 'block';
+        if (drawer)   drawer.style.transform = 'translateX(0)';
+        if (backdrop) backdrop.style.display = 'block';
     };
     window.cerrarDrawerAsignacion = function() {
         const drawer   = document.getElementById('asign-drawer');
         const backdrop = document.getElementById('asign-backdrop');
-        if (drawer)   drawer.style.transform   = 'translateX(100%)';
-        if (backdrop) backdrop.style.display   = 'none';
+        if (drawer)   drawer.style.transform = 'translateX(-100%)';
+        if (backdrop) backdrop.style.display = 'none';
     };
 
     // --- LOGICA DE FORMULARIO DE ASIGNACIÓN (Solo si existe) ---
@@ -2851,14 +2907,16 @@ function renderDashboardView() {
         function buildTipoChips() {
             selectTrabajoContainer.innerHTML = tipicosTrabajos.map(t => {
                 const sel = tiposSeleccionados.includes(t);
-                return `<label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer;
-                        font-size:0.88rem; color:var(--text-main); background:${sel ? 'rgba(255,105,0,0.15)' : ''}; transition:background 120ms;"
-                        onmouseover="this.style.background='${sel ? 'rgba(255,105,0,0.2)' : 'rgba(255,255,255,0.05)'}'"
-                        onmouseout="this.style.background='${sel ? 'rgba(255,105,0,0.15)' : ''}'">
+                return `<label style="display:flex; align-items:center; gap:0.7rem; padding:0.5rem 0.8rem; cursor:pointer;
+                        font-size:14px; font-weight:${sel?'600':'400'}; color:#1e293b;
+                        background:${sel ? 'rgba(255,105,0,0.08)' : '#fff'}; transition:background 120ms;
+                        border-bottom:1px solid #f1f5f9;"
+                        onmouseover="this.style.background='${sel ? 'rgba(255,105,0,0.12)' : '#f8fafc'}'"
+                        onmouseout="this.style.background='${sel ? 'rgba(255,105,0,0.08)' : '#fff'}'">
                     <input type="checkbox" class="tipo-chip-check" value="${t}" ${sel ? 'checked' : ''}
-                        style="accent-color:#FF6900; width:15px; height:15px; flex-shrink:0; cursor:pointer;">
+                        style="accent-color:#FF6900; width:18px; height:18px; flex-shrink:0; cursor:pointer;">
                     <span style="flex:1;">${t}</span>
-                    ${sel ? '<span style="font-size:0.7rem; color:#FF6900; font-weight:700;">✓</span>' : ''}
+                    ${sel ? '<i class="fa-solid fa-check" style="color:#FF6900; font-size:12px;"></i>' : ''}
                 </label>`;
             }).join('');
             selectTrabajoContainer.querySelectorAll('.tipo-chip-check').forEach(cb => {
@@ -2949,12 +3007,14 @@ function renderDashboardView() {
             } else {
                 lista.innerHTML = elegibles.map(t => {
                     const badge = t.ocupado
-                        ? `<small style="color:var(--warning-color); font-weight:600;">[Trabajando→Cola]</small>`
-                        : (!t.disponible ? `<small style="color:#94a3b8;">[Sin check-in→Cola]</small>` : '');
+                        ? `<small style="color:#d97706; font-weight:600;">[→Cola]</small>`
+                        : (!t.disponible ? `<small style="color:#94a3b8;">[Sin check-in]</small>` : '');
                     return `
-                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.4rem; border-bottom: 1px solid rgba(255,255,255,0.05); margin:0;">
-                        <input type="checkbox" class="ayudante-checkbox" value="${t.id}" style="margin-right: 0.8rem; transform: scale(1.2);">
-                        <span>${t.nombre} ${badge} <small style="color:var(--text-muted)">(${t.puesto})</small></span>
+                    <label style="display:flex; align-items:center; cursor:pointer; padding:0.45rem 0.4rem;
+                            border-bottom:1px solid #f1f5f9; margin:0; font-size:14px; color:#1e293b;">
+                        <input type="checkbox" class="ayudante-checkbox" value="${t.id}"
+                            style="accent-color:#FF6900; width:18px; height:18px; flex-shrink:0; margin-right:0.7rem; cursor:pointer;">
+                        <span>${t.nombre} ${badge} <small style="color:#64748b;">(${t.puesto})</small></span>
                     </label>`;
                 }).join('');
             }
