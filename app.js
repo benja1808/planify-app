@@ -911,6 +911,14 @@ async function renderMisHorasView() {
                 <span style="border-radius:6px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:600; ${badgeStyle}">${badgeLabel}</span>
                 ${notaRechazo}
             </td>
+            <td style="padding:0.5rem 0.6rem;">
+                <button onclick="window._eliminarHoraExtra('${r.id}')"
+                    style="background:none; border:none; cursor:pointer; color:#dc2626; font-size:0.95rem; padding:2px 6px; border-radius:6px; transition:background 150ms;"
+                    onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'"
+                    title="Eliminar">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </td>
         </tr>`;
     }).join('');
 
@@ -1327,7 +1335,14 @@ async function renderHorasExtraAdminView() {
                 <td style="padding:0.55rem 0.6rem; font-size:0.83rem; font-weight:700; color:var(--primary-color);">${r.horas} hrs</td>
                 <td style="padding:0.55rem 0.6rem; font-size:0.83rem; color:var(--text-muted); max-width:160px;">${r.motivo || '—'}</td>
                 <td style="padding:0.55rem 0.6rem;">${badgeEstado(r.estado)}${notaRechazo}</td>
-                <td style="padding:0.55rem 0.6rem; white-space:nowrap;">${btnAprobar}${btnRechazar}</td>
+                <td style="padding:0.55rem 0.6rem; white-space:nowrap;">
+                    ${btnAprobar}${btnRechazar}
+                    <button onclick="window._heEliminar('${r.id}')" title="Eliminar"
+                        style="background:none; border:none; cursor:pointer; color:#dc2626; font-size:0.95rem; padding:2px 6px; border-radius:6px; transition:background 150ms;"
+                        onmouseover="this.style.background='#fee2e2'" onmouseout="this.style.background='none'">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </td>
             </tr>`;
         }).join('');
     }
@@ -1432,6 +1447,16 @@ async function renderHorasExtraAdminView() {
             renderTabla();
             actualizarBadgeHE();
         };
+    };
+
+    window._heEliminar = async (id) => {
+        if (!confirm('¿Eliminar este registro de horas extra?')) return;
+        await supabaseClient.from('horas_extra').delete().eq('id', id);
+        if (window.localDB) await window.localDB.horas_extra.delete(id).catch(() => {});
+        const idx = enriched.findIndex(r => r.id === id);
+        if (idx >= 0) enriched.splice(idx, 1);
+        renderTabla();
+        actualizarBadgeHE();
     };
 }
 
@@ -1837,7 +1862,9 @@ function renderHistorialView() {
 
                 <!-- 2. Badges de tipo -->
                 ${tipos.length ? `<div style="display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.4rem;">
-                    ${tipos.map(t => `<span style="background:#f1f5f9; color:#475569; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 9px; border:1px solid #e2e8f0;">${t}</span>`).join('')}
+                    ${tipos.map(t => `<span onclick="window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')"
+                        style="background:#f1f5f9; color:#475569; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 9px; border:1px solid #e2e8f0; cursor:pointer; transition:background 150ms;"
+                        onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${t}</span>`).join('')}
                 </div>` : ''}
 
                 <!-- 3. Ubicación -->
@@ -2655,7 +2682,9 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
         if (parenMatches.length > 0) tipos = parenMatches.map(m => m[1]);
     }
     const tiposBadgesHtml = tipos.map(t =>
-        `<span style="display:inline-block; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 10px; letter-spacing:0.01em;">${t}</span>`
+        `<span onclick="event.stopPropagation(); window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')"
+            style="display:inline-block; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 10px; letter-spacing:0.01em; cursor:pointer; transition:background 150ms;"
+            onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${t}</span>`
     ).join('');
     const _ubSafeHtml = ubicacionTexto.replace(/'/g, '');
     const ubicacionHtml = ubicacionTexto
@@ -3421,7 +3450,7 @@ function renderSemanalView() {
                                     ${tarea.otNumero ? `<span style="font-size:0.75rem;font-weight:600;background:#fff3e0;color:#e65100;border-radius:6px;padding:1px 7px;margin-left:4px;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}
                                     ${vencido ? `<span class="badge" style="background:#ef4444;color:#fff;font-size:0.72rem;margin-left:4px;"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDO</span>` : ''}
                                 </div>
-                                ${tipos.length ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.35rem;">${tipos.map(t=>`<span style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:999px;font-size:0.7rem;font-weight:600;padding:1px 9px;">${t}</span>`).join('')}</div>` : ''}
+                                ${tipos.length ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.35rem;">${tipos.map(t=>`<span onclick="window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:999px;font-size:0.7rem;font-weight:600;padding:1px 9px;cursor:pointer;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${t}</span>`).join('')}</div>` : ''}
                                 <div style="margin:0.55rem 0 0.4rem;border-top:1px solid #f1f5f9;"></div>
                                 <div style="font-size:0.88rem;color:var(--text-main);display:flex;align-items:center;gap:0.4rem;">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -4449,6 +4478,119 @@ function renderListasFicha(mediciones) {
         </div>
     `).join('') : '<p style="color:var(--text-muted); font-size:0.85rem; padding:0.5rem;">No se registran cambios de aceite o engrase.</p>';
 }
+
+// ── Modal informativo de tipo de trabajo ────────────────────────────────────
+window.abrirModalTipoBadge = function(tipo, tareaId) {
+    const TIPOS_INFO = {
+        'medición de vibraciones': {
+            icon: '📳',
+            titulo: 'Medición de vibraciones',
+            descripcion: 'Análisis del nivel de vibración global de un equipo rotativo, expresado en mm/s. Se mide con un vibrómetro o analizador de vibraciones colocado sobre el equipo en operación.',
+            tecnica: 'Se toman lecturas en puntos definidos del equipo (rodamientos, carcasa, base) con el sensor apoyado firmemente. Los valores se registran en mm/s RMS y se comparan con mediciones anteriores para detectar tendencias anómalas.'
+        },
+        'termografía': {
+            icon: '🌡️',
+            titulo: 'Termografía',
+            descripcion: 'Inspección con cámara infrarroja para detectar puntos calientes en equipos eléctricos y mecánicos. Permite identificar fallas antes de que generen una detención imprevista.',
+            tecnica: 'Se escanea el equipo con la cámara termográfica mientras opera en condiciones normales de carga. Se identifican asimetrías térmicas entre fases eléctricas o puntos calientes en rodamientos, acoplamientos y conexiones.'
+        },
+        'lubricación': {
+            icon: '🛢️',
+            titulo: 'Lubricación',
+            descripcion: 'Aplicación de lubricante en puntos de engrase para reducir fricción y desgaste en equipos rotativos, extendiéndoles la vida útil.',
+            tecnica: 'Se aplica la cantidad indicada de grasa o aceite según la ficha técnica del equipo, usando engrasadora manual o automática. Se purgan los puntos si corresponde y se verifica la ausencia de contaminantes.'
+        },
+        'cambio de aceite': {
+            icon: '🔄',
+            titulo: 'Cambio de aceite',
+            descripcion: 'Sustitución del aceite en cárter o sistema hidráulico para mantener las propiedades lubricantes y evitar daño por degradación.',
+            tecnica: 'Se drena el aceite usado con el equipo en temperatura de operación, se limpia el cárter, se reemplaza el filtro si aplica, y se rellena con el tipo y volumen de aceite indicado en la ficha técnica.'
+        },
+        'cambios de aceite': {
+            icon: '🔄',
+            titulo: 'Cambio de aceite',
+            descripcion: 'Sustitución del aceite en cárter o sistema hidráulico para mantener las propiedades lubricantes y evitar daño por degradación.',
+            tecnica: 'Se drena el aceite usado con el equipo en temperatura de operación, se limpia el cárter, se reemplaza el filtro si aplica, y se rellena con el tipo y volumen de aceite indicado en la ficha técnica.'
+        },
+        'end (tintas penetrantes)': {
+            icon: '🔬',
+            titulo: 'END / Tintas Penetrantes',
+            descripcion: 'Ensayo no destructivo para detectar discontinuidades superficiales como grietas o porosidades en componentes metálicos, sin dañar la pieza.',
+            tecnica: 'Se limpia la superficie, se aplica el líquido penetrante, se espera el tiempo de penetración, se elimina el exceso y se aplica revelador. Las indicaciones visibles señalan discontinuidades.'
+        },
+        'end': {
+            icon: '🔬',
+            titulo: 'Ensayo No Destructivo',
+            descripcion: 'Técnica de inspección que evalúa la integridad de un componente sin alterarlo ni dañarlo, detectando defectos internos o superficiales.',
+            tecnica: 'Dependiendo del método (ultrasonido, partículas magnéticas, tintas penetrantes), se prepara la superficie y se aplica el procedimiento normalizado correspondiente para obtener indicaciones interpretables.'
+        },
+        'tintas penetrantes': {
+            icon: '🔬',
+            titulo: 'Tintas Penetrantes',
+            descripcion: 'Método de inspección no destructivo que detecta fisuras y discontinuidades abiertas a la superficie en materiales no porosos.',
+            tecnica: 'Se aplica el líquido penetrante sobre la zona limpia, se deja actuar, se elimina el exceso y se aplica revelador en polvo. Las indicaciones coloreadas revelan la ubicación y forma de los defectos.'
+        },
+        'medición de espesores': {
+            icon: '📏',
+            titulo: 'Medición de Espesores',
+            descripcion: 'Medición ultrasónica del espesor de paredes metálicas para detectar y monitorear pérdida de material por corrosión o erosión.',
+            tecnica: 'Se aplica gel acoplante en la superficie limpia y se apoya la sonda ultrasónica perpendicularmente. El equipo mide el tiempo de vuelo del pulso ultrasónico para calcular el espesor real de la pared.'
+        },
+        'balanceo': {
+            icon: '⚖️',
+            titulo: 'Balanceo',
+            descripcion: 'Corrección del desbalance dinámico en rotores para reducir vibración, ruido y desgaste prematuro de rodamientos y sellos.',
+            tecnica: 'Se miden las vibraciones del rotor en operación, se identifica el plano y ángulo de corrección mediante el analizador, y se agregan o retiran masas de corrección hasta alcanzar niveles de vibración aceptables.'
+        },
+        'dureza': {
+            icon: '💎',
+            titulo: 'Medición de Dureza',
+            descripcion: 'Medición de la resistencia superficial de un material a la deformación, para verificar tratamientos térmicos o detectar cambios metalúrgicos por temperatura o fatiga.',
+            tecnica: 'Se aplica una carga controlada sobre la superficie preparada con un indentador calibrado. El tamaño de la huella resultante determina el valor de dureza en la escala correspondiente (HB, HRC, HV).'
+        },
+        'inspección visual': {
+            icon: '👁️',
+            titulo: 'Inspección Visual',
+            descripcion: 'Revisión directa del estado externo del equipo para detectar anomalías visibles como fugas, corrosión, desgaste, daños o condiciones inseguras.',
+            tecnica: 'El técnico recorre el equipo siguiendo una lista de verificación, registrando hallazgos con descripción y fotografías si aplica. Se evalúa el estado general y se determina si se requieren acciones correctivas.'
+        },
+    };
+
+    const key = tipo.toLowerCase().trim();
+    const info = TIPOS_INFO[key] || {
+        icon: '🔧', titulo: tipo,
+        descripcion: 'Trabajo de mantenimiento preventivo o correctivo.',
+        tecnica: ''
+    };
+
+    // ── Construir HTML del modal ──────────────────────────────────────────────
+    const tecnicaHtml = info.tecnica ? `
+        <div style="font-size:0.7rem; font-weight:700; color:#94a3b8; letter-spacing:0.08em; margin:1rem 0 0.4rem;">TÉCNICA</div>
+        <p style="font-size:0.87rem; color:#475569; margin:0; line-height:1.55;">${info.tecnica}</p>` : '';
+
+    // Crear/reemplazar modal
+    document.getElementById('modal-tipo-badge')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-tipo-badge';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 200ms;';
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:16px;width:95%;max-width:440px;padding:1.5rem 1.5rem 1.3rem;box-shadow:0 20px 50px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.9rem;">
+                <div>
+                    <div style="font-size:1.8rem;line-height:1;">${info.icon}</div>
+                    <div style="font-size:1.1rem;font-weight:700;color:#111827;margin-top:0.3rem;">${info.titulo}</div>
+                </div>
+                <button onclick="document.getElementById('modal-tipo-badge').remove()"
+                    style="background:#f3f4f6;border:none;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:1rem;color:#6b7280;flex-shrink:0;">&times;</button>
+            </div>
+            <div style="font-size:0.7rem;font-weight:700;color:#94a3b8;letter-spacing:0.08em;margin-bottom:0.4rem;">DESCRIPCIÓN</div>
+            <p style="font-size:0.87rem;color:#475569;margin:0 0 0.2rem;line-height:1.55;">${info.descripcion}</p>
+            ${tecnicaHtml}
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => { overlay.style.opacity = '1'; });
+};
 
 window._borrarMedicion = async (id) => {
     if (!confirm('¿Eliminar esta medición?')) return;
