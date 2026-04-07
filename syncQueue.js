@@ -1,33 +1,73 @@
-// syncQueue.js — Cola de sincronización offline → Supabase
-// Requiere: localDB.js cargado antes, supabaseClient disponible como supabaseClient
+// syncQueue.js - Cola de sincronizacion offline -> Supabase
+// Requiere: localDB.js cargado antes y supabaseClient disponible en window
 
 (function() {
   'use strict';
 
   const MAX_INTENTOS = 3;
-  let sincronizando  = false;
+  const LAST_SYNC_KEY = 'planify_last_sync_at';
+  let sincronizando = false;
+  let ultimoExitoSync = Number(localStorage.getItem(LAST_SYNC_KEY) || 0);
 
-  // ── Agregar operación a la cola ─────────────────────────────────────────────
+  async function _obtenerEstado() {
+    let pendientes = 0;
+    let errores = 0;
+
+    try {
+      const [cola, colaErr] = await Promise.all([
+        window.localDB?.cola.getPendientes() || [],
+        window.localDB?.cola.getErrores() || []
+      ]);
+      pendientes = (cola || []).length;
+      errores = (colaErr || []).length;
+    } catch (error) {
+      console.warn('[syncQueue] No se pudo leer la cola local:', error?.message || error);
+    }
+
+    return {
+      online: navigator.onLine,
+      sincronizando,
+      pendientes,
+      errores,
+      lastSyncAt: ultimoExitoSync || null
+    };
+  }
+
+  async function _emitirEstado() {
+    const estado = await _obtenerEstado();
+    window.dispatchEvent(new CustomEvent('planify:sync-status', { detail: estado }));
+    return estado;
+  }
+
+  function _guardarUltimoExito(timestamp) {
+    ultimoExitoSync = timestamp;
+    try {
+      localStorage.setItem(LAST_SYNC_KEY, String(timestamp));
+    } catch {}
+  }
+
   async function addToQueue(tabla, operacion, payload) {
     if (!window.localDB) return;
     await window.localDB.cola.add({ tabla, operacion, payload });
     console.log(`[syncQueue] Encolado: ${operacion} en ${tabla}`);
+    await _actualizarBanner();
   }
 
-  // ── Procesar toda la cola ───────────────────────────────────────────────────
   async function procesarCola() {
     if (sincronizando) return;
     if (!navigator.onLine) return;
     if (!window.localDB || !window.supabaseClient) return;
 
     const pendientes = await window.localDB.cola.getPendientes();
-    if (pendientes.length === 0) return;
+    if (pendientes.length === 0) {
+      await _actualizarBanner();
+      return;
+    }
 
     sincronizando = true;
-    console.log(`[syncQueue] Procesando ${pendientes.length} operación(es) pendiente(s)...`);
-    _actualizarBanner();
+    console.log(`[syncQueue] Procesando ${pendientes.length} operacion(es) pendiente(s)...`);
+    await _actualizarBanner();
 
-    // Ordenar por timestamp (FIFO)
     pendientes.sort((a, b) => a.timestamp - b.timestamp);
 
     for (const item of pendientes) {
@@ -35,22 +75,26 @@
       if (exito) {
         await window.localDB.cola.delete(item.id);
       } else {
-        // Incrementar intentos
         item.intentos = (item.intentos || 0) + 1;
         if (item.intentos >= MAX_INTENTOS) {
           item.synced = 'error';
-          console.error(`[syncQueue] Item ${item.id} falló ${MAX_INTENTOS} veces. Marcado como error.`);
+          console.error(`[syncQueue] Item ${item.id} fallo ${MAX_INTENTOS} veces. Marcado como error.`);
         }
         await window.localDB.cola.update(item);
       }
     }
 
     sincronizando = false;
-    _actualizarBanner();
+
+    const estadoFinal = await _obtenerEstado();
+    if (estadoFinal.online && estadoFinal.pendientes === 0 && estadoFinal.errores === 0) {
+      _guardarUltimoExito(Date.now());
+    }
+
+    await _actualizarBanner();
     console.log('[syncQueue] Cola procesada.');
   }
 
-  // ── Ejecutar una operación individual contra Supabase ──────────────────────
   async function _ejecutarOperacion(item) {
     const { tabla, operacion, payload } = item;
     try {
@@ -71,83 +115,71 @@
       }
       return true;
     } catch (err) {
-      console.warn(`[syncQueue] Excepción en ${operacion} ${tabla}:`, err.message);
+      console.warn(`[syncQueue] Excepcion en ${operacion} ${tabla}:`, err.message);
       return false;
     }
   }
 
-  // ── Detectar online/offline y sincronizar automáticamente ──────────────────
   window.addEventListener('online', () => {
-    console.log('[syncQueue] Conexión restaurada. Sincronizando...');
+    console.log('[syncQueue] Conexion restaurada. Sincronizando...');
     _actualizarBanner();
-    // Pequeño delay para asegurar conexión estable
     setTimeout(procesarCola, 1500);
   });
 
   window.addEventListener('offline', () => {
-    console.log('[syncQueue] Sin conexión. Modo offline activado.');
+    console.log('[syncQueue] Sin conexion. Modo offline activado.');
     _actualizarBanner();
   });
 
-  // ── Actualizar el banner visual ─────────────────────────────────────────────
   async function _actualizarBanner() {
     const banner = document.getElementById('offline-banner');
-    if (!banner) return;
+    const estado = await _emitirEstado();
 
-    let pendientes = 0;
-    let errores = 0;
-    try {
-      const [cola, colaErr] = await Promise.all([
-        window.localDB?.cola.getPendientes() || [],
-        window.localDB?.cola.getErrores() || []
-      ]);
-      pendientes = (cola || []).length;
-      errores    = (colaErr || []).length;
-    } catch {}
+    if (!banner) return estado;
 
-    if (!navigator.onLine) {
+    if (!estado.online) {
       banner.style.display = 'flex';
       banner.style.background = '#dc2626';
-      let msg = 'Sin conexión';
-      if (pendientes > 0) msg += ` — <strong>${pendientes}</strong> cambio(s) pendiente(s)`;
-      if (errores > 0)    msg += ` · <strong>${errores}</strong> con error permanente`;
+      let msg = 'Sin conexion';
+      if (estado.pendientes > 0) msg += ` - <strong>${estado.pendientes}</strong> cambio(s) pendiente(s)`;
+      if (estado.errores > 0) msg += ` - <strong>${estado.errores}</strong> con error permanente`;
       banner.innerHTML = `
         <i class="fa-solid fa-wifi-slash" style="font-size:1rem;"></i>
         <span>${msg}</span>
       `;
-      return;
+      return estado;
     }
 
-    if (sincronizando) {
+    if (estado.sincronizando) {
       banner.style.display = 'flex';
+      banner.style.background = '#d97706';
       banner.innerHTML = `
         <i class="fa-solid fa-spinner fa-spin" style="font-size:1rem;"></i>
         <span>Sincronizando cambios...</span>
       `;
-      banner.style.background = '#d97706';
-      return;
+      return estado;
     }
 
-    if (errores > 0) {
+    if (estado.errores > 0) {
       banner.style.display = 'flex';
       banner.style.background = '#d97706';
       banner.innerHTML = `
         <i class="fa-solid fa-triangle-exclamation" style="font-size:1rem;"></i>
-        <span><strong>${errores}</strong> cambio(s) no pudieron sincronizarse. Revisa la conexión o recarga la app.</span>
+        <span><strong>${estado.errores}</strong> cambio(s) no pudieron sincronizarse. Revisa la conexion o recarga la app.</span>
       `;
-      return;
+      return estado;
     }
 
-    // Online, sin errores, sin pendientes → ocultar banner
     banner.style.display = 'none';
+    return estado;
   }
 
-  // ── API pública ─────────────────────────────────────────────────────────────
   window.syncQueue = {
-    add:      addToQueue,
+    add: addToQueue,
     procesar: procesarCola,
     actualizar: _actualizarBanner,
+    resumen: _obtenerEstado
   };
 
-  console.log('[syncQueue] Módulo cargado.');
+  console.log('[syncQueue] Modulo cargado.');
 })();

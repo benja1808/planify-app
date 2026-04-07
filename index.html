@@ -13,11 +13,12 @@
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=14">
     
     <!-- PWA / Mobile Capabilites -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#FF6900">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <!-- Registrar Service Worker (offline support) -->
@@ -32,6 +33,7 @@
     </script>
     <!-- SheetJS CDN -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
     <!-- Chart.js CDN para gráficos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Supabase JS -->
@@ -161,6 +163,7 @@
             </div>
             <div class="nav-links">
                 <button id="nav-mis-horas" style="display:none;">Mis Horas</button>
+                <button id="nav-control">Control</button>
                 <button id="nav-dashboard" class="active">Diario</button>
                 <button id="nav-semanal">Semanal</button>
                 <button id="nav-historial">Historial</button>
@@ -177,12 +180,31 @@
             </div>
         </nav>
 
+        <section id="sync-status-strip" class="sync-strip" aria-live="polite">
+            <div class="sync-strip-main">
+                <span id="sync-strip-state" class="sync-chip">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Preparando estado</span>
+                </span>
+                <span id="sync-strip-queue" class="sync-strip-meta">Cargando informacion local...</span>
+                <span id="sync-strip-last" class="sync-strip-meta">Ultima sincronizacion: pendiente</span>
+            </div>
+            <button id="btn-sync-now" class="sync-strip-action" type="button">
+                <i class="fa-solid fa-rotate-right"></i>
+                <span>Sincronizar</span>
+            </button>
+        </section>
+
         <!-- Buscador Global OTs -->
         <div id="search-container" style="background: rgba(255, 255, 255, 0.95); padding: 1rem 2rem; border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; gap: 1rem;">
-            <div style="position: relative; width: 100%; max-width: 600px;">
+            <div class="search-shell" style="position: relative; width: 100%; max-width: 600px;">
                 <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
                 <input type="text" id="input-buscar-ot" class="form-control" placeholder="Buscar por número de OT o Equipo... (Ej. OT-1052 o Bomba)" style="padding-left: 2.8rem; border-radius: 50px; text-transform: uppercase;">
+                <button id="btn-clear-search" class="search-clear-btn" type="button" aria-label="Limpiar busqueda">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
             </div>
+            <div class="search-hint"><kbd>/</kbd> Buscar</div>
         </div>
 
         <!-- Contenedor de Resultados Búsqueda (Oculto por defecto) -->
@@ -203,112 +225,130 @@
     </div>
 
     <!-- MODAL INICIAR TRABAJO PROGRAMADO -->
-    <div id="modal-iniciar-trabajo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:3000; align-items:center; justify-content:center;">
-        <div style="background:#fff; border-radius:16px; width:95%; max-width:520px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 30px 60px rgba(0,0,0,0.3);">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:1.5rem 2rem 1rem; flex-shrink:0;">
-                <h2 style="margin:0; font-size:1.2rem; color:#111827;"><i class="fa-solid fa-play" style="color:#FF6900"></i> Iniciar Trabajo</h2>
-                <button onclick="document.getElementById('modal-iniciar-trabajo').style.display='none'" style="background:#f3f4f6; border:none; border-radius:8px; width:32px; height:32px; cursor:pointer; font-size:1.1rem; color:#6b7280;">&times;</button>
+    <div id="modal-iniciar-trabajo" class="modal-overlay-base">
+        <div class="modal-shell modal-shell--medium">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-bolt"></i> Operacion en curso</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-play"></i> Iniciar trabajo</h2>
+                    <p class="modal-subtitle">Configura unidad, especialidad y equipo de apoyo antes de poner la OT en marcha.</p>
+                </div>
+                <button onclick="document.getElementById('modal-iniciar-trabajo').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
             </div>
-            <div style="overflow-y:auto; padding:0 2rem; flex:1;">
-            <div style="margin-bottom:1.2rem;">
-                <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Trabajo a realizar</label>
-                <p id="modal-iniciar-tipo" style="margin:0; font-size:0.88rem; color:#374151; background:#fff7f0; padding:0.75rem; border-radius:8px; border-left:3px solid #FF6900; line-height:1.5;"></p>
+            <div class="modal-scroll">
+            <div class="form-group">
+                <span class="form-section-title"><i class="fa-solid fa-list-check"></i> Trabajo a realizar</span>
+                <p id="modal-iniciar-tipo" class="modal-callout"></p>
             </div>
             <input type="hidden" id="modal-iniciar-tarea-id">
             <input type="hidden" id="modal-iniciar-equipo-id">
-            <div style="margin-bottom:1rem;">
+            <div class="form-group">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Unidad / Ubicación</label>
-                <select id="modal-iniciar-ubicacion" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #d1d5db; border-radius:8px; font-size:0.9rem; background:#fff;">
+                <select id="modal-iniciar-ubicacion" class="form-control">
                     <option value="">— Seleccionar —</option>
                 </select>
+                <p class="form-helper">La unidad elegida define el contexto tecnico y el equipo correcto.</p>
             </div>
-            <div style="margin-bottom:1rem;">
+            <div class="form-group">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Tipo de trabajo <span style="font-weight:400; color:#6b7280;">(selecciona uno o varios)</span></label>
-                <div id="modal-iniciar-tipo-trabajo" style="border:1px solid #d1d5db; border-radius:8px; max-height:200px; overflow-y:auto; padding:0.3rem 0;"></div>
-                <div id="modal-iniciar-tipos-badges" style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.5rem; min-height:20px;"></div>
+                <div id="modal-iniciar-tipo-trabajo" class="modal-choice-list"></div>
+                <div id="modal-iniciar-tipos-badges" class="modal-pill-wrap"></div>
             </div>
-            <div id="modal-iniciar-componentes" style="display:none; margin-bottom:1rem;">
+            <div id="modal-iniciar-componentes" class="form-group" style="display:none;">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Componentes <span style="font-weight:400; color:#6b7280;">(desmarcar los que no aplican)</span></label>
-                <div id="modal-iniciar-comp-list" style="display:flex; flex-wrap:wrap; gap:0.5rem 0.8rem; padding:0.6rem 0.8rem; background:#f9fafb; border-radius:8px; border:1px solid #d1d5db;"></div>
+                <div id="modal-iniciar-comp-list" class="modal-component-list"></div>
             </div>
-            <div style="margin-bottom:1rem;">
+            <div class="form-group">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Líder / Supervisor</label>
-                <select id="modal-iniciar-lider" style="width:100%; padding:0.6rem 0.8rem; border:1px solid #d1d5db; border-radius:8px; font-size:0.9rem;">
+                <select id="modal-iniciar-lider" class="form-control">
                     <option value="">— Seleccionar —</option>
                 </select>
             </div>
-            <div style="margin-bottom:1.5rem;">
+            <div class="form-group">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Personal de Apoyo <span style="font-weight:400; color:#6b7280;">(opcional)</span></label>
-                <div id="modal-iniciar-ayudantes" style="border:1px solid #d1d5db; border-radius:8px; max-height:160px; overflow-y:auto; padding:0.3rem 0;"></div>
+                <div id="modal-iniciar-ayudantes" class="modal-choice-list" style="max-height:160px;"></div>
             </div>
             </div><!-- /scroll area -->
-            <div style="display:flex; gap:0.75rem; padding:1rem 2rem 1.5rem; flex-shrink:0; border-top:1px solid #f3f4f6;">
-                <button onclick="document.getElementById('modal-iniciar-trabajo').style.display='none'" style="flex:1; padding:0.7rem; border:1px solid #d1d5db; border-radius:8px; background:#fff; cursor:pointer; color:#374151;">Cancelar</button>
-                <button id="modal-iniciar-confirmar" style="flex:2; padding:0.7rem; border:none; border-radius:8px; background:#FF6900; color:#fff; font-weight:600; cursor:pointer; font-size:0.95rem;"><i class="fa-solid fa-play"></i> Confirmar e Iniciar</button>
+            <div class="modal-actions">
+                <button onclick="document.getElementById('modal-iniciar-trabajo').style.display='none'" class="btn btn-outline" type="button">Cancelar</button>
+                <button id="modal-iniciar-confirmar" class="btn btn-primary" type="button"><i class="fa-solid fa-play"></i> Confirmar e iniciar</button>
             </div>
         </div>
     </div>
 
     <!-- MODAL FINALIZAR TAREA -->
-    <div id="modal-finalizar-tarea" class="login-overlay" style="display: none; z-index: 2000;">
-        <div class="panel login-panel fade-in">
-            <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1.5rem;">
-                <h2 style="margin:0;"><i class="fa-solid fa-flag-checkered" style="color:var(--success-color)"></i> Finalizar Trabajo</h2>
-                <button id="btn-cerrar-modal-finalizar" class="btn" style="background: transparent; color: var(--text-muted); padding:0;"><i class="fa-solid fa-xmark fa-lg"></i></button>
+    <div id="modal-finalizar-tarea" class="modal-overlay-base" style="z-index: 2000;">
+        <div class="modal-shell modal-shell--wide fade-in">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-clipboard-check"></i> Cierre tecnico</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-flag-checkered"></i> Finalizar trabajo</h2>
+                    <p class="modal-subtitle">Deja el cierre listo para gestion, historial tecnico y seguimiento del equipo.</p>
+                </div>
+                <button id="btn-cerrar-modal-finalizar" class="modal-close" type="button" aria-label="Cerrar modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
-            <p style="color: var(--text-muted); font-size: 0.95rem; margin-bottom: 1.5rem;">
+            <div class="modal-body">
+                <div class="modal-callout">
                 Por favor, describe brevemente lo que se hizo para el informe de gestión.
-            </p>
+                </div>
 
             <input type="hidden" id="modal-tarea-id">
             <input type="hidden" id="modal-lider-id">
             <input type="hidden" id="modal-ayudantes-ids">
 
-            <div class="form-grid">
-                <div>
+            <div class="modal-split-grid">
+                <div class="form-group">
                     <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">Número de Aviso</label>
                     <input type="text" id="modal-numero-aviso" class="form-control" placeholder="Ej: 123456">
                 </div>
-                <div>
+                <div class="form-group">
                     <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">HH Trabajo</label>
                     <input type="text" id="modal-hh-trabajo" class="form-control" placeholder="Ej: 2.5">
                 </div>
             </div>
 
-            <div style="margin-bottom: 1.2rem; text-align: left;">
+            <div class="form-group">
                 <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">Acciones Realizadas (Requerido) *</label>
                 <textarea id="modal-acciones" class="form-control" rows="3" placeholder="Ej: Se midieron vibraciones en bombas 1 y 2. Se detectó desalineamiento..." required style="resize: vertical;"></textarea>
             </div>
 
-            <div style="margin-bottom: 1.2rem; text-align: left;">
+            <div class="form-group">
                 <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">Observaciones Adicionales (Opcional)</label>
                 <textarea id="modal-observaciones" class="form-control" rows="2" placeholder="Ej: Queda pendiente cambiar rodamiento la próxima guardia..." style="resize: vertical;"></textarea>
             </div>
 
-            <div style="margin-bottom: 1.2rem; text-align: left;">
+            <div class="form-group">
                 <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">Análisis (Opcional)</label>
                 <textarea id="modal-analisis" class="form-control" rows="2" placeholder="Ej: Se detectó desalineamiento en el acople principal..." style="resize: vertical;"></textarea>
             </div>
 
-            <div style="margin-bottom: 1.5rem; text-align: left;">
+            <div class="form-group">
                 <label style="display:block; margin-bottom: 0.5rem; color: var(--text-main); font-weight: 500;">Recomendación del Analista (Opcional)</label>
                 <textarea id="modal-recomendacion-analista" class="form-control" rows="2" placeholder="Ej: Se recomienda realizar alineamiento láser a la brevedad..." style="resize: vertical;"></textarea>
             </div>
 
-            <div id="modal-mediciones-container" style="margin-bottom:1.5rem;"></div>
-            <button id="btn-confirmar-finalizar" class="btn btn-success" style="width: 100%; padding: 0.8rem; font-size: 1.05rem;"><i class="fa-solid fa-check-double"></i> Guardar y Terminar</button>
+            <div id="modal-mediciones-container" class="modal-soft-box"></div>
+            </div>
+            <div class="modal-actions">
+                <button onclick="document.getElementById('modal-finalizar-tarea').style.display='none'" class="btn btn-outline" type="button">Cancelar</button>
+                <button id="btn-confirmar-finalizar" class="btn btn-success" type="button"><i class="fa-solid fa-check-double"></i> Guardar y terminar</button>
+            </div>
         </div>
     </div>
 
     <!-- Modal: Agregar Nuevo Equipo -->
-    <div id="modal-nuevo-equipo" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:9000; align-items:center; justify-content:center; backdrop-filter: blur(4px);">
-        <div style="background: var(--bg-secondary); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:2rem; width:90%; max-width:500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
-                <h2 style="margin:0; font-size:1.3rem;"><i class="fa-solid fa-plus-circle" style="color:var(--primary-color)"></i> Agregar Nuevo Equipo</h2>
-                <button id="modal-equipo-cerrar" style="background:none; border:none; color:var(--text-muted); font-size:1.5rem; cursor:pointer; line-height:1;">&times;</button>
+    <div id="modal-nuevo-equipo" class="modal-overlay-base" style="z-index:9000;">
+        <div class="modal-shell modal-shell--medium">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-sitemap"></i> Maestro de activos</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-plus-circle"></i> Agregar nuevo equipo</h2>
+                    <p class="modal-subtitle">Crea un equipo base con su unidad, KKS y componente principal para dejarlo disponible en la planificacion.</p>
+                </div>
+                <button id="modal-equipo-cerrar" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
             </div>
-
+            <div class="modal-body">
             <div class="form-group">
                 <label>Nombre / Activo <span style="color:var(--danger-color)">*</span></label>
                 <input type="text" id="nuevo-equipo-activo" class="form-control" placeholder="Ej: Bomba de agua principal">
@@ -327,12 +367,12 @@
                 <label>Componente</label>
                 <input type="text" id="nuevo-equipo-componente" class="form-control" placeholder="Ej: Motor, Reductor, Bomba...">
             </div>
-
-            <div style="display:flex; gap:0.8rem; margin-top:1.5rem;">
-                <button id="modal-equipo-cancelar" class="btn btn-outline" style="flex:1;">Cancelar</button>
-                <button id="modal-equipo-guardar" class="btn btn-primary" style="flex:2;"><i class="fa-solid fa-floppy-disk"></i> Guardar Equipo</button>
+            <p id="modal-equipo-status" class="form-helper" style="margin-top:-0.35rem; text-align:center;"></p>
             </div>
-            <p id="modal-equipo-status" style="margin-top:0.8rem; font-size:0.85rem; color:var(--text-muted); text-align:center;"></p>
+            <div class="modal-actions">
+                <button id="modal-equipo-cancelar" class="btn btn-outline" type="button">Cancelar</button>
+                <button id="modal-equipo-guardar" class="btn btn-primary" type="button"><i class="fa-solid fa-floppy-disk"></i> Guardar equipo</button>
+            </div>
         </div>
     </div>
 
@@ -411,21 +451,32 @@
     </div>
 
     <!-- Offline: IndexedDB local + cola de sync (cargan antes que app.js) -->
-    <script src="localDB.js"></script>
-    <script src="syncQueue.js"></script>
+    <script src="localDB.js?v=2"></script>
+    <script src="syncQueue.js?v=2"></script>
 
     <!-- Scripts locales modulares -->
-    <script src="app.js?v=150" defer></script>
+    <script src="app.js?v=169" defer></script>
+    <script src="dashboardAnalytics.js?v=34" defer></script>
 
     <!-- Modal: Rechazo de Horas Extra (Planificador) -->
-<div id="modal-he-rechazo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:10000; align-items:center; justify-content:center; padding:1rem;">
-    <div style="background:#fff; border-radius:16px; padding:2rem; max-width:400px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,0.25);">
-        <h2 style="margin:0 0 0.4rem 0; font-size:1.1rem;">Rechazar Horas Extra</h2>
+<div id="modal-he-rechazo" class="modal-overlay-base" style="z-index:10000;">
+    <div class="modal-shell modal-shell--compact">
+        <div class="modal-head">
+            <div class="modal-title-wrap">
+                <span class="modal-eyebrow"><i class="fa-solid fa-user-shield"></i> Validacion administrativa</span>
+                <h2 class="modal-title"><i class="fa-solid fa-ban"></i> Rechazar horas extra</h2>
+            </div>
+            <button onclick="document.getElementById('modal-he-rechazo').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
         <p style="color:var(--text-muted); font-size:0.83rem; margin-bottom:1.2rem;">Indica el motivo del rechazo. El trabajador podrá verlo en su perfil.</p>
         <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem; color:var(--text-muted);">Motivo <span style="color:var(--danger-color);">*</span></label>
         <textarea id="he-rechazo-motivo" class="form-control" rows="3" placeholder="Ej: Horas no verificadas, ya cubiertas por turno..." style="resize:vertical;"></textarea>
         <p id="he-rechazo-error" style="display:none; color:var(--danger-color); font-size:0.82rem; margin-top:0.4rem;">El motivo es obligatorio.</p>
-        <div style="display:flex; gap:0.75rem; margin-top:1.2rem;">
+            </div>
+        </div>
+        <div class="modal-actions">
             <button id="btn-he-rechazo-confirmar" class="btn" style="flex:1; border-radius:10px; background:#fee2e2; color:#dc2626; border:1px solid #fecaca; font-weight:600;">Confirmar Rechazo</button>
             <button id="btn-he-rechazo-cancelar" class="btn" style="border-radius:10px; border:1px solid var(--border-color); background:transparent; color:var(--text-muted); padding:0 1.2rem;">Cancelar</button>
         </div>
@@ -433,8 +484,9 @@
 </div>
 
 <!-- Modal: Horas Extra -->
-    <div id="modal-horas-extra" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:9999; align-items:center; justify-content:center; padding:1rem;">
-        <div style="background:#fff; border-radius:16px; padding:2rem; max-width:420px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+    <div id="modal-horas-extra" class="modal-overlay-base" style="z-index:9999;">
+        <div class="modal-shell modal-shell--compact">
+            <div class="modal-body">
 
             <!-- Pregunta inicial -->
             <div id="he-pregunta">
@@ -467,6 +519,7 @@
                 </div>
             </div>
 
+            </div>
         </div>
     </div>
 

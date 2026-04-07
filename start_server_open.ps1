@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$appDir = "C:\Users\benja\.gemini\antigravity\scratch\planner_app"
+$appDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $serverPath = Join-Path $appDir "server.js"
 $outLog = Join-Path $appDir "server.out.log"
 $errLog = Join-Path $appDir "server.err.log"

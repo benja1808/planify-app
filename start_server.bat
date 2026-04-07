@@ -1,6 +1,7 @@
 @echo off
 setlocal
-set "APP_DIR=C:\Users\benja\.gemini\antigravity\scratch\planner_app"
+set "APP_DIR=%~dp0"
+if "%APP_DIR:~-1%"=="\" set "APP_DIR=%APP_DIR:~0,-1%"
 cd /d "%APP_DIR%"
 echo Iniciando Planner App en http://localhost:4173
 
