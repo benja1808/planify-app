@@ -98,9 +98,26 @@
   }
 
   async function getByIndex(storeName, indexName, value) {
-    const store = await getStore(storeName);
-    const index = store.index(indexName);
-    return promisify(index.getAll(value));
+    const fieldKey = (STORES[storeName]?.indexes || []).find(idx => idx.name === indexName)?.key || indexName;
+    const shouldFallback = typeof value === 'boolean' || indexName === 'synced';
+
+    if (shouldFallback) {
+      const items = await getAll(storeName);
+      return items.filter(item => item?.[fieldKey] === value);
+    }
+
+    try {
+      const store = await getStore(storeName);
+      const index = store.index(indexName);
+      return typeof value === 'undefined'
+        ? promisify(index.getAll())
+        : promisify(index.getAll(value));
+    } catch (error) {
+      const items = await getAll(storeName);
+      return typeof value === 'undefined'
+        ? items
+        : items.filter(item => item?.[fieldKey] === value);
+    }
   }
 
   // ── API pública ─────────────────────────────────────────────────────────────
@@ -157,6 +174,7 @@
       upsert:           (item)       => upsert('horas_extra', item),
       bulk:             (items)      => upsertMany('horas_extra', items),
       delete:           (id)         => eliminar('horas_extra', id),
+      clear:            ()           => limpiar('horas_extra'),
       getByTrabajador:  (wId)        => getByIndex('horas_extra', 'trabajador_id', wId),
       getPendientes:    ()           => getByIndex('horas_extra', 'synced', false),
     },

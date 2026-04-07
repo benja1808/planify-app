@@ -548,7 +548,7 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
 
 async function completarTareaConPrompts(id, liderId, ayudantesIdsStr) {
     const observaciones = prompt("Ingrese breve reporte/observaciones del trabajo finalizado:");
-    const numeroAviso = prompt("Ingrese nÃºmero de Aviso / NotificaciÃ³n SAP (Opcional):");
+    const numeroAviso = prompt("Ingrese n\u00famero de Aviso / Notificaci\u00f3n SAP (Opcional):");
     const hhTrabajo = prompt("Ingrese Horas Hombre (HH) consumidas:");
 
     await guardarTareaFinalizada({
@@ -879,7 +879,7 @@ async function renderMisHorasView() {
     if (!contenedor) return;
 
     if (registros.length === 0) {
-        contenedor.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; padding:1rem 0;">Sin horas extra registradas.</p>`;
+        contenedor.innerHTML = `<div class="empty-state empty-state--compact"><div><strong>Sin horas extra registradas</strong><p>Cuando registres horas extra aparecerán aquí con su estado y motivo.</p></div></div>`;
         return;
     }
 
@@ -933,8 +933,8 @@ async function renderMisHorasView() {
                 <div style="font-size:0.72rem; color:var(--text-muted); margin-top:0.1rem;">Histórico aprobado</div>
             </div>
         </div>
-        <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse;">
+        <div class="table-shell">
+            <table class="table-clean" style="width:100%; border-collapse:collapse;">
                 <thead>
                     <tr style="border-bottom:1px solid var(--border-color);">
                         <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.4rem 0.6rem; font-weight:600;">Fecha</th>
@@ -1241,6 +1241,38 @@ async function cargarTodasHorasExtra() {
 }
 
 // ── HORAS EXTRA: badge de pendientes en nav ───────────────────────────────────
+async function limpiarColaHorasExtra(filtroFn = null) {
+    const cola = await window.localDB?.cola.getAll().catch(() => []) || [];
+    const items = cola.filter(item => {
+        if (item.tabla !== 'horas_extra') return false;
+        return typeof filtroFn === 'function' ? filtroFn(item) : true;
+    });
+    await Promise.all(items.map(item => window.localDB?.cola.delete(item.id).catch(() => {})));
+}
+
+async function eliminarRegistrosHorasExtra(ids = null) {
+    if (!navigator.onLine || !supabaseClient) {
+        throw new Error('Se requiere conexion a internet para eliminar horas extra.');
+    }
+
+    if (Array.isArray(ids) && ids.length > 0) {
+        const idsUnicos = [...new Set(ids.map(id => String(id)))];
+        const { error } = await supabaseClient.from('horas_extra').delete().in('id', idsUnicos);
+        if (error) throw error;
+
+        await Promise.all(idsUnicos.map(id => window.localDB?.horas_extra.delete(id).catch(() => {})));
+        await limpiarColaHorasExtra(item => idsUnicos.includes(String(item.payload?.id)));
+    } else {
+        const { error } = await supabaseClient.from('horas_extra').delete().not('id', 'is', null);
+        if (error) throw error;
+
+        await window.localDB?.horas_extra.clear().catch(() => {});
+        await limpiarColaHorasExtra();
+    }
+
+    await window.syncQueue?.actualizar?.();
+}
+
 async function actualizarBadgeHE() {
     const badge = document.getElementById('badge-he-pendientes');
     if (!badge) return;
@@ -1383,11 +1415,15 @@ async function renderHorasExtraAdminView() {
                 ${opcionesTrabajadores}
             </select>
             <input type="month" id="he-filtro-mes" class="form-control" style="flex:1; min-width:140px; max-width:180px;" placeholder="Mes">
+            <button id="btn-he-eliminar-todo" class="btn" style="margin-left:auto; background:#fee2e2; color:#dc2626; border:1px solid #fecaca; font-size:0.82rem; white-space:nowrap;">
+                <i class="fa-solid fa-trash-can"></i> Eliminar todas
+            </button>
         </div>
 
         <!-- Tabla -->
-        <div class="panel" style="overflow-x:auto; padding:0;">
-            <table style="width:100%; border-collapse:collapse;">
+        <div class="panel" style="padding:0;">
+            <div class="table-shell" style="border:none; border-radius:18px;">
+            <table class="table-clean" style="width:100%; border-collapse:collapse;">
                 <thead>
                     <tr style="border-bottom:2px solid var(--border-color); background:var(--glass-bg);">
                         <th style="text-align:left; font-size:0.75rem; color:var(--text-muted); padding:0.6rem 0.6rem; font-weight:600;">Trabajador</th>
@@ -1400,6 +1436,7 @@ async function renderHorasExtraAdminView() {
                 </thead>
                 <tbody id="he-admin-tabla-body"></tbody>
             </table>
+            </div>
         </div>
 
     </div>`;
@@ -1451,13 +1488,88 @@ async function renderHorasExtraAdminView() {
 
     window._heEliminar = async (id) => {
         if (!confirm('¿Eliminar este registro de horas extra?')) return;
-        await supabaseClient.from('horas_extra').delete().eq('id', id);
-        if (window.localDB) await window.localDB.horas_extra.delete(id).catch(() => {});
-        const idx = enriched.findIndex(r => r.id === id);
-        if (idx >= 0) enriched.splice(idx, 1);
-        renderTabla();
-        actualizarBadgeHE();
+        try {
+            await eliminarRegistrosHorasExtra([id]);
+            const idx = enriched.findIndex(r => r.id === id);
+            if (idx >= 0) enriched.splice(idx, 1);
+            renderTabla();
+            actualizarBadgeHE();
+        } catch (error) {
+            alert(error?.message || 'No se pudo eliminar el registro.');
+        }
     };
+
+    document.getElementById('btn-he-eliminar-todo')?.addEventListener('click', async () => {
+        if (enriched.length === 0) {
+            alert('No hay horas extra para eliminar.');
+            return;
+        }
+        if (!confirm(`\u00bfEliminar TODAS las horas extra (${enriched.length} registro(s))? Esta acci\u00f3n no se puede deshacer.`)) return;
+
+        const btn = document.getElementById('btn-he-eliminar-todo');
+        const textoOriginal = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+        }
+
+        try {
+            await eliminarRegistrosHorasExtra();
+            enriched.splice(0, enriched.length);
+            renderTabla();
+            actualizarBadgeHE();
+        } catch (error) {
+            alert(error?.message || 'No se pudieron eliminar las horas extra.');
+        } finally {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = textoOriginal;
+            }
+        }
+    });
+
+    window._heEliminar = async (id) => {
+        if (!confirm('Eliminar este registro de horas extra?')) return;
+        try {
+            await eliminarRegistrosHorasExtra([id]);
+            const idx = enriched.findIndex(r => r.id === id);
+            if (idx >= 0) enriched.splice(idx, 1);
+            renderTabla();
+            actualizarBadgeHE();
+        } catch (error) {
+            alert(error?.message || 'No se pudo eliminar el registro.');
+        }
+    };
+
+    const btnEliminarTodoOriginal = document.getElementById('btn-he-eliminar-todo');
+    if (btnEliminarTodoOriginal) {
+        const btnEliminarTodo = btnEliminarTodoOriginal.cloneNode(true);
+        btnEliminarTodoOriginal.parentNode.replaceChild(btnEliminarTodo, btnEliminarTodoOriginal);
+
+        btnEliminarTodo.addEventListener('click', async () => {
+            if (enriched.length === 0) {
+                alert('No hay horas extra para eliminar.');
+                return;
+            }
+            if (!confirm(`Eliminar TODAS las horas extra (${enriched.length} registro(s))? Esta accion no se puede deshacer.`)) return;
+
+            const textoOriginal = btnEliminarTodo.innerHTML;
+            btnEliminarTodo.disabled = true;
+            btnEliminarTodo.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+
+            try {
+                await eliminarRegistrosHorasExtra();
+                enriched.splice(0, enriched.length);
+                renderTabla();
+                actualizarBadgeHE();
+            } catch (error) {
+                alert(error?.message || 'No se pudieron eliminar las horas extra.');
+            } finally {
+                btnEliminarTodo.disabled = false;
+                btnEliminarTodo.innerHTML = textoOriginal;
+            }
+        });
+    }
 }
 
 // ── HORAS EXTRA: cargar del trabajador (local + remoto si online) ────────────
@@ -1824,13 +1936,20 @@ function renderHistorialView() {
             .replace(/^\[[^\]]+\]\s*/, '')
             .replace(/\s*\([^)]+\)\s*$/, '')
             .trim();
-        // Enlace a ficha técnica si existe el equipo
-        const eqObj = estado.equipos.find(e =>
-            e.activo.toLowerCase() === nombreLimpio.toLowerCase() ||
-            (matchUnidad && e.activo.toLowerCase() === matchUnidad[1].toLowerCase())
+        // Enlace a ficha técnica respetando la unidad del registro de historial.
+        // Si hay varios componentes del mismo activo en esa unidad, abrir el selector de componente.
+        const ubicacionNormalizada = (ubicacion || '').trim().toLowerCase();
+        const nombreNormalizado = (nombreLimpio || tipoStr).trim().toLowerCase();
+        const equiposMismaUnidad = estado.equipos.filter(e =>
+            (e.activo || '').trim().toLowerCase() === nombreNormalizado &&
+            (!ubicacionNormalizada || (e.ubicacion || '').trim().toLowerCase() === ubicacionNormalizada)
         );
+        const eqObj = equiposMismaUnidad[0] || estado.equipos.find(e =>
+            (e.activo || '').trim().toLowerCase() === nombreNormalizado
+        );
+        const ubicacionEscapada = (ubicacion || '').replace(/'/g, '');
         const nombreHtml = eqObj
-            ? `<a href="#" onclick="event.preventDefault(); window.abrirFichaTecnica('${eqObj.id}')" style="color:var(--primary-color); text-decoration:none; font-weight:700;">${nombreLimpio || tipoStr}</a>`
+            ? `<a href="#" onclick="${equiposMismaUnidad.length > 1 ? `window.elegirComponenteYAbrirFicha('${eqObj.id}','${ubicacionEscapada}')` : `window.abrirFichaTecnica('${eqObj.id}')`}; return false;" style="color:var(--primary-color); text-decoration:none; font-weight:700;">${nombreLimpio || tipoStr}</a>`
             : `<span style="font-weight:700; color:var(--text-main);">${nombreLimpio || tipoStr}</span>`;
 
         // ── Acciones: tipos automáticos + texto manual ────────────────────────
@@ -1906,7 +2025,7 @@ function renderHistorialView() {
     }
 
     function renderLista(tareas) {
-        if (tareas.length === 0) return `<p style="text-align:center; padding:3rem; color:var(--text-muted);">Sin registros.</p>`;
+        if (tareas.length === 0) return `<div class="empty-state"><div><strong>Sin registros</strong><p>No encontramos movimientos para esta pestaña con los filtros actuales.</p></div></div>`;
         return `<div id="lista-historial-items" style="display:grid; gap:1rem;">${tareas.map(renderTarjeta).join('')}</div>`;
     }
 
@@ -2057,6 +2176,1625 @@ function renderHistorialView() {
 // La API key de Gemini vive en los secretos de Supabase — no se necesita en el frontend.
 
 // ── GENERADOR DE INFORMES CON IA (via Supabase Edge Function → Gemini) ───────
+function renderHistorialView() {
+    const filtrosTipo = [
+        { id: 'todos', label: 'Todos', icon: 'fa-layer-group', bg: '#ffffff', color: '#475569', border: 'rgba(203,213,225,0.95)' },
+        { id: 'vibraciones', label: 'Vibraciones', icon: 'fa-wave-square', bg: '#fff7ed', color: '#9a3412', border: 'rgba(249,115,22,0.22)' },
+        { id: 'termografia', label: 'Termografia', icon: 'fa-temperature-three-quarters', bg: '#ecfeff', color: '#0f766e', border: 'rgba(13,148,136,0.22)' },
+        { id: 'lubricacion', label: 'Lubricacion / Aceite', icon: 'fa-oil-can', bg: '#eff6ff', color: '#1d4ed8', border: 'rgba(59,130,246,0.2)' },
+        { id: 'end', label: 'END', icon: 'fa-flask-vial', bg: '#f5f3ff', color: '#6d28d9', border: 'rgba(139,92,246,0.22)' },
+        { id: 'espesores', label: 'Espesores', icon: 'fa-ruler-horizontal', bg: '#ecfccb', color: '#3f6212', border: 'rgba(132,204,22,0.24)' },
+        { id: 'dureza', label: 'Dureza', icon: 'fa-gem', bg: '#fdf2f8', color: '#be185d', border: 'rgba(236,72,153,0.22)' }
+    ];
+    const tipoMap = Object.fromEntries(filtrosTipo.map(tipo => [tipo.id, tipo]));
+    const historialBase = Array.isArray(estado.historialTareas) ? [...estado.historialTareas] : [];
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+
+    const normalizar = (valor) => String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const capitalizar = (texto) => {
+        const limpio = String(texto || '').trim();
+        return limpio ? limpio.charAt(0).toUpperCase() + limpio.slice(1) : '';
+    };
+
+    const formatearNumero = (valor, maxDecimals = 1) => new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDecimals
+    }).format(Number(valor || 0));
+
+    const formatearFechaCorta = (fecha) => (
+        fecha && !Number.isNaN(fecha.getTime())
+            ? fecha.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : '--'
+    );
+
+    const formatearHora = (fecha) => (
+        fecha && !Number.isNaN(fecha.getTime())
+            ? fecha.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+            : '--'
+    );
+
+    const formatearFechaLarga = (fecha) => {
+        if (!fecha || Number.isNaN(fecha.getTime())) return 'Sin fecha';
+        return capitalizar(fecha.toLocaleDateString('es-CL', {
+            weekday: 'long',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        }));
+    };
+
+    const inputDate = (fecha) => (
+        fecha && !Number.isNaN(fecha.getTime())
+            ? `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`
+            : ''
+    );
+
+    const inicioDia = (valor) => {
+        if (!valor) return null;
+        const fecha = new Date(`${valor}T00:00:00`);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    };
+
+    const finDia = (valor) => {
+        if (!valor) return null;
+        const fecha = new Date(`${valor}T23:59:59.999`);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    };
+
+    const obtenerFechaRegistro = (item) => item.created_at || item.fecha_creacion || item.fecha_termino || item.fecha_inicio || item.fecha || null;
+
+    const parseAyudantes = (valor) => {
+        if (Array.isArray(valor)) return valor.map(item => String(item || '').trim()).filter(Boolean);
+        if (typeof valor === 'string') return valor.split(',').map(item => item.trim()).filter(Boolean);
+        return [];
+    };
+
+    const parseTipos = (item) => {
+        if (Array.isArray(item.tipos_trabajo) && item.tipos_trabajo.length) return item.tipos_trabajo.filter(Boolean);
+        if (Array.isArray(item.tiposSeleccionados) && item.tiposSeleccionados.length) return item.tiposSeleccionados.filter(Boolean);
+        const base = String(item.tipo || item.tarea || '');
+        const match = base.match(/\(([^)]+)\)\s*$/);
+        if (match?.[1]) {
+            return match[1]
+                .split(',')
+                .map(parte => parte.trim())
+                .filter(Boolean);
+        }
+        return [];
+    };
+
+    const detectarTipoPrincipal = (item, tipos) => {
+        const texto = normalizar([
+            item.tipo,
+            item.tarea,
+            item.acciones_realizadas,
+            item.observaciones,
+            item.analisis,
+            tipos.join(' ')
+        ].filter(Boolean).join(' '));
+
+        if (texto.includes('vibrac')) return 'vibraciones';
+        if (texto.includes('termog')) return 'termografia';
+        if (texto.includes('lubric') || texto.includes('aceite')) return 'lubricacion';
+        if (texto.includes('tintas') || texto.includes('penetrantes') || texto.includes(' end')) return 'end';
+        if (texto.includes('espesor')) return 'espesores';
+        if (texto.includes('dureza')) return 'dureza';
+        if (tipos.length) return detectarTipoPrincipal({ tipo: tipos.join(' ') }, []);
+        return 'todos';
+    };
+
+    const parseRegistro = (item) => {
+        const fecha = new Date(obtenerFechaRegistro(item) || 0);
+        const equipoExacto = item.equipo_id
+            ? estado.equipos.find(e => String(e.id) === String(item.equipo_id))
+            : null;
+        const tipoRaw = String(item.tipo || item.tarea || 'Registro historial').trim();
+        const unidadMatch = tipoRaw.match(/^\[([^\]]+)\]/);
+        const nombreLimpio = tipoRaw
+            .replace(/^\[[^\]]+\]\s*/, '')
+            .replace(/\s*\([^)]+\)\s*$/, '')
+            .trim();
+        const tipos = parseTipos(item);
+        const tipoPrincipal = detectarTipoPrincipal(item, tipos);
+        const unidad = item.ubicacion || equipoExacto?.ubicacion || (unidadMatch ? unidadMatch[1].trim() : '');
+        const nombreActivo = equipoExacto?.activo || nombreLimpio || tipoRaw;
+        const componente = equipoExacto?.componente || item.componente || item.punto_medicion || '';
+        const ayudantes = parseAyudantes(item.ayudantes_nombres);
+        const hh = parseFloat(String(item.hh_trabajo ?? '').replace(',', '.')) || 0;
+        const activosMismaUnidad = estado.equipos.filter(e =>
+            normalizar(e.activo) === normalizar(nombreActivo) &&
+            normalizar(e.ubicacion) === normalizar(unidad)
+        );
+        const equipoFallback = equipoExacto || activosMismaUnidad[0] || estado.equipos.find(e =>
+            normalizar(e.activo) === normalizar(nombreActivo)
+        ) || null;
+
+        return {
+            original: item,
+            id: item.id,
+            fecha,
+            fechaClave: fecha && !Number.isNaN(fecha.getTime()) ? inputDate(fecha) : 'sin-fecha',
+            fechaLabel: formatearFechaLarga(fecha),
+            horaLabel: formatearHora(fecha),
+            unidad: unidad || 'Sin unidad',
+            nombre: nombreActivo || 'Registro historial',
+            componente: componente || '',
+            lider: item.lider_nombre || 'Sin tecnico',
+            ayudantes,
+            hh,
+            otNumero: String(item.ot_numero || '').trim(),
+            aviso: String(item.numero_aviso || '').trim(),
+            tipos,
+            tipoPrincipal,
+            acciones: String(item.acciones_realizadas || '').trim(),
+            observaciones: String(item.observaciones || item.descripcion || '').trim(),
+            analisis: String(item.analisis || item.accion_analista || item.recomendacion_analista || '').trim(),
+            equipo: equipoFallback,
+            equipoAccion: equipoExacto
+                ? { mode: 'direct', id: equipoExacto.id, unidad: equipoExacto.ubicacion || unidad || '' }
+                : (
+                    equipoFallback
+                        ? { mode: activosMismaUnidad.length > 1 ? 'group' : 'direct', id: equipoFallback.id, unidad: unidad || equipoFallback.ubicacion || '' }
+                        : null
+                )
+        };
+    };
+
+    const registrosBase = historialBase
+        .sort((a, b) => new Date(obtenerFechaRegistro(b) || 0) - new Date(obtenerFechaRegistro(a) || 0))
+        .map(parseRegistro);
+
+    const fechasValidas = registrosBase
+        .map(registro => registro.fecha)
+        .filter(fecha => fecha && !Number.isNaN(fecha.getTime()));
+    const fechaMin = fechasValidas.length ? new Date(Math.min(...fechasValidas.map(fecha => fecha.getTime()))) : new Date();
+    const fechaMax = fechasValidas.length ? new Date(Math.max(...fechasValidas.map(fecha => fecha.getTime()))) : new Date();
+
+    const opcionesUnidad = [...new Set(registrosBase.map(registro => registro.unidad).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const opcionesLider = [...new Set(registrosBase.map(registro => registro.lider).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+
+    const getPresetRange = (preset) => {
+        const hoy = new Date();
+        const fin = new Date(hoy);
+        fin.setHours(23, 59, 59, 999);
+        const inicio = new Date(hoy);
+        inicio.setHours(0, 0, 0, 0);
+
+        if (preset === 'hoy') {
+            return { desde: inputDate(inicio), hasta: inputDate(fin) };
+        }
+        if (preset === 'semana') {
+            const desde = new Date(fin);
+            desde.setDate(desde.getDate() - 6);
+            desde.setHours(0, 0, 0, 0);
+            return { desde: inputDate(desde), hasta: inputDate(fin) };
+        }
+        if (preset === 'mes') {
+            const desde = new Date(fin);
+            desde.setDate(desde.getDate() - 29);
+            desde.setHours(0, 0, 0, 0);
+            return { desde: inputDate(desde), hasta: inputDate(fin) };
+        }
+        return { desde: inputDate(fechaMin), hasta: inputDate(fechaMax) };
+    };
+
+    let presetActivo = 'mes';
+    let filtroTipo = 'todos';
+    let filtroUnidad = 'todos';
+    let filtroLider = 'todos';
+    let textoBusqueda = '';
+    let rango = getPresetRange(presetActivo);
+
+    const coincideFiltroTipo = (registro, filtro) => filtro === 'todos' || registro.tipoPrincipal === filtro || registro.tipos.some(tipo => {
+        const tipoNorm = normalizar(tipo);
+        if (filtro === 'vibraciones') return tipoNorm.includes('vibrac');
+        if (filtro === 'termografia') return tipoNorm.includes('termog');
+        if (filtro === 'lubricacion') return tipoNorm.includes('lubric') || tipoNorm.includes('aceite');
+        if (filtro === 'end') return tipoNorm.includes('end') || tipoNorm.includes('tintas') || tipoNorm.includes('penetrantes');
+        if (filtro === 'espesores') return tipoNorm.includes('espesor');
+        if (filtro === 'dureza') return tipoNorm.includes('dureza');
+        return true;
+    });
+
+    const getBusquedaTexto = (registro) => normalizar([
+        registro.nombre,
+        registro.unidad,
+        registro.componente,
+        registro.lider,
+        registro.ayudantes.join(' '),
+        registro.otNumero,
+        registro.aviso,
+        registro.acciones,
+        registro.observaciones,
+        registro.analisis,
+        registro.tipos.join(' '),
+        registro.equipo?.kks || ''
+    ].join(' '));
+
+    const getRegistrosFiltrados = ({ omitTipo = false } = {}) => registrosBase.filter((registro) => {
+        const fecha = registro.fecha;
+        const desde = inicioDia(rango.desde);
+        const hasta = finDia(rango.hasta);
+
+        if (desde && (!fecha || Number.isNaN(fecha.getTime()) || fecha < desde)) return false;
+        if (hasta && (!fecha || Number.isNaN(fecha.getTime()) || fecha > hasta)) return false;
+        if (filtroUnidad !== 'todos' && normalizar(registro.unidad) !== filtroUnidad) return false;
+        if (filtroLider !== 'todos' && normalizar(registro.lider) !== filtroLider) return false;
+        if (textoBusqueda && !getBusquedaTexto(registro).includes(normalizar(textoBusqueda))) return false;
+        if (!omitTipo && !coincideFiltroTipo(registro, filtroTipo)) return false;
+        return true;
+    });
+
+    const getTopEspecialidad = (registros) => {
+        const contador = new Map();
+        registros.forEach((registro) => {
+            const clave = registro.tipoPrincipal || 'todos';
+            contador.set(clave, (contador.get(clave) || 0) + 1);
+        });
+        const top = [...contador.entries()].sort((a, b) => b[1] - a[1])[0];
+        if (!top) return null;
+        return {
+            tipo: top[0],
+            total: top[1],
+            label: tipoMap[top[0]]?.label || 'Sin clasificar'
+        };
+    };
+
+    const getTopLider = (registros) => {
+        const contador = new Map();
+        registros.forEach((registro) => {
+            const clave = registro.lider || 'Sin tecnico';
+            contador.set(clave, (contador.get(clave) || 0) + 1);
+        });
+        const top = [...contador.entries()].sort((a, b) => b[1] - a[1])[0];
+        return top ? { nombre: top[0], total: top[1] } : null;
+    };
+
+    const tipoModalMap = {
+        vibraciones: 'medición de vibraciones',
+        termografia: 'termografía',
+        lubricacion: 'lubricación',
+        end: 'end',
+        espesores: 'medición de espesores',
+        dureza: 'dureza',
+        todos: 'inspección visual'
+    };
+
+    const renderTipoPills = (registros) => {
+        const host = document.getElementById('historial-type-pills');
+        if (!host) return;
+        const conteos = new Map();
+        filtrosTipo.forEach(tipo => conteos.set(tipo.id, 0));
+        registros.forEach((registro) => {
+            const clave = registro.tipoPrincipal || 'todos';
+            conteos.set(clave, (conteos.get(clave) || 0) + 1);
+        });
+        conteos.set('todos', registros.length);
+
+        host.innerHTML = filtrosTipo.map((tipo) => `
+            <button type="button"
+                class="history-type-pill ${filtroTipo === tipo.id ? 'is-active' : ''}"
+                data-history-type="${tipo.id}">
+                <i class="fa-solid ${tipo.icon}"></i>
+                <span>${tipo.label}</span>
+                <strong>${conteos.get(tipo.id) || 0}</strong>
+            </button>
+        `).join('');
+    };
+
+    const renderMetrics = (registros) => {
+        const host = document.getElementById('historial-kpis');
+        if (!host) return;
+
+        const hhTotal = registros.reduce((acum, registro) => acum + registro.hh, 0);
+        const equipos = new Set(registros.map(registro => `${normalizar(registro.unidad)}|${normalizar(registro.nombre)}`));
+        const unidades = new Set(registros.map(registro => normalizar(registro.unidad)).filter(Boolean));
+        const topEspecialidad = getTopEspecialidad(registros);
+        const topLider = getTopLider(registros);
+
+        host.innerHTML = `
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-book-open"></i> Registros</span>
+                <div class="history-kpi-value">${registros.length}</div>
+                <div class="history-kpi-meta">Cierres visibles para el rango seleccionado.</div>
+            </article>
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-user-clock"></i> HH acumuladas</span>
+                <div class="history-kpi-value">${formatearNumero(hhTotal)}</div>
+                <div class="history-kpi-meta">Horas hombre registradas en los trabajos filtrados.</div>
+            </article>
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-gears"></i> Equipos intervenidos</span>
+                <div class="history-kpi-value">${equipos.size}</div>
+                <div class="history-kpi-meta">Activos distintos con actividad dentro del rango.</div>
+            </article>
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-location-dot"></i> Unidades</span>
+                <div class="history-kpi-value">${unidades.size}</div>
+                <div class="history-kpi-meta">${[...new Set(registros.map(registro => registro.unidad))].slice(0, 3).join(' · ') || 'Sin unidades detectadas'}</div>
+            </article>
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-chart-pie"></i> Especialidad dominante</span>
+                <div class="history-kpi-value">${escapeHtml(topEspecialidad?.label || 'Sin dato')}</div>
+                <div class="history-kpi-meta">${topEspecialidad ? `${topEspecialidad.total} registro(s) dentro del rango.` : 'Aun no hay especialidades para analizar.'}</div>
+            </article>
+            <article class="history-kpi">
+                <span class="history-kpi-label"><i class="fa-solid fa-user-tie"></i> Lider principal</span>
+                <div class="history-kpi-value">${escapeHtml(topLider?.nombre || 'Sin dato')}</div>
+                <div class="history-kpi-meta">${topLider ? `${topLider.total} cierre(s) liderados en este periodo.` : 'Todavia no hay registros en el rango actual.'}</div>
+            </article>
+        `;
+    };
+
+    const renderBadgeTipo = (tipoId, recordId, labelOverride = '') => {
+        const tipo = tipoMap[tipoId] || tipoMap.todos;
+        return `
+            <button type="button"
+                class="history-type-badge"
+                data-action="type-info"
+                data-type="${tipoId}"
+                data-record="${recordId}"
+                style="background:${tipo.bg}; color:${tipo.color}; border:1px solid ${tipo.border};">
+                <i class="fa-solid ${tipo.icon}"></i>
+                <span>${escapeHtml(labelOverride || tipo.label)}</span>
+            </button>
+        `;
+    };
+
+    const renderRegistro = (registro) => {
+        const stats = [];
+        if (registro.otNumero) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(registro.otNumero)}</span>`);
+        if (registro.aviso) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-bell"></i> Aviso ${escapeHtml(registro.aviso)}</span>`);
+        stats.push(`<span class="history-stat-chip"><i class="fa-regular fa-clock"></i> ${formatearHora(registro.fecha)}</span>`);
+        if (registro.hh > 0) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-user-clock"></i> ${formatearNumero(registro.hh)} HH</span>`);
+        if (registro.ayudantes.length) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-users"></i> ${registro.ayudantes.length} apoyo</span>`);
+
+        const resumenLineas = [
+            registro.acciones ? `<p><strong>Acciones:</strong> ${escapeHtml(registro.acciones)}</p>` : '',
+            registro.observaciones ? `<p><strong>Observacion:</strong> ${escapeHtml(registro.observaciones)}</p>` : '',
+            registro.analisis ? `<p><strong>Analisis:</strong> ${escapeHtml(registro.analisis)}</p>` : ''
+        ].filter(Boolean).join('');
+
+        const botonesTipo = (registro.tipos.length ? registro.tipos : [tipoMap[registro.tipoPrincipal]?.label || 'General'])
+            .slice(0, 3)
+            .map((tipoTexto) => renderBadgeTipo(registro.tipoPrincipal, registro.id, tipoTexto))
+            .join('');
+
+        const botonEquipo = registro.equipoAccion
+            ? `<button type="button" class="btn btn-outline" data-action="open-equipo" data-id="${registro.equipoAccion.id}" data-mode="${registro.equipoAccion.mode}" data-unidad="${escapeHtml(registro.equipoAccion.unidad || '')}">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir equipo
+               </button>`
+            : '';
+
+        return `
+            <article class="history-record" data-record-id="${registro.id}">
+                <div class="history-record-top">
+                    <div class="history-record-main">
+                        <div class="history-record-title-row">
+                            <div class="history-record-title">${escapeHtml(registro.nombre)}</div>
+                            ${renderBadgeTipo(registro.tipoPrincipal, registro.id)}
+                        </div>
+                        <div class="history-record-meta">
+                            <span><i class="fa-regular fa-calendar"></i> ${formatearFechaCorta(registro.fecha)}, ${registro.horaLabel}</span>
+                            <span><i class="fa-solid fa-location-dot"></i> ${escapeHtml(registro.unidad)}</span>
+                            ${registro.componente ? `<span><i class="fa-solid fa-screwdriver-wrench"></i> ${escapeHtml(registro.componente)}</span>` : ''}
+                            <span><i class="fa-solid fa-user-tie"></i> ${escapeHtml(registro.lider)}</span>
+                        </div>
+                        <div class="history-record-stats">
+                            ${stats.join('')}
+                        </div>
+                        <div class="history-record-actions">
+                            ${botonesTipo}
+                        </div>
+                        <div class="history-record-summary">
+                            ${resumenLineas || '<p>Sin detalle tecnico adicional para este cierre.</p>'}
+                        </div>
+                    </div>
+                    <div class="history-record-side">
+                        ${botonEquipo}
+                        <button type="button" class="btn btn-outline" data-action="report" data-id="${registro.id}">
+                            <i class="fa-solid fa-file-lines"></i> Informe
+                        </button>
+                        <button type="button" class="btn btn-outline btn-icon" title="Eliminar registro" data-action="delete" data-id="${registro.id}" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </article>
+        `;
+    };
+
+    const renderContenido = (registros) => {
+        const host = document.getElementById('historial-contenido');
+        if (!host) return;
+        if (!registros.length) {
+            host.innerHTML = `
+                <div class="panel">
+                    <div class="empty-state">
+                        <div>
+                            <strong>Sin registros en este rango</strong>
+                            <p>Ajusta las fechas o los filtros para revisar actividad historica con mas detalle.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const grupos = registros.reduce((acum, registro) => {
+            if (!acum[registro.fechaClave]) {
+                acum[registro.fechaClave] = {
+                    label: registro.fechaLabel,
+                    items: []
+                };
+            }
+            acum[registro.fechaClave].items.push(registro);
+            return acum;
+        }, {});
+
+        host.innerHTML = `
+            <div class="history-groups">
+                ${Object.entries(grupos).map(([clave, grupo]) => `
+                    <section class="history-group" data-group="${clave}">
+                        <div class="history-group-head">
+                            <div class="history-group-title">
+                                <h3>${escapeHtml(grupo.label)}</h3>
+                            </div>
+                            <div class="history-group-count">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <span>${grupo.items.length} registro(s)</span>
+                            </div>
+                        </div>
+                        <div class="history-record-list">
+                            ${grupo.items.map(renderRegistro).join('')}
+                        </div>
+                    </section>
+                `).join('')}
+            </div>
+        `;
+    };
+
+    const renderResumenRango = (registros) => {
+        const host = document.getElementById('historial-resumen-rango');
+        if (!host) return;
+        const equipos = new Set(registros.map(registro => `${normalizar(registro.unidad)}|${normalizar(registro.nombre)}`));
+        const desde = rango.desde ? formatearFechaCorta(inicioDia(rango.desde)) : formatearFechaCorta(fechaMin);
+        const hasta = rango.hasta ? formatearFechaCorta(finDia(rango.hasta)) : formatearFechaCorta(fechaMax);
+        host.innerHTML = `
+            <i class="fa-regular fa-calendar-check"></i>
+            <span>${registros.length} registro(s) · ${equipos.size} equipo(s) · ${desde} al ${hasta}</span>
+        `;
+    };
+
+    const syncPresetButtons = () => {
+        document.querySelectorAll('[data-history-preset]').forEach((button) => {
+            button.classList.toggle('is-active', button.dataset.historyPreset === presetActivo);
+        });
+    };
+
+    const updateLimpiarButton = (registros) => {
+        const button = document.getElementById('btn-limpiar-historial');
+        if (!button) return;
+        button.disabled = registros.length === 0;
+        button.innerHTML = `<i class="fa-solid fa-trash-can"></i> Limpiar visibles (${registros.length})`;
+    };
+
+    const renderTodo = () => {
+        const visibles = getRegistrosFiltrados();
+        const visiblesSinTipo = getRegistrosFiltrados({ omitTipo: true });
+        renderMetrics(visibles);
+        renderTipoPills(visiblesSinTipo);
+        renderContenido(visibles);
+        renderResumenRango(visibles);
+        syncPresetButtons();
+        updateLimpiarButton(visibles);
+    };
+
+    window._borrarHistorial = async (id) => {
+        if (!confirm('Eliminar este registro del historial? Tambien se borraran las mediciones asociadas.')) return;
+        if (!navigator.onLine) {
+            alert('Se requiere conexion a internet para eliminar del historial.');
+            return;
+        }
+
+        const { error } = await supabaseClient.from(tablasDb.historial).delete().eq('id', id);
+        if (error) {
+            alert('Error al eliminar: ' + error.message);
+            return;
+        }
+
+        const registro = estado.historialTareas.find(t => t.id === id);
+        if (registro?.equipo_id && registro?.fecha_med) {
+            const equipoObj = estado.equipos.find(e => String(e.id) === String(registro.equipo_id));
+            const idsGrupo = equipoObj
+                ? estado.equipos.filter(e => e.activo === equipoObj.activo).map(e => e.id)
+                : [registro.equipo_id];
+            await supabaseClient.from(tablasDb.mediciones)
+                .delete()
+                .in('equipo_id', idsGrupo)
+                .eq('fecha', registro.fecha_med);
+            estado.historialMediciones = estado.historialMediciones.filter(
+                med => !(idsGrupo.includes(med.equipo_id) && med.fecha?.slice(0, 10) === registro.fecha_med)
+            );
+        }
+
+        estado.historialTareas = estado.historialTareas.filter(t => t.id !== id);
+        renderHistorialView();
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in history-view">
+            <section class="panel history-hero">
+                <div class="history-hero-top">
+                    <div>
+                        <div class="history-eyebrow">Bitacora tecnica</div>
+                        <h1 style="margin:0 0 0.4rem 0;">Historial</h1>
+                        <p class="history-subtitle">Seguimiento consolidado de trabajos cerrados, analisis tecnicos y actividad por fecha.</p>
+                    </div>
+                    <button id="btn-limpiar-historial" type="button" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                        <i class="fa-solid fa-trash-can"></i> Limpiar visibles
+                    </button>
+                </div>
+                <div class="history-toolbar">
+                    <div class="history-presets">
+                        <button type="button" class="history-preset" data-history-preset="hoy">Hoy</button>
+                        <button type="button" class="history-preset" data-history-preset="semana">Ultimos 7 dias</button>
+                        <button type="button" class="history-preset" data-history-preset="mes">Ultimos 30 dias</button>
+                        <button type="button" class="history-preset" data-history-preset="todo">Todo</button>
+                    </div>
+                    <div id="historial-resumen-rango" class="history-group-count"></div>
+                </div>
+            </section>
+
+            <section id="historial-kpis" class="history-kpi-grid"></section>
+
+            <section class="panel">
+                <div class="history-filter-grid">
+                    <div class="form-group">
+                        <label for="input-buscar-historial">Busqueda tecnica</label>
+                        <input id="input-buscar-historial" class="form-control" type="text" placeholder="Equipo, OT, aviso, KKS, lider...">
+                    </div>
+                    <div class="form-group">
+                        <label for="historial-filtro-unidad">Unidad</label>
+                        <select id="historial-filtro-unidad" class="form-control">
+                            <option value="todos">Todas</option>
+                            ${opcionesUnidad.map(unidad => `<option value="${escapeHtml(normalizar(unidad))}">${escapeHtml(unidad)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="historial-filtro-lider">Lider</label>
+                        <select id="historial-filtro-lider" class="form-control">
+                            <option value="todos">Todos</option>
+                            ${opcionesLider.map(lider => `<option value="${escapeHtml(normalizar(lider))}">${escapeHtml(lider)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="historial-fecha-desde">Desde</label>
+                        <input id="historial-fecha-desde" class="form-control" type="date" value="${escapeHtml(rango.desde)}">
+                    </div>
+                    <div class="form-group">
+                        <label for="historial-fecha-hasta">Hasta</label>
+                        <input id="historial-fecha-hasta" class="form-control" type="date" value="${escapeHtml(rango.hasta)}">
+                    </div>
+                </div>
+                <div id="historial-type-pills" class="history-type-pills" style="margin-top:1rem;"></div>
+            </section>
+
+            <section id="historial-contenido"></section>
+        </div>
+    `;
+
+    document.querySelectorAll('[data-history-preset]').forEach((button) => {
+        button.addEventListener('click', () => {
+            presetActivo = button.dataset.historyPreset;
+            rango = getPresetRange(presetActivo);
+            const inputDesde = document.getElementById('historial-fecha-desde');
+            const inputHasta = document.getElementById('historial-fecha-hasta');
+            if (inputDesde) inputDesde.value = rango.desde;
+            if (inputHasta) inputHasta.value = rango.hasta;
+            renderTodo();
+        });
+    });
+
+    document.getElementById('input-buscar-historial')?.addEventListener('input', (event) => {
+        textoBusqueda = event.target.value || '';
+        renderTodo();
+    });
+
+    document.getElementById('historial-filtro-unidad')?.addEventListener('change', (event) => {
+        filtroUnidad = event.target.value || 'todos';
+        renderTodo();
+    });
+
+    document.getElementById('historial-filtro-lider')?.addEventListener('change', (event) => {
+        filtroLider = event.target.value || 'todos';
+        renderTodo();
+    });
+
+    document.getElementById('historial-fecha-desde')?.addEventListener('change', (event) => {
+        presetActivo = 'custom';
+        rango.desde = event.target.value || '';
+        renderTodo();
+    });
+
+    document.getElementById('historial-fecha-hasta')?.addEventListener('change', (event) => {
+        presetActivo = 'custom';
+        rango.hasta = event.target.value || '';
+        renderTodo();
+    });
+
+    document.getElementById('historial-type-pills')?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-history-type]');
+        if (!button) return;
+        filtroTipo = button.dataset.historyType || 'todos';
+        renderTodo();
+    });
+
+    document.getElementById('historial-contenido')?.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+
+        const action = button.dataset.action;
+        if (action === 'open-equipo') {
+            const id = button.dataset.id;
+            const mode = button.dataset.mode;
+            const unidad = button.dataset.unidad || '';
+            if (!id) return;
+            if (mode === 'group') {
+                window.elegirComponenteYAbrirFicha(id, unidad);
+            } else {
+                window.abrirFichaTecnica(id);
+            }
+            return;
+        }
+
+        if (action === 'report') {
+            const id = button.dataset.id;
+            if (id) window._generarInformeTarea(id);
+            return;
+        }
+
+        if (action === 'delete') {
+            const id = button.dataset.id;
+            if (id) window._borrarHistorial(id);
+            return;
+        }
+
+        if (action === 'type-info') {
+            const tipo = button.dataset.type;
+            const recordId = button.dataset.record;
+            if (!tipo || !recordId) return;
+            const textoBadge = button.querySelector('span')?.textContent?.trim();
+            const label = tipoModalMap[tipo] || textoBadge || tipoMap[tipo]?.label || tipo;
+            window.abrirModalTipoBadge(label, recordId);
+        }
+    });
+
+    document.getElementById('btn-limpiar-historial')?.addEventListener('click', async () => {
+        const visibles = getRegistrosFiltrados();
+        if (!visibles.length) return;
+        const mensaje = visibles.length === registrosBase.length
+            ? `Se eliminaran todos los registros visibles del historial (${visibles.length}).`
+            : `Se eliminaran ${visibles.length} registros visibles segun los filtros actuales.`;
+        if (!confirm(`${mensaje} Esta accion no se puede deshacer.`)) return;
+        if (!navigator.onLine) {
+            alert('Se requiere conexion a internet para limpiar el historial.');
+            return;
+        }
+
+        const idsABorrar = visibles.map(registro => registro.id);
+        const { error } = await supabaseClient.from(tablasDb.historial).delete().in('id', idsABorrar);
+        if (error) {
+            alert('Error al eliminar: ' + error.message);
+            return;
+        }
+
+        estado.historialTareas = estado.historialTareas.filter(t => !idsABorrar.includes(t.id));
+        renderHistorialView();
+    });
+
+    renderTodo();
+}
+
+async function renderHorasExtraAdminView() {
+    mainContent.innerHTML = `<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div></div>`;
+
+    const todos = await cargarTodasHorasExtra();
+    const trabajadores = estado.trabajadores || [];
+    const hoy = new Date();
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+
+    const normalizar = (valor) => String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    const formatHoras = (valor) => new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(Number(valor || 0));
+    const formatFecha = (valor) => valor
+        ? new Date(`${valor}T12:00:00`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '--';
+
+    const enriched = todos.map((registro) => ({
+        ...registro,
+        nombreTrabajador: trabajadores.find(t => t.id === registro.trabajador_id)?.nombre || 'Desconocido',
+        estado: registro.estado || 'pendiente',
+        horasNumero: parseFloat(registro.horas) || 0
+    }));
+
+    let filtroEstado = 'todos';
+    let filtroTrabajador = '';
+    let filtroMes = '';
+    let textoBusqueda = '';
+
+    const getStatusHtml = (estado, motivoRechazo = '') => {
+        const base = estado === 'aprobado'
+            ? `<span class="overtime-status approved"><i class="fa-solid fa-circle-check"></i> Aprobado</span>`
+            : estado === 'rechazado'
+            ? `<span class="overtime-status rejected"><i class="fa-solid fa-circle-xmark"></i> Rechazado</span>`
+            : `<span class="overtime-status pending"><i class="fa-solid fa-hourglass-half"></i> Pendiente</span>`;
+        return `${base}${estado === 'rechazado' && motivoRechazo ? `<div class="overtime-note" style="margin-top:0.35rem; color:#dc2626;">${motivoRechazo}</div>` : ''}`;
+    };
+
+    const getFiltrados = () => enriched.filter((registro) => {
+        if (filtroEstado !== 'todos' && registro.estado !== filtroEstado) return false;
+        if (filtroTrabajador && registro.trabajador_id !== filtroTrabajador) return false;
+        if (filtroMes && !(registro.fecha || '').startsWith(filtroMes)) return false;
+        if (textoBusqueda) {
+            const texto = normalizar([
+                registro.nombreTrabajador,
+                registro.motivo,
+                registro.estado,
+                registro.fecha
+            ].join(' '));
+            if (!texto.includes(normalizar(textoBusqueda))) return false;
+        }
+        return true;
+    });
+
+    const renderTabla = () => {
+        const tabla = document.getElementById('he-admin-tabla-body');
+        const filtrados = getFiltrados();
+        const baseMetricas = filtroTrabajador
+            ? enriched.filter(r => r.trabajador_id === filtroTrabajador)
+            : enriched;
+        const pendientes = baseMetricas.filter(r => r.estado === 'pendiente').length;
+        const aprobadasMes = baseMetricas
+            .filter(r => r.estado === 'aprobado' && (r.fecha || '').startsWith(mesActual))
+            .reduce((acum, r) => acum + r.horasNumero, 0);
+        const totalSolicitadoMes = baseMetricas
+            .filter(r => (r.fecha || '').startsWith(mesActual))
+            .reduce((acum, r) => acum + r.horasNumero, 0);
+        const trabajadoresConSolicitudes = new Set(baseMetricas.map(r => r.trabajador_id)).size;
+
+        const statPend = document.getElementById('he-stat-pendientes');
+        const statApr = document.getElementById('he-stat-aprobadas');
+        const statTot = document.getElementById('he-stat-total');
+        const statTrab = document.getElementById('he-stat-trabajadores');
+        const statVisible = document.getElementById('he-visible-count');
+        if (statPend) statPend.textContent = String(pendientes);
+        if (statApr) statApr.textContent = `${formatHoras(aprobadasMes)} hrs`;
+        if (statTot) statTot.textContent = `${formatHoras(totalSolicitadoMes)} hrs`;
+        if (statTrab) statTrab.textContent = String(trabajadoresConSolicitudes);
+        if (statVisible) statVisible.textContent = `${filtrados.length} registro(s) visibles`;
+
+        if (!tabla) return;
+        if (!filtrados.length) {
+            tabla.innerHTML = `<tr><td colspan="6" style="padding:2rem;"><div class="empty-state empty-state--compact"><div><strong>Sin registros para este filtro</strong><p>Ajusta el estado, trabajador, mes o busqueda para revisar otras solicitudes.</p></div></div></td></tr>`;
+            return;
+        }
+
+        tabla.innerHTML = filtrados.map((registro) => {
+            const btnAprobar = registro.estado === 'pendiente'
+                ? `<button type="button" class="btn btn-outline" style="border-color:#bbf7d0;color:#15803d;background:#f0fdf4;" onclick="window._heAprobar('${registro.id}')"><i class="fa-solid fa-check"></i> Aprobar</button>`
+                : '';
+            const btnRechazar = registro.estado === 'pendiente'
+                ? `<button type="button" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;" onclick="window._heRechazar('${registro.id}')"><i class="fa-solid fa-xmark"></i> Rechazar</button>`
+                : '';
+
+            return `
+                <tr id="he-row-${registro.id}" style="${registro.estado === 'rechazado' ? 'opacity:0.72;' : ''}">
+                    <td>
+                        <div style="font-weight:700; color:#0f172a;">${registro.nombreTrabajador}</div>
+                        <div class="overtime-note">${registro.aprobado_por ? `Gestionado por ${registro.aprobado_por}` : 'Sin resolucion aun'}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:700; color:#0f172a;">${formatFecha(registro.fecha)}</div>
+                        <div class="overtime-note">${registro.created_at ? new Date(registro.created_at).toLocaleDateString('es-CL') : 'Sin fecha de carga'}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:800; color:var(--primary-color);">${formatHoras(registro.horasNumero)} hrs</div>
+                    </td>
+                    <td style="max-width:260px;">
+                        <div style="color:#475569; font-size:0.83rem; line-height:1.55;">${registro.motivo || 'Sin motivo registrado.'}</div>
+                    </td>
+                    <td>${getStatusHtml(registro.estado, registro.motivo_rechazo)}</td>
+                    <td>
+                        <div style="display:flex; flex-wrap:wrap; gap:0.45rem;">
+                            ${btnAprobar}
+                            ${btnRechazar}
+                            <button type="button" class="btn btn-outline btn-icon" title="Eliminar" onclick="window._heEliminar('${registro.id}')" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    };
+
+    const opcionesTrabajadores = [
+        `<option value="">Todos los trabajadores</option>`,
+        ...trabajadores
+            .slice()
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+            .map(t => `<option value="${t.id}">${t.nombre}</option>`)
+    ].join('');
+
+    const pendientesInicial = enriched.filter(r => r.estado === 'pendiente').length;
+    const aprobadasInicial = enriched.filter(r => r.estado === 'aprobado' && (r.fecha || '').startsWith(mesActual)).reduce((a, r) => a + r.horasNumero, 0);
+    const totalInicial = enriched.filter(r => (r.fecha || '').startsWith(mesActual)).reduce((a, r) => a + r.horasNumero, 0);
+    const trabajadoresActivos = new Set(enriched.map(r => r.trabajador_id)).size;
+
+    mainContent.innerHTML = `
+        <div class="fade-in overtime-view" style="max-width:1180px; margin:0 auto;">
+            <section class="panel overtime-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="overtime-eyebrow">Gestion administrativa</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-regular fa-clock"></i> Horas Extra</h1>
+                        <p class="overtime-subtitle">Revision centralizada de solicitudes, aprobaciones y trazabilidad mensual del sobretiempo del equipo.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-hourglass-half"></i> ${pendientesInicial} pendientes</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-users"></i> ${trabajadoresActivos} trabajador(es)</span>
+                    </div>
+                </div>
+
+                <div class="overtime-kpi-grid">
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
+                        <div id="he-stat-pendientes" class="overtime-kpi-value">${pendientesInicial}</div>
+                        <div class="overtime-kpi-meta">Solicitudes aun sin resolucion administrativa.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-circle-check"></i> Aprobadas mes</span>
+                        <div id="he-stat-aprobadas" class="overtime-kpi-value">${formatHoras(aprobadasInicial)} hrs</div>
+                        <div class="overtime-kpi-meta">Horas aprobadas durante el mes actual.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-chart-column"></i> Solicitadas mes</span>
+                        <div id="he-stat-total" class="overtime-kpi-value">${formatHoras(totalInicial)} hrs</div>
+                        <div class="overtime-kpi-meta">Total solicitado, incluyendo pendientes y rechazadas.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-user-group"></i> Trabajadores</span>
+                        <div id="he-stat-trabajadores" class="overtime-kpi-value">${trabajadoresActivos}</div>
+                        <div class="overtime-kpi-meta">Personas con solicitudes cargadas en el periodo consultado.</div>
+                    </article>
+                </div>
+
+                <div class="overtime-toolbar">
+                    <div class="overtime-toolbar-note">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>${pendientesInicial > 0 ? `Hay ${pendientesInicial} solicitud(es) esperando resolucion.` : 'No hay solicitudes pendientes por revisar.'}</span>
+                    </div>
+                    <div id="he-visible-count" class="overtime-toolbar-note">${enriched.length} registro(s) visibles</div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="overtime-filter-grid">
+                    <div class="form-group">
+                        <label for="he-busqueda">Busqueda</label>
+                        <input id="he-busqueda" type="text" class="form-control" placeholder="Trabajador, motivo o fecha...">
+                    </div>
+                    <div class="form-group">
+                        <label for="he-filtro-estado">Estado</label>
+                        <select id="he-filtro-estado" class="form-control">
+                            <option value="todos">Todos</option>
+                            <option value="pendiente">Pendientes</option>
+                            <option value="aprobado">Aprobados</option>
+                            <option value="rechazado">Rechazados</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="he-filtro-trabajador">Trabajador</label>
+                        <select id="he-filtro-trabajador" class="form-control">${opcionesTrabajadores}</select>
+                    </div>
+                    <div class="form-group">
+                        <label for="he-filtro-mes">Mes</label>
+                        <input type="month" id="he-filtro-mes" class="form-control">
+                    </div>
+                    <button id="btn-he-eliminar-todo" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                        <i class="fa-solid fa-trash-can"></i> Eliminar todas
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel" style="padding:0;">
+                <div class="table-shell" style="border:none; border-radius:18px;">
+                    <table class="table-clean" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th>Trabajador</th>
+                                <th>Fecha</th>
+                                <th>Horas</th>
+                                <th>Motivo</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="he-admin-tabla-body"></tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    `;
+
+    document.getElementById('he-filtro-estado')?.addEventListener('change', (event) => {
+        filtroEstado = event.target.value || 'todos';
+        renderTabla();
+    });
+    document.getElementById('he-filtro-trabajador')?.addEventListener('change', (event) => {
+        filtroTrabajador = event.target.value || '';
+        renderTabla();
+    });
+    document.getElementById('he-filtro-mes')?.addEventListener('change', (event) => {
+        filtroMes = event.target.value || '';
+        renderTabla();
+    });
+    document.getElementById('he-busqueda')?.addEventListener('input', (event) => {
+        textoBusqueda = event.target.value || '';
+        renderTabla();
+    });
+
+    window._heAprobar = async (id) => {
+        await aprobarHorasExtra(id);
+        const idx = enriched.findIndex(r => r.id === id);
+        if (idx >= 0) {
+            enriched[idx] = {
+                ...enriched[idx],
+                estado: 'aprobado',
+                aprobado_por: 'Planificador',
+                fecha_aprobacion: new Date().toISOString(),
+                motivo_rechazo: null
+            };
+        }
+        renderTabla();
+        actualizarBadgeHE();
+    };
+
+    window._heRechazar = (id) => {
+        const modal = document.getElementById('modal-he-rechazo');
+        document.getElementById('he-rechazo-motivo').value = '';
+        document.getElementById('he-rechazo-error').style.display = 'none';
+        modal.style.display = 'flex';
+
+        document.getElementById('btn-he-rechazo-cancelar').onclick = () => {
+            modal.style.display = 'none';
+        };
+        document.getElementById('btn-he-rechazo-confirmar').onclick = async () => {
+            const motivo = document.getElementById('he-rechazo-motivo').value.trim();
+            if (!motivo) {
+                document.getElementById('he-rechazo-error').style.display = 'block';
+                return;
+            }
+            const boton = document.getElementById('btn-he-rechazo-confirmar');
+            boton.disabled = true;
+            boton.textContent = 'Guardando...';
+            await rechazarHorasExtra(id, motivo);
+            boton.disabled = false;
+            boton.textContent = 'Confirmar Rechazo';
+            modal.style.display = 'none';
+            const idx = enriched.findIndex(r => r.id === id);
+            if (idx >= 0) {
+                enriched[idx] = {
+                    ...enriched[idx],
+                    estado: 'rechazado',
+                    aprobado_por: 'Planificador',
+                    fecha_aprobacion: new Date().toISOString(),
+                    motivo_rechazo: motivo
+                };
+            }
+            renderTabla();
+            actualizarBadgeHE();
+        };
+    };
+
+    window._heEliminar = async (id) => {
+        if (!confirm('Eliminar este registro de horas extra?')) return;
+        try {
+            await eliminarRegistrosHorasExtra([id]);
+            const idx = enriched.findIndex(r => r.id === id);
+            if (idx >= 0) enriched.splice(idx, 1);
+            renderTabla();
+            actualizarBadgeHE();
+        } catch (error) {
+            alert(error?.message || 'No se pudo eliminar el registro.');
+        }
+    };
+
+    document.getElementById('btn-he-eliminar-todo')?.addEventListener('click', async () => {
+        if (!enriched.length) {
+            alert('No hay horas extra para eliminar.');
+            return;
+        }
+        if (!confirm(`Eliminar TODAS las horas extra (${enriched.length} registro(s))? Esta accion no se puede deshacer.`)) return;
+        const btn = document.getElementById('btn-he-eliminar-todo');
+        const textoOriginal = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+        try {
+            await eliminarRegistrosHorasExtra();
+            enriched.splice(0, enriched.length);
+            renderTabla();
+            actualizarBadgeHE();
+        } catch (error) {
+            alert(error?.message || 'No se pudieron eliminar las horas extra.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    });
+
+    renderTabla();
+}
+
+function renderTrabajadoresView() {
+    const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
+    const idsEnTarea = new Set(tareasActivas.flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)));
+    const ocupados = estado.trabajadores.filter(t => t.disponible && idsEnTarea.has(t.id));
+    const disponibles = estado.trabajadores.filter(t => t.disponible && !idsEnTarea.has(t.id));
+    const ausentes = estado.trabajadores.filter(t => !t.disponible);
+
+    const normalizar = (valor) => String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const totalTrabajadores = estado.trabajadores.length;
+    const cobertura = totalTrabajadores > 0
+        ? Math.round(((disponibles.length + ocupados.length) / totalTrabajadores) * 100)
+        : 0;
+    const habilidadesActivas = new Set([...disponibles, ...ocupados].flatMap(t => t.habilidades || [])).size;
+    const topHabilidad = (() => {
+        const conteo = new Map();
+        [...disponibles, ...ocupados].forEach((trabajador) => {
+            (trabajador.habilidades || []).forEach((habilidad) => {
+                conteo.set(habilidad, (conteo.get(habilidad) || 0) + 1);
+            });
+        });
+        return [...conteo.entries()].sort((a, b) => b[1] - a[1])[0] || null;
+    })();
+
+    const getTareasTrabajador = (trabajadorId) => tareasActivas.filter(t =>
+        t.liderId === trabajadorId || (t.ayudantesIds || []).includes(trabajadorId)
+    );
+
+    const renderEstado = (tipo) => {
+        if (tipo === 'disponible') return { label: 'Disponible', color: 'var(--success-color)', bg: 'var(--success-color)' };
+        if (tipo === 'ocupado') return { label: 'Trabajando', color: 'var(--warning-color)', bg: 'var(--warning-color)' };
+        return { label: 'Sin check-in', color: '#64748b', bg: '#64748b' };
+    };
+
+    const renderCard = (trabajador, estadoTipo) => {
+        const estadoCfg = renderEstado(estadoTipo);
+        const tareas = getTareasTrabajador(trabajador.id);
+        const principal = tareas[0] || null;
+        const rolPrincipal = principal
+            ? (principal.liderId === trabajador.id ? 'Lider de frente' : 'Apoyo en terreno')
+            : (estadoTipo === 'disponible' ? 'Listo para ser asignado' : 'Sin jornada activa');
+        const resumen = principal
+            ? `${principal.tipo || 'Trabajo activo'}${principal.otNumero || principal.ot_numero ? ` · OT ${(principal.otNumero || principal.ot_numero)}` : ''}`
+            : (estadoTipo === 'ausente'
+                ? 'Aun no registra check-in hoy.'
+                : `Disponible con ${(trabajador.habilidades || []).length} habilidad(es) cargadas.`);
+        const searchText = normalizar([
+            trabajador.nombre,
+            trabajador.puesto,
+            (trabajador.habilidades || []).join(' '),
+            rolPrincipal,
+            resumen,
+            (principal?.tipo || ''),
+            (principal?.otNumero || principal?.ot_numero || '')
+        ].join(' '));
+
+        return `
+            <article class="crew-card ${estadoTipo === 'ausente' ? 'is-muted' : ''}" data-crew-card data-crew-panel="${estadoTipo}" data-search="${searchText}" style="border-left-color:${estadoCfg.color};">
+                <div class="crew-card-top">
+                    <div class="crew-card-main">
+                        <div class="crew-avatar" style="background:${estadoCfg.color};">${(trabajador.nombre || '?').charAt(0).toUpperCase()}</div>
+                        <div>
+                            <div class="crew-card-title">${trabajador.nombre}</div>
+                            <div class="crew-card-role">${trabajador.puesto}</div>
+                        </div>
+                    </div>
+                    <span class="crew-status-badge" style="background:${estadoCfg.bg};">${estadoCfg.label}</span>
+                </div>
+                <div class="crew-card-meta">
+                    <span><i class="fa-solid fa-user-gear"></i> ${rolPrincipal}</span>
+                    <span><i class="fa-solid fa-layer-group"></i> ${(trabajador.habilidades || []).length} habilidad(es)</span>
+                    ${principal ? `<span><i class="fa-solid fa-briefcase"></i> ${tareas.length} tarea(s) activa(s)</span>` : ''}
+                </div>
+                <div class="crew-summary"><strong>Resumen:</strong> ${resumen}</div>
+                <div class="crew-card-actions">
+                    ${(principal?.otNumero || principal?.ot_numero) ? `<span class="crew-chip"><i class="fa-solid fa-hashtag"></i> ${principal.otNumero || principal.ot_numero}</span>` : ''}
+                    ${principal?.horaAsignacion ? `<span class="crew-chip"><i class="fa-regular fa-clock"></i> ${principal.horaAsignacion}</span>` : ''}
+                </div>
+                <div class="crew-skills">
+                    ${(trabajador.habilidades || []).length
+                        ? (trabajador.habilidades || []).map(habilidad => `<span class="crew-skill">${habilidad}</span>`).join('')
+                        : `<span class="crew-chip">Sin habilidades cargadas</span>`}
+                </div>
+            </article>
+        `;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in crew-view">
+            <section class="panel crew-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="crew-eyebrow">Operacion de personal</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-users"></i> Trabajadores</h1>
+                        <p class="crew-subtitle">Lectura rapida de disponibilidad, carga activa y cobertura de habilidades del equipo en terreno.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-user-check"></i> Cobertura ${cobertura}%</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-screwdriver-wrench"></i> ${habilidadesActivas} habilidades</span>
+                    </div>
+                </div>
+
+                <div class="crew-kpi-grid">
+                    <article class="crew-kpi-card">
+                        <span class="crew-kpi-label"><i class="fa-solid fa-circle-check"></i> Disponibles</span>
+                        <div class="crew-kpi-value">${disponibles.length}</div>
+                        <div class="crew-kpi-meta">Personal con check-in y sin tarea activa asignada.</div>
+                    </article>
+                    <article class="crew-kpi-card">
+                        <span class="crew-kpi-label"><i class="fa-solid fa-person-digging"></i> Trabajando</span>
+                        <div class="crew-kpi-value">${ocupados.length}</div>
+                        <div class="crew-kpi-meta">Personas ejecutando al menos un trabajo en este momento.</div>
+                    </article>
+                    <article class="crew-kpi-card">
+                        <span class="crew-kpi-label"><i class="fa-solid fa-user-clock"></i> Sin check-in</span>
+                        <div class="crew-kpi-value">${ausentes.length}</div>
+                        <div class="crew-kpi-meta">Trabajadores aun fuera de jornada o sin marcar ingreso.</div>
+                    </article>
+                    <article class="crew-kpi-card">
+                        <span class="crew-kpi-label"><i class="fa-solid fa-star"></i> Habilidad dominante</span>
+                        <div class="crew-kpi-value">${topHabilidad ? topHabilidad[0] : 'Sin dato'}</div>
+                        <div class="crew-kpi-meta">${topHabilidad ? `${topHabilidad[1]} persona(s) con esta especialidad.` : 'Todavia no hay habilidades registradas.'}</div>
+                    </article>
+                </div>
+
+                <div class="crew-toolbar">
+                    <div class="crew-tabs">
+                        <button type="button" class="crew-tab is-active" data-crew-tab="disponible" style="background:var(--success-color);">Disponibles (${disponibles.length})</button>
+                        <button type="button" class="crew-tab" data-crew-tab="ocupado">Trabajando (${ocupados.length})</button>
+                        <button type="button" class="crew-tab" data-crew-tab="ausente">Sin check-in (${ausentes.length})</button>
+                    </div>
+                    <div style="display:flex; gap:0.65rem; align-items:center; flex-wrap:wrap;">
+                        <div class="crew-toolbar-note">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>${ocupados.length > 0 ? `${ocupados.length} persona(s) estan en ejecucion ahora.` : 'No hay personal trabajando en este momento.'}</span>
+                        </div>
+                        <input id="trabajadores-search" type="text" class="form-control" placeholder="Buscar trabajador, puesto o habilidad..." style="min-width:260px; max-width:320px;">
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div id="crew-panel-disponible" class="crew-grid" data-crew-container="disponible">
+                    ${disponibles.length ? disponibles.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'disponible')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin personal disponible</strong><p>Todos los trabajadores con check-in estan ejecutando trabajo o aun no hay ingreso registrado.</p></div></div>`}
+                </div>
+                <div id="crew-panel-ocupado" class="crew-grid" data-crew-container="ocupado" style="display:none;">
+                    ${ocupados.length ? ocupados.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'ocupado')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin personal trabajando</strong><p>Cuando una tarea pase a ejecucion aparecera aqui el equipo en terreno.</p></div></div>`}
+                </div>
+                <div id="crew-panel-ausente" class="crew-grid" data-crew-container="ausente" style="display:none;">
+                    ${ausentes.length ? ausentes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'ausente')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin ausencias</strong><p>Todo el personal ya marco check-in hoy.</p></div></div>`}
+                </div>
+            </section>
+        </div>
+    `;
+
+    window._trabTab = function(tab) {
+        document.querySelectorAll('[data-crew-tab]').forEach((button) => {
+            const active = button.dataset.crewTab === tab;
+            button.classList.toggle('is-active', active);
+            button.style.background = active
+                ? (tab === 'disponible' ? 'var(--success-color)' : tab === 'ocupado' ? 'var(--warning-color)' : '#64748b')
+                : '#ffffff';
+            button.style.color = active ? '#ffffff' : '#475569';
+        });
+        document.querySelectorAll('[data-crew-container]').forEach((panel) => {
+            panel.style.display = panel.dataset.crewContainer === tab ? 'grid' : 'none';
+        });
+    };
+
+    document.querySelectorAll('[data-crew-tab]').forEach((button) => {
+        button.addEventListener('click', () => window._trabTab(button.dataset.crewTab));
+    });
+
+    document.getElementById('trabajadores-search')?.addEventListener('input', (event) => {
+        const query = normalizar(event.target.value);
+        document.querySelectorAll('[data-crew-container]').forEach((panel) => {
+            let visibles = 0;
+            panel.querySelectorAll('[data-crew-card]').forEach((card) => {
+                const match = !query || (card.dataset.search || '').includes(query);
+                card.style.display = match ? '' : 'none';
+                if (match) visibles += 1;
+            });
+            const empty = panel.querySelector('.empty-state');
+            if (empty && panel.querySelectorAll('[data-crew-card]').length > 0) {
+                empty.style.display = visibles === 0 ? '' : 'none';
+            }
+            if (!empty && visibles === 0 && panel.querySelectorAll('[data-crew-card]').length > 0) {
+                const helperId = `crew-empty-${panel.dataset.crewContainer}`;
+                let helper = panel.querySelector(`[data-helper-id="${helperId}"]`);
+                if (!helper) {
+                    helper = document.createElement('div');
+                    helper.dataset.helperId = helperId;
+                    helper.className = 'empty-state';
+                    helper.style.gridColumn = '1/-1';
+                    panel.appendChild(helper);
+                }
+                helper.innerHTML = '<div><strong>Sin coincidencias</strong><p>Ajusta la busqueda para encontrar el perfil que necesitas.</p></div>';
+            } else {
+                panel.querySelectorAll('[data-helper-id]').forEach((helper) => helper.remove());
+            }
+        });
+    });
+}
+
+async function renderMisHorasView() {
+    const trabajador = estado.trabajadorLogueado;
+    if (!trabajador) return;
+
+    mainContent.innerHTML = `<div class="fade-in overtime-view" style="max-width:980px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div></div>`;
+
+    const registros = await cargarHorasExtraTrabajador(trabajador.id);
+    const hoy = new Date();
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+    const formatHoras = (valor) => new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(Number(valor || 0));
+    const formatFecha = (valor) => valor
+        ? new Date(`${valor}T12:00:00`).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+        : '--';
+
+    const totalMesAprobado = registros
+        .filter(r => r.estado === 'aprobado' && (r.fecha || '').startsWith(mesActual))
+        .reduce((acum, r) => acum + (parseFloat(r.horas) || 0), 0);
+    const totalHistorico = registros
+        .filter(r => r.estado === 'aprobado')
+        .reduce((acum, r) => acum + (parseFloat(r.horas) || 0), 0);
+    const pendientes = registros.filter(r => (r.estado || 'pendiente') === 'pendiente').length;
+    const rechazadas = registros.filter(r => r.estado === 'rechazado').length;
+
+    window._eliminarHoraExtra = async (id) => {
+        if (!confirm('Eliminar este registro de horas extra?')) return;
+        try {
+            await eliminarRegistrosHorasExtra([id]);
+            vistaActual = 'mis_horas';
+            renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudo eliminar el registro.');
+        }
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in overtime-view" style="max-width:980px; margin:0 auto;">
+            <section class="panel overtime-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="overtime-eyebrow">Seguimiento personal</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-regular fa-clock"></i> Mis Horas Extra</h1>
+                        <p class="overtime-subtitle">Consulta tu historico, el estado de aprobacion y registra nuevas horas extra cuando corresponda.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-hourglass-half"></i> ${pendientes} pendientes</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-circle-check"></i> ${formatHoras(totalHistorico)} hrs aprobadas</span>
+                    </div>
+                </div>
+
+                <div class="overtime-kpi-grid">
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-calendar-days"></i> Mes actual</span>
+                        <div class="overtime-kpi-value">${formatHoras(totalMesAprobado)} hrs</div>
+                        <div class="overtime-kpi-meta">Horas aprobadas durante este mes.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-chart-line"></i> Historico</span>
+                        <div class="overtime-kpi-value">${formatHoras(totalHistorico)} hrs</div>
+                        <div class="overtime-kpi-meta">Total aprobado acumulado en tu historial.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
+                        <div class="overtime-kpi-value">${pendientes}</div>
+                        <div class="overtime-kpi-meta">Solicitudes aun en revision administrativa.</div>
+                    </article>
+                    <article class="overtime-kpi-card">
+                        <span class="overtime-kpi-label"><i class="fa-solid fa-circle-xmark"></i> Rechazadas</span>
+                        <div class="overtime-kpi-value">${rechazadas}</div>
+                        <div class="overtime-kpi-meta">Registros no aprobados o con observaciones.</div>
+                    </article>
+                </div>
+
+                <div class="overtime-toolbar">
+                    <div class="overtime-toolbar-note">
+                        <i class="fa-solid fa-circle-info"></i>
+                        <span>${registros.length ? `${registros.length} registro(s) en tu historial personal.` : 'Aun no tienes horas extra registradas.'}</span>
+                    </div>
+                    <div style="display:flex; gap:0.65rem; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-outline" onclick="window.mostrarCalendarioHorasExtra('${trabajador.id}')">
+                            <i class="fa-regular fa-calendar"></i> Calendario
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="window.abrirModalHorasExtraManual('${trabajador.id}')">
+                            <i class="fa-solid fa-plus"></i> Agregar horas extra
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                ${registros.length === 0 ? `
+                    <div class="empty-state">
+                        <div>
+                            <strong>Sin horas extra registradas</strong>
+                            <p>Cuando registres horas extra apareceran aqui con su fecha, motivo y estado de revision.</p>
+                        </div>
+                    </div>
+                ` : `
+                    <div class="table-shell">
+                        <table class="table-clean" style="width:100%;">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Horas</th>
+                                    <th>Motivo</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${registros.map((registro) => `
+                                    <tr style="${registro.estado === 'rechazado' ? 'opacity:0.72;' : ''}">
+                                        <td>
+                                            <div style="font-weight:700; color:#0f172a;">${formatFecha(registro.fecha)}</div>
+                                            <div class="overtime-note">${registro.created_at ? new Date(registro.created_at).toLocaleDateString('es-CL') : 'Sin fecha de carga'}</div>
+                                        </td>
+                                        <td><div style="font-weight:800; color:var(--primary-color);">${formatHoras(registro.horas)} hrs</div></td>
+                                        <td style="max-width:280px;"><div style="color:#475569; font-size:0.83rem; line-height:1.55;">${registro.motivo || 'Sin motivo registrado.'}</div></td>
+                                        <td>
+                                            ${registro.estado === 'aprobado'
+                                                ? `<span class="overtime-status approved"><i class="fa-solid fa-circle-check"></i> Aprobado</span>`
+                                                : registro.estado === 'rechazado'
+                                                ? `<span class="overtime-status rejected"><i class="fa-solid fa-circle-xmark"></i> Rechazado</span>${registro.motivo_rechazo ? `<div class="overtime-note" style="margin-top:0.35rem; color:#dc2626;">${registro.motivo_rechazo}</div>` : ''}`
+                                                : `<span class="overtime-status pending"><i class="fa-solid fa-hourglass-half"></i> Pendiente</span>`}
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-outline btn-icon" title="Eliminar" onclick="window._eliminarHoraExtra('${registro.id}')" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                                                <i class="fa-solid fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `}
+            </section>
+        </div>
+    `;
+}
+
+function renderPerfilView() {
+    const trabajador = estado.trabajadorLogueado;
+
+    const renderTaskBlock = (tarea, accentClass = '', ownerId = trabajador?.id) => {
+        const esLider = ownerId && tarea.liderId === ownerId;
+        return `
+            <article class="profile-task-item ${accentClass}">
+                <div class="profile-task-title">${tarea.tipo}</div>
+                <div class="profile-task-meta">
+                    ${tarea.horaAsignacion ? `<span><i class="fa-regular fa-clock"></i> ${tarea.horaAsignacion}</span>` : ''}
+                    ${(tarea.otNumero || tarea.ot_numero) ? `<span><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero || tarea.ot_numero}</span>` : ''}
+                    <span><i class="fa-solid fa-user-tag"></i> ${esLider ? 'Lider' : 'Apoyo'}</span>
+                </div>
+            </article>
+        `;
+    };
+
+    if (!trabajador) {
+        const todos = estado.trabajadores || [];
+        const renderAdminPerfil = (wId) => {
+            const seleccionado = wId ? todos.find(t => t.id === wId) : null;
+            const tareasHoy = seleccionado ? estado.tareas.filter(t =>
+                t.estadoTarea === 'en_curso' &&
+                (t.liderId === seleccionado.id || (t.ayudantesIds && t.ayudantesIds.includes(seleccionado.id)))
+            ) : [];
+            const tareasSemana = seleccionado ? estado.tareas.filter(t =>
+                t.estadoTarea === 'programada_semana' &&
+                (t.liderId === seleccionado.id || (t.ayudantesIds && t.ayudantesIds.includes(seleccionado.id)))
+            ) : [];
+
+            mainContent.innerHTML = `
+                <div class="fade-in profile-layout" style="max-width:980px; margin:0 auto;">
+                    <section class="panel crew-hero">
+                        <div class="dashboard-hero-head">
+                            <div>
+                                <div class="crew-eyebrow">Perfil operativo</div>
+                                <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-id-badge"></i> Mi Perfil</h1>
+                                <p class="crew-subtitle">Consulta la carga de cada trabajador y su estado operativo del dia sin exponer datos sensibles.</p>
+                            </div>
+                        </div>
+                        <div class="profile-header" style="margin-top:1rem;">
+                            <label style="font-weight:700; color:#475569;">Ver perfil de</label>
+                            <select id="select-perfil-admin" class="form-control" style="min-width:260px; max-width:420px;">
+                                <option value="">-- Selecciona un trabajador --</option>
+                                ${todos.map(t => `<option value="${t.id}" ${t.id === wId ? 'selected' : ''}>${t.nombre} - ${t.puesto}</option>`).join('')}
+                            </select>
+                        </div>
+                    </section>
+
+                    ${seleccionado ? `
+                        <section class="panel">
+                            <div class="profile-header">
+                                <div class="profile-header-main">
+                                    <div class="profile-avatar">${seleccionado.nombre.charAt(0).toUpperCase()}</div>
+                                    <div>
+                                        <h2 style="margin:0;">${seleccionado.nombre}</h2>
+                                        <div class="profile-role">${seleccionado.puesto}</div>
+                                        <div class="crew-card-actions" style="margin-top:0.5rem;">
+                                            <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${seleccionado.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                                            <span class="crew-chip"><i class="fa-solid fa-screwdriver-wrench"></i> ${(seleccionado.habilidades || []).length} habilidad(es)</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button id="btn-marcar-salida-admin" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                                    <i class="fa-solid fa-door-open"></i> Marcar salida
+                                </button>
+                            </div>
+                            <div class="crew-skills" style="margin-top:1rem;">
+                                ${(seleccionado.habilidades || []).length
+                                    ? (seleccionado.habilidades || []).map(h => `<span class="crew-skill">${h}</span>`).join('')
+                                    : '<span class="crew-chip">Sin habilidades cargadas</span>'}
+                            </div>
+                        </section>
+
+                        <section class="profile-task-grid">
+                            <div class="panel">
+                                <div class="panel-header" style="justify-content:space-between;">
+                                    <h3 style="margin:0;"><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Para ejecutar hoy</h3>
+                                    <span class="crew-status-badge" style="background:var(--warning-color);">${tareasHoy.length}</span>
+                                </div>
+                                ${tareasHoy.length ? tareasHoy.map(t => renderTaskBlock(t, 'is-today', seleccionado.id)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos hoy</strong><p>Cuando tenga carga activa aparecera aqui.</p></div></div>`}
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header" style="justify-content:space-between;">
+                                    <h3 style="margin:0;"><i class="fa-solid fa-calendar-week" style="color:var(--primary-color)"></i> Proximos de la semana</h3>
+                                    <span class="crew-status-badge" style="background:var(--primary-color);">${tareasSemana.length}</span>
+                                </div>
+                                ${tareasSemana.length ? tareasSemana.map(t => renderTaskBlock(t, '', seleccionado.id)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos esta semana</strong><p>No hay planificacion semanal asociada por ahora.</p></div></div>`}
+                            </div>
+                        </section>
+                    ` : `
+                        <section class="panel">
+                            <div class="empty-state">
+                                <div>
+                                    <strong>Selecciona un trabajador</strong>
+                                    <p>Elige una persona para ver su perfil, habilidades y carga operativa.</p>
+                                </div>
+                            </div>
+                        </section>
+                    `}
+                </div>
+            `;
+
+            document.getElementById('select-perfil-admin')?.addEventListener('change', (event) => {
+                renderAdminPerfil(event.target.value || null);
+            });
+
+            if (seleccionado) {
+                document.getElementById('btn-marcar-salida-admin')?.addEventListener('click', async () => {
+                    await updateTrabajadorDisponibilidad(seleccionado.id, false);
+                    estado.trabajadores = estado.trabajadores.map(t => t.id === seleccionado.id ? { ...t, disponible: false } : t);
+                    renderAdminPerfil(null);
+                });
+            }
+        };
+
+        renderAdminPerfil(null);
+        return;
+    }
+
+    const tareasDiarias = estado.tareas.filter(t =>
+        (t.estadoTarea === 'en_curso' || (t.estadoTarea === 'programada_semana' && t.liderId)) &&
+        (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
+    );
+    const tareasSemanales = estado.tareas.filter(t =>
+        t.estadoTarea === 'programada_semana' &&
+        (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
+    );
+
+    mainContent.innerHTML = `
+        <div class="fade-in profile-layout" style="max-width:980px; margin:0 auto;">
+            <section class="panel crew-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="crew-eyebrow">Perfil operativo</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-id-badge"></i> Mi Perfil</h1>
+                        <p class="crew-subtitle">Tu resumen de jornada, habilidades y carga actual de trabajo dentro de Planify.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-person-digging"></i> ${tareasDiarias.length} hoy</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-calendar-week"></i> ${tareasSemanales.length} semana</span>
+                    </div>
+                </div>
+
+                <div class="profile-header" style="margin-top:1rem;">
+                    <div class="profile-header-main">
+                        <div class="profile-avatar">${trabajador.nombre.charAt(0).toUpperCase()}</div>
+                        <div>
+                            <h2 style="margin:0;">${trabajador.nombre}</h2>
+                            <div class="profile-role">${trabajador.puesto}</div>
+                            <div class="crew-card-actions" style="margin-top:0.5rem;">
+                                <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${trabajador.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                                <span class="crew-chip"><i class="fa-solid fa-screwdriver-wrench"></i> ${(trabajador.habilidades || []).length} habilidad(es)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:0.65rem; flex-wrap:wrap;">
+                        <button type="button" class="btn btn-outline" onclick="vistaActual='mis_horas'; renderizarVistaActual();">
+                            <i class="fa-regular fa-clock"></i> Mis horas extra
+                        </button>
+                        <button type="button" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;" onclick="window.marcarSalidaTrabajador('${trabajador.id}')">
+                            <i class="fa-solid fa-door-open"></i> Marcar salida
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="crew-skills">
+                    ${(trabajador.habilidades || []).length
+                        ? (trabajador.habilidades || []).map(h => `<span class="crew-skill">${h}</span>`).join('')
+                        : '<span class="crew-chip">Sin habilidades cargadas</span>'}
+                </div>
+            </section>
+
+            <section class="profile-task-grid">
+                <div class="panel">
+                    <div class="panel-header" style="justify-content:space-between;">
+                        <h3 style="margin:0;"><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Para ejecutar hoy</h3>
+                        <span class="crew-status-badge" style="background:var(--warning-color);">${tareasDiarias.length}</span>
+                    </div>
+                    ${tareasDiarias.length ? tareasDiarias.map(t => renderTaskBlock(t, 'is-today')).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos para hoy</strong><p>Cuando recibas una tarea activa aparecera aqui.</p></div></div>`}
+                </div>
+                <div class="panel">
+                    <div class="panel-header" style="justify-content:space-between;">
+                        <h3 style="margin:0;"><i class="fa-solid fa-calendar-week" style="color:var(--primary-color)"></i> Proximos de la semana</h3>
+                        <span class="crew-status-badge" style="background:var(--primary-color);">${tareasSemanales.length}</span>
+                    </div>
+                    ${tareasSemanales.length ? tareasSemanales.map(t => renderTaskBlock(t)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos esta semana</strong><p>No hay planificacion futura cargada para ti por ahora.</p></div></div>`}
+                </div>
+            </section>
+        </div>
+    `;
+}
+
 window._generarInformeTarea = function(id) {
     const tarea = estado.historialTareas.find(t => t.id === id);
     if (!tarea) return;
@@ -2530,6 +4268,440 @@ window.exportarAWordConPlantilla = async function(trigger) {
     }
 };
 
+function injectPlanifyEnhancementStyles() {
+    if (document.getElementById('planify-enhancement-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'planify-enhancement-styles';
+    style.textContent = `
+.planify-ficha-overlay{backdrop-filter:blur(3px)}
+.planify-ficha-panel{max-width:1280px;width:min(1280px,97vw);display:flex;flex-direction:column;padding:0;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 30px 70px rgba(15,23,42,.22)}
+.planify-ficha-header{padding:1.35rem 1.5rem 1.2rem;background:linear-gradient(135deg,#fffaf5 0%,#ffffff 45%,#eff6ff 100%);border-bottom:1px solid #e5e7eb}
+.planify-ficha-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;font-size:.78rem;color:#64748b;margin-bottom:.8rem}
+.planify-ficha-breadcrumb strong{color:#0f172a}
+.planify-ficha-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}
+.planify-ficha-title-wrap{min-width:0;flex:1}
+.planify-ficha-title{margin:0;font-size:1.85rem;line-height:1.08;letter-spacing:-.04em;color:#0f172a;overflow-wrap:anywhere}
+.planify-ficha-meta{display:flex;gap:.7rem 1rem;flex-wrap:wrap;margin-top:.6rem;font-size:.87rem;color:#475569}
+.planify-ficha-meta span{display:inline-flex;align-items:center;gap:.38rem}
+.planify-ficha-actions{display:flex;justify-content:flex-end;gap:.55rem;flex-wrap:wrap}
+.planify-ficha-action-btn{padding:.62rem .95rem;border-radius:999px;font-size:.82rem;border:1px solid #e5e7eb;background:#fff;color:#334155;box-shadow:0 8px 18px rgba(15,23,42,.05)}
+.planify-ficha-action-btn:hover{background:#fff7ed;border-color:#fed7aa;color:#9a3412}
+.planify-ficha-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.85rem;margin-top:1rem}
+.planify-ficha-stat{background:rgba(255,255,255,.92);border:1px solid rgba(226,232,240,.94);border-radius:18px;padding:.95rem 1rem;box-shadow:0 10px 26px rgba(15,23,42,.05);display:flex;flex-direction:column;gap:.3rem;min-height:142px}
+.planify-ficha-stat.is-normal{background:linear-gradient(135deg,rgba(236,253,245,.9),#fff);border-color:rgba(16,185,129,.22)}
+.planify-ficha-stat.is-watch{background:linear-gradient(135deg,rgba(255,247,237,.94),#fff);border-color:rgba(245,158,11,.25)}
+.planify-ficha-stat.is-critical{background:linear-gradient(135deg,rgba(254,242,242,.95),#fff);border-color:rgba(239,68,68,.24)}
+.planify-ficha-stat-label{display:flex;align-items:center;gap:.45rem;font-size:.74rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:.45rem}
+.planify-ficha-stat-value{font-size:1.45rem;font-weight:900;line-height:1.1;letter-spacing:-.03em;color:#0f172a;overflow-wrap:anywhere}
+.planify-ficha-stat-meta{font-size:.8rem;line-height:1.45;color:#475569;margin-top:.35rem}
+.planify-ficha-tabs{display:flex;gap:.4rem;flex-wrap:wrap;padding:.8rem 1.2rem;background:#fff;border-bottom:1px solid #e5e7eb}
+.planify-ficha-tab-btn{padding:.78rem 1rem;border:none;background:transparent;color:#64748b;font-weight:700;border-radius:12px;cursor:pointer;transition:all .18s ease}
+.planify-ficha-tab-btn:hover{background:#f8fafc;color:#0f172a}
+.planify-ficha-tab-btn.active{background:#fff7ed;color:#9a3412;box-shadow:inset 0 0 0 1px #fed7aa}
+.planify-ficha-body{flex:0 0 auto;overflow:visible;padding:1.2rem;background:#f8fafc}
+.planify-ficha-grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(280px,.78fr);gap:1rem}
+.planify-ficha-stack{display:grid;gap:1rem}
+.planify-ficha-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:1rem;box-shadow:0 12px 28px rgba(15,23,42,.04)}
+.planify-ficha-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem;margin-bottom:.85rem}
+.planify-ficha-card-head h3{margin:0;font-size:1rem;font-weight:800;color:#0f172a}
+.planify-ficha-card-head span{font-size:.8rem;color:#64748b;line-height:1.45}
+.planify-ficha-subgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-bottom:.9rem}
+.planify-ficha-mini{padding:.82rem .85rem;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
+.planify-ficha-mini.is-normal{background:linear-gradient(135deg,rgba(236,253,245,.88),#fff);border-color:rgba(16,185,129,.18)}
+.planify-ficha-mini.is-watch{background:linear-gradient(135deg,rgba(255,247,237,.92),#fff);border-color:rgba(245,158,11,.2)}
+.planify-ficha-mini.is-critical{background:linear-gradient(135deg,rgba(254,242,242,.95),#fff);border-color:rgba(239,68,68,.2)}
+.planify-ficha-mini-label{font-size:.72rem;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#64748b;margin-bottom:.28rem}
+.planify-ficha-mini-value{font-size:1.08rem;font-weight:800;color:#0f172a;line-height:1.15}
+.planify-ficha-mini-meta{font-size:.77rem;color:#64748b;margin-top:.28rem;line-height:1.4}
+.planify-ficha-chart{height:400px}
+.planify-ficha-reading-list,.planify-ficha-activity-list,.planify-ficha-related-list{display:grid;gap:.75rem}
+.planify-ficha-reading{display:grid;gap:.45rem;padding:.88rem .95rem;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
+.planify-ficha-reading.is-normal{background:linear-gradient(135deg,rgba(236,253,245,.88),#fff);border-color:rgba(16,185,129,.2)}
+.planify-ficha-reading.is-watch{background:linear-gradient(135deg,rgba(255,247,237,.92),#fff);border-color:rgba(245,158,11,.22)}
+.planify-ficha-reading.is-critical{background:linear-gradient(135deg,rgba(254,242,242,.95),#fff);border-color:rgba(239,68,68,.22)}
+.planify-ficha-reading-top{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start}
+.planify-ficha-reading-title{font-size:.95rem;font-weight:800;color:#0f172a}
+.planify-ficha-reading-value{font-size:1rem;font-weight:900;text-align:right;white-space:nowrap}
+.planify-ficha-reading-value.is-vib{color:#ea580c}
+.planify-ficha-reading-value.is-temp{color:#0f766e}
+.planify-ficha-reading-meta{display:flex;gap:.35rem .65rem;flex-wrap:wrap;font-size:.78rem;color:#64748b}
+.planify-ficha-reading-note{font-size:.8rem;color:#475569;line-height:1.45}
+.planify-status-badge{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .58rem;border-radius:999px;font-size:.72rem;font-weight:800;border:1px solid transparent}
+.planify-status-badge.is-normal{background:#ecfdf5;color:#047857;border-color:#a7f3d0}
+.planify-status-badge.is-watch{background:#fff7ed;color:#b45309;border-color:#fdba74}
+.planify-status-badge.is-critical{background:#fef2f2;color:#b91c1c;border-color:#fca5a5}
+.planify-ficha-empty{display:grid;place-items:center;text-align:center;min-height:140px;padding:1.1rem;color:#64748b;background:linear-gradient(135deg,#ffffff,#f8fafc);border:1px dashed #cbd5e1;border-radius:16px}
+.planify-ficha-loading{min-height:220px}
+.planify-ficha-activity{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(280px,.8fr);gap:1rem}
+.planify-ficha-task{padding:.9rem .95rem;border-radius:16px;background:#fff;border:1px solid #e2e8f0;display:grid;gap:.4rem}
+.planify-ficha-task-top{display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start}
+.planify-ficha-task-title{font-size:.93rem;font-weight:800;color:#0f172a}
+.planify-ficha-task-meta{display:flex;gap:.4rem .7rem;flex-wrap:wrap;font-size:.78rem;color:#64748b}
+.planify-ficha-link{background:none;border:none;padding:0;color:#ea580c;font:inherit;font-weight:800;cursor:pointer;text-align:left}
+.planify-ficha-link:hover{text-decoration:underline}
+.planify-ficha-related{display:flex;justify-content:space-between;gap:.7rem;align-items:flex-start;padding:.82rem .88rem;border-radius:16px;background:#fff;border:1px solid #e2e8f0}
+.planify-ficha-related-main{min-width:0;flex:1}
+.planify-ficha-related-main strong{display:block;color:#0f172a;font-size:.9rem}
+.planify-ficha-related-main span{display:block;font-size:.78rem;color:#64748b;line-height:1.45}
+.planify-ficha-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.28rem .52rem;border-radius:999px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;font-size:.72rem;font-weight:800}
+.planify-ficha-inline-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+.planify-ficha-source{display:inline-flex;align-items:center;gap:.35rem;padding:.32rem .56rem;border-radius:999px;background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:.72rem;font-weight:800}
+@media (max-width: 980px){.planify-ficha-overview{grid-template-columns:repeat(2,minmax(0,1fr))}.planify-ficha-grid,.planify-ficha-activity{grid-template-columns:1fr}.planify-ficha-subgrid{grid-template-columns:1fr 1fr}.planify-ficha-title-row{flex-direction:column}.planify-ficha-actions{justify-content:flex-start}}
+@media (max-width: 720px){.planify-ficha-panel{width:100vw;border-radius:0}.planify-ficha-body{padding:1rem}.planify-ficha-header{padding:1.1rem 1rem}.planify-ficha-tabs{padding:.7rem .8rem}.planify-ficha-overview,.planify-ficha-subgrid{grid-template-columns:1fr}.planify-ficha-meta,.planify-ficha-actions{gap:.55rem}.planify-ficha-chart{height:280px}}
+`;
+    document.head.appendChild(style);
+}
+
+function normalizarFechaFicha(value) {
+    const date = value instanceof Date ? value : new Date(value);
+    return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function formatearFechaFicha(value) {
+    const date = normalizarFechaFicha(value);
+    return date ? date.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Sin fecha';
+}
+
+function formatearFechaHoraFicha(value) {
+    const date = normalizarFechaFicha(value);
+    return date ? date.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Sin fecha';
+}
+
+function numeroFicha(value, decimals = 0) {
+    return Number(value || 0).toLocaleString('es-CL', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function getEstadoCondicionFicha(tipo, valor) {
+    const number = Number(valor || 0);
+    if (tipo === 'vibracion') {
+        if (number >= 4.5) return { label: 'Crítico', className: 'is-critical', tone: 'is-critical', color: '#dc2626' };
+        if (number >= 3.2) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch', color: '#d97706' };
+        return { label: 'Controlado', className: 'is-normal', tone: 'is-normal', color: '#059669' };
+    }
+    if (number >= 80) return { label: 'Crítico', className: 'is-critical', tone: 'is-critical', color: '#dc2626' };
+    if (number >= 65) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch', color: '#d97706' };
+    return { label: 'Controlado', className: 'is-normal', tone: 'is-normal', color: '#059669' };
+}
+
+function resumirTendenciaFicha(registros, tipo) {
+    const sorted = [...registros].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    if (sorted.length < 2) {
+        return { label: sorted.length ? 'Primera lectura' : 'Sin tendencia', meta: 'Aún no hay comparación.', className: 'is-normal', icon: 'fa-wave-square' };
+    }
+    const last = Number(sorted[sorted.length - 1].valor || 0);
+    const prev = Number(sorted[sorted.length - 2].valor || 0);
+    const diff = last - prev;
+    const threshold = tipo === 'vibracion' ? 0.05 : 0.5;
+    if (Math.abs(diff) <= threshold) {
+        return { label: 'Estable', meta: 'Sin cambio relevante frente a la lectura anterior.', className: 'is-normal', icon: 'fa-minus' };
+    }
+    if (diff > 0) {
+        return {
+            label: 'Al alza',
+            meta: `Sube ${numeroFicha(Math.abs(diff), tipo === 'vibracion' ? 2 : 1)} ${tipo === 'vibracion' ? 'mm/s' : '°C'} vs. la lectura anterior.`,
+            className: 'is-watch',
+            icon: 'fa-arrow-trend-up'
+        };
+    }
+    return {
+        label: 'A la baja',
+        meta: `Baja ${numeroFicha(Math.abs(diff), tipo === 'vibracion' ? 2 : 1)} ${tipo === 'vibracion' ? 'mm/s' : '°C'} vs. la lectura anterior.`,
+        className: 'is-normal',
+        icon: 'fa-arrow-trend-down'
+    };
+}
+
+function obtenerResumenMedicionesFicha(registros, tipo) {
+    const items = [...registros]
+        .filter(item => item.tipo === tipo)
+        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    if (!items.length) {
+        return {
+            count: 0,
+            avg: 0,
+            max: 0,
+            latest: null,
+            status: { label: 'Sin datos', className: 'is-normal', tone: '', color: '#64748b' },
+            trend: { label: 'Sin tendencia', meta: 'No hay registros todavía.', className: 'is-normal', icon: 'fa-minus' }
+        };
+    }
+    const latest = items[items.length - 1];
+    const avg = items.reduce((sum, item) => sum + Number(item.valor || 0), 0) / items.length;
+    const max = Math.max(...items.map(item => Number(item.valor || 0)));
+    return {
+        count: items.length,
+        avg,
+        max,
+        latest,
+        status: getEstadoCondicionFicha(tipo, latest.valor),
+        trend: resumirTendenciaFicha(items, tipo)
+    };
+}
+
+function consolidarEstadoFicha(estados) {
+    if (estados.some(item => item?.className === 'is-critical')) return { label: 'Crítico', className: 'is-critical', tone: 'is-critical' };
+    if (estados.some(item => item?.className === 'is-watch')) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch' };
+    return { label: 'Controlado', className: 'is-normal', tone: 'is-normal' };
+}
+
+function getThresholdConfigFicha(tipo) {
+    if (tipo === 'vibracion') return { watch: 3.2, critical: 4.5, decimals: 2, unit: 'mm/s' };
+    return { watch: 65, critical: 80, decimals: 1, unit: 'C' };
+}
+
+function priorizarToneFicha(...tones) {
+    if (tones.includes('is-critical')) return 'is-critical';
+    if (tones.includes('is-watch')) return 'is-watch';
+    if (tones.includes('is-normal')) return 'is-normal';
+    return '';
+}
+
+function getBrechaUmbralFicha(tipo, summary) {
+    if (!summary?.latest) {
+        return { value: 'Sin dato', meta: 'No hay lectura vigente para comparar.', tone: '' };
+    }
+    const cfg = getThresholdConfigFicha(tipo);
+    const latestValue = Number(summary.latest.valor || 0);
+    if (latestValue >= cfg.critical) {
+        return {
+            value: `+${numeroFicha(latestValue - cfg.critical, cfg.decimals)} ${cfg.unit}`,
+            meta: `Sobre atencion (${numeroFicha(cfg.critical, cfg.decimals)} ${cfg.unit})`,
+            tone: 'is-critical'
+        };
+    }
+    if (latestValue >= cfg.watch) {
+        return {
+            value: `+${numeroFicha(latestValue - cfg.watch, cfg.decimals)} ${cfg.unit}`,
+            meta: `Sobre seguimiento (${numeroFicha(cfg.watch, cfg.decimals)} ${cfg.unit})`,
+            tone: 'is-watch'
+        };
+    }
+    return {
+        value: `${numeroFicha(cfg.watch - latestValue, cfg.decimals)} ${cfg.unit}`,
+        meta: 'Margen hasta seguimiento',
+        tone: 'is-normal'
+    };
+}
+
+function getPulsoActivoFicha(equipo, summaries, tareasRelacionadas) {
+    const latestDates = [
+        summaries?.vibracion?.latest?.fecha,
+        summaries?.termografia?.latest?.fecha,
+        tareasRelacionadas?.[0]?.created_at,
+        tareasRelacionadas?.[0]?.fecha_termino,
+        tareasRelacionadas?.[0]?.fecha_inicio
+    ]
+        .filter(Boolean)
+        .map(value => new Date(value))
+        .filter(date => !Number.isNaN(date.getTime()))
+        .sort((a, b) => b - a);
+
+    if (!latestDates.length) {
+        return {
+            value: 'Sin actividad',
+            meta: 'No hay mediciones ni cierres recientes asociados a este activo.',
+            tone: ''
+        };
+    }
+
+    const lastDate = latestDates[0];
+    const diffDays = Math.max(0, Math.floor((Date.now() - lastDate.getTime()) / 86400000));
+    const cycleDays = Number(equipo.frecuencia_nueva || 30);
+    const totalMeasures = (summaries?.vibracion?.count || 0) + (summaries?.termografia?.count || 0);
+    let value = 'Al dia';
+    let tone = 'is-normal';
+
+    if (diffDays > cycleDays * 1.5) {
+        value = 'Atrasado';
+        tone = 'is-critical';
+    } else if (diffDays > cycleDays) {
+        value = 'Revisar';
+        tone = 'is-watch';
+    }
+
+    return {
+        value,
+        meta: `Ultimo movimiento hace ${numeroFicha(diffDays)} dia(s) / ${numeroFicha(totalMeasures)} medicion(es) y ${numeroFicha(tareasRelacionadas.length)} cierre(s).`,
+        tone
+    };
+}
+
+function getComparativaGrupoFicha(equipo, siblingEquipos, medicionesGrupo, tipo) {
+    const cfg = getThresholdConfigFicha(tipo);
+    const tolerance = tipo === 'vibracion' ? 0.05 : 0.5;
+    const latestByComponent = siblingEquipos.map(item => {
+        const latest = medicionesGrupo
+            .filter(med => String(med.equipo_id) === String(item.id) && med.tipo === tipo)
+            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0];
+        return latest ? { id: item.id, value: Number(latest.valor || 0), component: item.componente || item.activo } : null;
+    }).filter(Boolean);
+
+    const current = latestByComponent.find(item => String(item.id) === String(equipo.id));
+    const peers = latestByComponent.filter(item => String(item.id) !== String(equipo.id));
+
+    if (!current) {
+        return { value: 'Sin dato', meta: 'No hay lectura vigente para comparar contra componentes hermanos.', tone: '' };
+    }
+    if (!peers.length) {
+        return {
+            value: `${numeroFicha(latestByComponent.length)}`,
+            meta: latestByComponent.length > 1 ? 'Aun no hay suficientes lecturas hermanas para comparar.' : 'Solo existe este componente con lectura vigente.',
+            tone: 'is-normal'
+        };
+    }
+
+    const avg = peers.reduce((sum, item) => sum + item.value, 0) / peers.length;
+    const diff = current.value - avg;
+    const currentTone = getEstadoCondicionFicha(tipo, current.value).tone;
+
+    if (Math.abs(diff) <= tolerance) {
+        return {
+            value: 'En linea',
+            meta: `Muy cerca del promedio de ${numeroFicha(peers.length)} componente(s): ${numeroFicha(avg, cfg.decimals)} ${cfg.unit}.`,
+            tone: 'is-normal'
+        };
+    }
+    if (diff > 0) {
+        return {
+            value: `+${numeroFicha(diff, cfg.decimals)} ${cfg.unit}`,
+            meta: `Sobre el promedio del activo (${numeroFicha(avg, cfg.decimals)} ${cfg.unit}).`,
+            tone: currentTone
+        };
+    }
+    return {
+        value: `-${numeroFicha(Math.abs(diff), cfg.decimals)} ${cfg.unit}`,
+        meta: `Bajo el promedio del activo (${numeroFicha(avg, cfg.decimals)} ${cfg.unit}).`,
+        tone: 'is-normal'
+    };
+}
+
+function crearTarjetaResumenFicha({ label, value, meta, icon, tone = '' }) {
+    return `
+        <article class="planify-ficha-stat ${tone}">
+            <div class="planify-ficha-stat-label"><i class="fa-solid ${icon}"></i> ${label}</div>
+            <div class="planify-ficha-stat-value">${value}</div>
+            <div class="planify-ficha-stat-meta">${meta}</div>
+        </article>
+    `;
+}
+
+function crearTarjetaMiniFicha({ label, value, meta, tone = '' }) {
+    return `
+        <article class="planify-ficha-mini ${tone}">
+            <div class="planify-ficha-mini-label">${label}</div>
+            <div class="planify-ficha-mini-value">${value}</div>
+            <div class="planify-ficha-mini-meta">${meta}</div>
+        </article>
+    `;
+}
+
+function emptyFichaState(title, copy) {
+    return `<div class="planify-ficha-empty"><div><div style="font-weight:800;color:#0f172a;margin-bottom:.35rem;">${title}</div><div style="font-size:.85rem;line-height:1.5;">${copy}</div></div></div>`;
+}
+
+function getEstadoCondicionFicha(tipo, valor) {
+    const number = Number(valor || 0);
+    if (tipo === 'vibracion') {
+        if (number >= 4.5) return { label: 'Critico', className: 'is-critical', tone: 'is-critical', color: '#dc2626' };
+        if (number >= 3.2) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch', color: '#d97706' };
+        return { label: 'Controlado', className: 'is-normal', tone: 'is-normal', color: '#059669' };
+    }
+    if (number >= 80) return { label: 'Critico', className: 'is-critical', tone: 'is-critical', color: '#dc2626' };
+    if (number >= 65) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch', color: '#d97706' };
+    return { label: 'Controlado', className: 'is-normal', tone: 'is-normal', color: '#059669' };
+}
+
+function resumirTendenciaFicha(registros, tipo) {
+    const sorted = [...registros].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    if (sorted.length < 2) {
+        return { label: sorted.length ? 'Primera lectura' : 'Sin tendencia', meta: 'Aun no hay comparacion.', className: 'is-normal', icon: 'fa-wave-square' };
+    }
+    const last = Number(sorted[sorted.length - 1].valor || 0);
+    const prev = Number(sorted[sorted.length - 2].valor || 0);
+    const diff = last - prev;
+    const threshold = tipo === 'vibracion' ? 0.05 : 0.5;
+    if (Math.abs(diff) <= threshold) {
+        return { label: 'Estable', meta: 'Sin cambio relevante frente a la lectura anterior.', className: 'is-normal', icon: 'fa-minus' };
+    }
+    if (diff > 0) {
+        return {
+            label: 'Al alza',
+            meta: `Sube ${numeroFicha(Math.abs(diff), tipo === 'vibracion' ? 2 : 1)} ${tipo === 'vibracion' ? 'mm/s' : 'C'} vs. la lectura anterior.`,
+            className: 'is-watch',
+            icon: 'fa-arrow-trend-up'
+        };
+    }
+    return {
+        label: 'A la baja',
+        meta: `Baja ${numeroFicha(Math.abs(diff), tipo === 'vibracion' ? 2 : 1)} ${tipo === 'vibracion' ? 'mm/s' : 'C'} vs. la lectura anterior.`,
+        className: 'is-normal',
+        icon: 'fa-arrow-trend-down'
+    };
+}
+
+function obtenerResumenMedicionesFicha(registros, tipo) {
+    const items = [...registros]
+        .filter(item => item.tipo === tipo)
+        .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    if (!items.length) {
+        return {
+            count: 0,
+            avg: 0,
+            max: 0,
+            latest: null,
+            status: { label: 'Sin datos', className: 'is-normal', tone: '', color: '#64748b' },
+            trend: { label: 'Sin tendencia', meta: 'No hay registros todavia.', className: 'is-normal', icon: 'fa-minus' }
+        };
+    }
+    const latest = items[items.length - 1];
+    const avg = items.reduce((sum, item) => sum + Number(item.valor || 0), 0) / items.length;
+    const max = Math.max(...items.map(item => Number(item.valor || 0)));
+    return {
+        count: items.length,
+        avg,
+        max,
+        latest,
+        status: getEstadoCondicionFicha(tipo, latest.valor),
+        trend: resumirTendenciaFicha(items, tipo)
+    };
+}
+
+function consolidarEstadoFicha(estados) {
+    if (estados.some(item => item?.className === 'is-critical')) return { label: 'Critico', className: 'is-critical', tone: 'is-critical' };
+    if (estados.some(item => item?.className === 'is-watch')) return { label: 'Seguimiento', className: 'is-watch', tone: 'is-watch' };
+    return { label: 'Controlado', className: 'is-normal', tone: 'is-normal' };
+}
+
+window.irAHistorialDeEquipo = function(equipoId) {
+    const equipo = estado.equipos.find(item => item.id === equipoId);
+    vistaActual = 'historial';
+    renderizarVistaActual();
+    setTimeout(() => {
+        const input = document.getElementById('input-buscar-historial');
+        if (!input) return;
+        input.value = equipo ? `${equipo.activo} ${equipo.ubicacion}` : '';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+    }, 120);
+};
+
+window.irAControlConBusqueda = function(equipoId) {
+    const equipo = estado.equipos.find(item => item.id === equipoId);
+    if (!equipo) return;
+    vistaActual = 'control';
+    renderizarVistaActual();
+    setTimeout(() => {
+        const input = document.getElementById('input-buscar-ot') || searchInput;
+        if (!input) return;
+        input.value = equipo.kks || equipo.activo;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.focus();
+    }, 120);
+};
+
 function renderFichaTecnicaModal() {
     // Si ya existe, no crearlo
     if (document.getElementById('modal-ficha-tecnica')) return;
@@ -2665,7 +4837,7 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
         // ubicacionTexto ya está disponible aquí
         const _ubSafe = ubicacionTexto.replace(/'/g, '');
         tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
-            ? '<a href="#" onclick="event.preventDefault(); window.elegirComponenteYAbrirFicha(\'' + eqId + '\',\'' + _ubSafe + '\')" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
+            ? '<a href="#" onclick="window.elegirComponenteYAbrirFicha(\'' + eqId + '\',\'' + _ubSafe + '\'); return false;" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
             : p).join('');
     }
     // Strip [Unidad] prefix and (Tipo de trabajo) suffix from displayed title
@@ -2682,92 +4854,354 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
         if (parenMatches.length > 0) tipos = parenMatches.map(m => m[1]);
     }
     const tiposBadgesHtml = tipos.map(t =>
-        `<span onclick="event.stopPropagation(); window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')"
+        `<span class="daily-task-type-pill" onclick="window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')"
             style="display:inline-block; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; border-radius:999px; font-size:0.72rem; font-weight:600; padding:2px 10px; letter-spacing:0.01em; cursor:pointer; transition:background 150ms;"
             onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${t}</span>`
     ).join('');
     const _ubSafeHtml = ubicacionTexto.replace(/'/g, '');
     const ubicacionHtml = ubicacionTexto
-        ? `<div style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
+        ? `<div class="daily-task-location" style="display:flex; align-items:center; gap:0.35rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-               <a href="#" onclick="event.preventDefault(); window.abrirVistaUnidad('${_ubSafeHtml}')" style="color:#64748b; text-decoration:none; font-weight:600;" onmouseover="this.style.color='#FF6900'" onmouseout="this.style.color='#64748b'">${ubicacionTexto}</a>
+               <a href="#" onclick="window.abrirVistaUnidad('${_ubSafeHtml}'); return false;" style="color:#64748b; text-decoration:none; font-weight:600;" onmouseover="this.style.color='#FF6900'" onmouseout="this.style.color='#64748b'">${ubicacionTexto}</a>
            </div>` : '';
     const fechaStr = tarea.fechaAsignacion
         ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})
         : (tarea.horaAsignacion || '');
     return `
-    <div class="list-item" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}; padding: 1rem 1.1rem; display:flex; flex-direction:column; gap:0; align-items:stretch;">
+    <div class="list-item daily-task-card ${tarea._enCola ? 'is-queue' : 'is-active'}" style="border-left: 3px solid ${tarea._enCola ? '#9ca3af' : 'var(--warning-color)'}; padding: 1rem 1.1rem; display:flex; flex-direction:column; gap:0; align-items:stretch;">
         <!-- 1. Nombre del equipo / trabajo -->
-        <div style="font-size:1.05rem; font-weight:700; color:var(--primary-color); line-height:1.3;">${tituloHtml}${tarea.otNumero ? `&nbsp;<span style="font-size:0.78rem; font-weight:600; background:#fff3e0; color:#e65100; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}</div>
+        <div class="daily-task-title" style="font-size:1.05rem; font-weight:700; color:var(--primary-color); line-height:1.3;">${tituloHtml}${tarea.otNumero ? `&nbsp;<span class="daily-task-inline-pill" style="font-size:0.78rem; font-weight:600; background:#fff3e0; color:#e65100; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}</div>
 
         <!-- 2. Tipos de trabajo (chips) -->
-        ${tiposBadgesHtml ? `<div style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem;">${tiposBadgesHtml}</div>` : ''}
+        ${tiposBadgesHtml ? `<div class="daily-task-badges" style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem;">${tiposBadgesHtml}</div>` : ''}
 
         <!-- 3. Ubicación -->
         ${ubicacionHtml}
 
         <!-- Separator -->
-        <div style="margin:0.7rem 0 0.6rem; border-top:1px solid #f1f5f9;"></div>
+        <div class="daily-task-divider" style="margin:0.7rem 0 0.6rem; border-top:1px solid #f1f5f9;"></div>
 
         <!-- 4. Líder -->
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
-            <div>
-                <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; color:var(--text-main);">
+        <div class="daily-task-crew-row" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+            <div class="daily-task-crew-copy">
+                <div class="daily-task-lead-row" style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; color:var(--text-main);">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     <span style="color:#64748b; font-size:0.82rem;">Líder</span>
                     <strong style="font-size:0.92rem;">${tarea.liderNombre || 'Sin asignar'}</strong>
                 </div>
                 <!-- 5. Apoyo -->
                 ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
-                <div style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
+                <div class="daily-task-support-row" style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     <span>Apoyo: ${tarea.ayudantesNombres.join(', ')}</span>
                 </div>` : ''}
             </div>
             ${isAdmin && !tarea.liderId ? `
-            <button onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0;">
+            <button class="daily-task-assign-inline" onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0;">
                 <i class="fa-solid fa-user-plus"></i> Asignar personal
             </button>` : ''}
         </div>
 
         <!-- 6. Fecha de asignación + badge de estado -->
-        <div style="display:flex; align-items:center; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap;">
-            <span style="font-size:0.78rem; color:#94a3b8; display:flex; align-items:center; gap:0.3rem;">
+        <div class="daily-task-status-row" style="display:flex; align-items:center; gap:0.5rem; margin-top:0.65rem; flex-wrap:wrap;">
+            <span class="daily-task-date" style="font-size:0.78rem; color:#94a3b8; display:flex; align-items:center; gap:0.3rem;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                 ${fechaStr}
             </span>
-            <span style="margin-left:auto;">
+            <span class="daily-task-status-wrap" style="margin-left:auto;">
                 ${tarea._enCola
-                    ? `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#f3f4f6; color:#6b7280; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #e5e7eb;"><span style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.68rem; font-weight:700;">${tarea._pos}</span> EN COLA</span>`
-                    : `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#fff3e0; color:#FF6900; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #ffd0a8;"><i class="fa-solid fa-circle-play" style="font-size:0.72rem;"></i> ACTIVO</span>`}
+                    ? `<span class="daily-task-status-pill is-queue" style="display:inline-flex; align-items:center; gap:0.3rem; background:#f3f4f6; color:#6b7280; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #e5e7eb;"><span class="daily-task-status-order" style="display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; background:#6b7280; color:#fff; border-radius:50%; font-size:0.68rem; font-weight:700;">${tarea._pos}</span> EN COLA</span>`
+                    : `<span class="daily-task-status-pill is-active" style="display:inline-flex; align-items:center; gap:0.3rem; background:#fff3e0; color:#FF6900; border-radius:999px; font-size:0.72rem; font-weight:700; padding:3px 10px; border:1px solid #ffd0a8;"><i class="fa-solid fa-circle-play" style="font-size:0.72rem;"></i> ACTIVO</span>`}
             </span>
         </div>
 
         <!-- 7. Botones de acción -->
-        <div style="display:flex; gap:0.5rem; margin-top:0.75rem; align-items:center; flex-wrap:wrap;">
+        <div class="daily-task-actions" style="display:flex; gap:0.5rem; margin-top:0.75rem; align-items:center; flex-wrap:wrap;">
             ${isAdmin ? `
-            <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
+            <button class="btn btn-outline daily-task-action-icon" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
                 <i class="fa-solid fa-trash"></i>
             </button>` : ''}
             ${tarea._enCola && puedeGestionar ? `
-            <div style="display:flex; flex-direction:column; gap:2px;">
-                <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▲</button>
-                <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▼</button>
+            <div class="daily-task-order-stack" style="display:flex; flex-direction:column; gap:2px;">
+                <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" class="daily-task-order-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▲</button>
+                <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" class="daily-task-order-btn" style="background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:4px; color:var(--text-main); padding:2px 6px; cursor:pointer; font-size:0.75rem; line-height:1;" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>▼</button>
             </div>
-            <button class="btn btn-primary" style="flex:1;" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
+            <button class="btn btn-primary daily-task-main-btn" style="flex:1;" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
                 <i class="fa-solid fa-play"></i> Iniciar
             </button>` : ''}
             ${!tarea._enCola && puedeGestionar ? `
-            <button onclick="window.ponerEnColaExposed('${tarea.id}')" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
+            <button onclick="window.ponerEnColaExposed('${tarea.id}')" class="daily-task-secondary-btn" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
                 <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
             </button>
-            <button class="btn btn-success" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+            <button class="btn btn-success daily-task-main-btn" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
                 <i class="fa-solid fa-flag-checkered"></i> Terminar
             </button>` : ''}
             ${tarea._enCola && !puedeGestionar ? `
             <span style="font-size:0.8rem; color:var(--text-muted);">Posición #${tarea._pos} en cola</span>` : ''}
         </div>
     </div>`;
+}
+
+function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
+    let ubicacionTexto = tarea.ubicacion || '';
+    if (!ubicacionTexto) {
+        const bracketMatch = tarea.tipo.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) ubicacionTexto = bracketMatch[1];
+    }
+
+    let eqId = '', nombreEqEncontrado = '';
+    const ubicacionTarea = ubicacionTexto.toLowerCase();
+    const matches = tarea.tipo.matchAll(/\[(.*?)\]/g);
+    for (const match of matches) {
+        const candidato = match[1];
+        let res = estado.equipos.find(e => (e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato) && e.ubicacion && e.ubicacion.toLowerCase() === ubicacionTarea);
+        if (!res) res = estado.equipos.find(e => e.activo.toLowerCase() === candidato.toLowerCase() || e.kks === candidato);
+        if (res) { eqId = res.id; nombreEqEncontrado = candidato; break; }
+    }
+
+    if (!eqId) {
+        let res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()) && e.ubicacion && e.ubicacion.toLowerCase() === ubicacionTarea);
+        if (!res) res = estado.equipos.find(e => tarea.tipo.toLowerCase().includes(e.activo.toLowerCase()));
+        if (res) { eqId = res.id; nombreEqEncontrado = res.activo; }
+    }
+
+    let tituloHtml = tarea.tipo;
+    if (eqId) {
+        const partes = tarea.tipo.split(new RegExp('(\\[?' + nombreEqEncontrado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]?)', 'i'));
+        const ubicacionSafe = ubicacionTexto.replace(/'/g, '');
+        tituloHtml = partes.map(p => (p.toLowerCase() === nombreEqEncontrado.toLowerCase() || p.toLowerCase() === '[' + nombreEqEncontrado.toLowerCase() + ']')
+            ? '<a href="#" onclick="window.elegirComponenteYAbrirFicha(\'' + eqId + '\',\'' + ubicacionSafe + '\'); return false;" style="color:var(--primary-color); text-decoration:none; cursor:pointer;" onmouseover="this.style.textDecoration=\'underline\'" onmouseout="this.style.textDecoration=\'none\'">' + p + '</a>'
+            : p).join('');
+    }
+
+    tituloHtml = tituloHtml.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '');
+
+    const esParticipante = estado.usuarioActual === 'trabajador' &&
+        (tarea.liderId === estado.trabajadorLogueado?.id || (tarea.ayudantesIds || []).includes(estado.trabajadorLogueado?.id));
+    const puedeGestionar = isAdmin || esParticipante;
+    const posActual = colaTareas.findIndex(t => t.id === tarea.id);
+    const ayudantes = Array.isArray(tarea.ayudantesNombres) ? tarea.ayudantesNombres : [];
+    const apoyoTexto = ayudantes.length > 0 ? ayudantes.join(', ') : 'Sin apoyo asignado';
+    const dotacion = (tarea.liderNombre ? 1 : 0) + ayudantes.length;
+
+    let tipos = Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0 ? tarea.tiposSeleccionados : [];
+    if (tipos.length === 0) {
+        const parenMatches = [...tarea.tipo.matchAll(/\(([^)]+)\)/g)];
+        if (parenMatches.length > 0) tipos = parenMatches.map(m => m[1]);
+    }
+
+    const tiposBadgesHtml = tipos.map(t =>
+        `<button type="button" class="daily-task-type-badge" onclick="window.abrirModalTipoBadge('${t.replace(/'/g, "\\'")}', '${tarea.id}')">${t}</button>`
+    ).join('');
+
+    const ubicacionSafeHtml = ubicacionTexto.replace(/'/g, '');
+    const fechaStr = tarea.fechaAsignacion
+        ? new Date(tarea.fechaAsignacion).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : (tarea.horaAsignacion || '');
+
+    const estadoHtml = tarea._enCola
+        ? `<span class="daily-task-status-pill is-queue"><span class="daily-task-status-order">${tarea._pos}</span> En cola</span>`
+        : `<span class="daily-task-status-pill is-active"><i class="fa-solid fa-circle-play" style="font-size:0.72rem;"></i> Activo</span>`;
+    const otHtml = tarea.otNumero
+        ? `<span class="daily-task-meta-pill is-accent"><i class="fa-solid fa-hashtag"></i> OT ${tarea.otNumero}</span>`
+        : '';
+    const ubicacionHtml = ubicacionTexto
+        ? `<a href="#" onclick="window.abrirVistaUnidad('${ubicacionSafeHtml}'); return false;" class="daily-task-meta-pill is-link"><i class="fa-solid fa-location-dot"></i> ${ubicacionTexto}</a>`
+        : '';
+    const dotacionHtml = `<span class="daily-task-meta-pill"><i class="fa-solid fa-users"></i> ${dotacion} persona(s)</span>`;
+    const asignarBtnHtml = isAdmin && !tarea.liderId
+        ? `<button onclick="asignarPersonalATarea('${tarea.id}')" class="daily-task-assign-btn"><i class="fa-solid fa-user-plus"></i> Asignar personal</button>`
+        : '';
+
+    return `
+    <article class="list-item daily-task-card ${tarea._enCola ? 'is-queue' : 'is-active'}">
+        <div class="daily-task-top">
+            <div class="daily-task-top-main">
+                <div class="daily-task-kicker">${tarea._enCola ? 'Trabajo en espera' : 'Trabajo en ejecucion'}</div>
+                <div class="daily-task-title-row">
+                    <div class="daily-task-title">${tituloHtml}</div>
+                    ${estadoHtml}
+                </div>
+                <div class="daily-task-meta-row">
+                    ${otHtml}
+                    ${ubicacionHtml}
+                    ${dotacionHtml}
+                </div>
+            </div>
+            ${asignarBtnHtml}
+        </div>
+
+        ${tiposBadgesHtml ? `<div class="daily-task-badges">${tiposBadgesHtml}</div>` : ''}
+
+        <div class="daily-task-info-grid">
+            <div class="daily-task-info-card">
+                <span class="daily-task-info-label">Lider</span>
+                <strong class="daily-task-info-value">${tarea.liderNombre || 'Sin asignar'}</strong>
+            </div>
+            <div class="daily-task-info-card">
+                <span class="daily-task-info-label">Apoyo</span>
+                <span class="daily-task-info-value is-muted">${apoyoTexto}</span>
+            </div>
+            <div class="daily-task-info-card">
+                <span class="daily-task-info-label">Programacion</span>
+                <span class="daily-task-info-value is-muted">${fechaStr || 'Sin horario registrado'}</span>
+            </div>
+        </div>
+
+        <div class="daily-task-footer-note">${tarea._enCola ? `Posicion ${tarea._pos} en cola para esta cuadrilla.` : 'Trabajo disponible para cierre o reasignacion operativa.'}</div>
+
+        <div class="daily-task-actions">
+            ${isAdmin ? `
+            <button class="btn btn-outline daily-task-action-icon" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTareaExposed('${tarea.id}')" title="Eliminar / Cancelar">
+                <i class="fa-solid fa-trash"></i>
+            </button>` : ''}
+            ${tarea._enCola && puedeGestionar ? `
+            <div class="daily-task-order-stack">
+                <button title="Subir en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'up')" class="daily-task-order-btn" ${posActual === 0 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>&#9650;</button>
+                <button title="Bajar en cola" onclick="window.moverOrdenExposed('${tarea.id}', 'down')" class="daily-task-order-btn" ${posActual === colaTareas.length - 1 ? 'disabled style="opacity:0.35; cursor:default;"' : ''}>&#9660;</button>
+            </div>
+            <button class="btn btn-primary daily-task-main-btn" onclick="window.iniciarDesdeColaExposed('${tarea.id}')">
+                <i class="fa-solid fa-play"></i> Iniciar
+            </button>` : ''}
+            ${!tarea._enCola && puedeGestionar ? `
+            <button onclick="window.ponerEnColaExposed('${tarea.id}')" class="daily-task-secondary-btn">
+                <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
+            </button>
+            <button class="btn btn-success daily-task-main-btn" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
+                <i class="fa-solid fa-flag-checkered"></i> Terminar
+            </button>` : ''}
+            ${tarea._enCola && !puedeGestionar ? `
+            <span class="daily-task-queue-note">Posicion #${tarea._pos} en cola</span>` : ''}
+        </div>
+    </article>`;
+}
+
+function renderControlView() {
+    const tareasDiarias = estado.tareas.filter(t =>
+        t.estadoTarea === 'en_curso' ||
+        (t.estadoTarea === 'programada_semana' && t.liderId)
+    ).sort((a, b) => {
+        const aEnCola = a.estadoEjecucion === 'en_cola' || a.estadoTarea === 'programada_semana';
+        const bEnCola = b.estadoEjecucion === 'en_cola' || b.estadoTarea === 'programada_semana';
+        if (!aEnCola && bEnCola) return -1;
+        if (aEnCola && !bEnCola) return 1;
+        return (a.orden || 0) - (b.orden || 0);
+    });
+
+    let colaPosCounter = 0;
+    const tareasConPos = tareasDiarias.map(t => {
+        const enCola = t.estadoEjecucion === 'en_cola' || t.estadoTarea === 'programada_semana';
+        return { ...t, _enCola: enCola, _pos: enCola ? ++colaPosCounter : 0 };
+    });
+
+    const colaTareas = tareasConPos.filter(t => t._enCola);
+    const tareasActivas = tareasConPos.filter(t => !t._enCola);
+    const { vibraciones, lubricacion, otros } = _clasificarTareasPorEspecialidad(tareasConPos);
+    const trabajadoresConCheckIn = estado.trabajadores.filter(t => t.disponible).length;
+    const trabajadoresOcupados = estado.trabajadores.filter(t => t.ocupado).length;
+    const trabajadoresSinCheckIn = Math.max(estado.trabajadores.length - trabajadoresConCheckIn, 0);
+    const coberturaTurno = estado.trabajadores.length > 0
+        ? Math.round((trabajadoresConCheckIn / estado.trabajadores.length) * 100)
+        : 0;
+    const equiposCriticosActivos = new Set(
+        tareasConPos
+            .map(t => estado.equipos.find(eq => String(eq.id) === String(t.equipoId)))
+            .filter(eq => eq && ['A', 'B'].includes(String(eq.criticidad || '').toUpperCase()))
+            .map(eq => eq.id)
+    ).size;
+    const resumenEspecialidades = [
+        { label: 'Vibraciones', count: vibraciones.length, icon: 'fa-gear' },
+        { label: 'Lubricacion', count: lubricacion.length, icon: 'fa-droplet' },
+        { label: 'Otros', count: otros.length, icon: 'fa-list-check' }
+    ].sort((a, b) => b.count - a.count);
+    const focoPrincipal = resumenEspecialidades[0];
+    const proximaEnCola = colaTareas[0] || null;
+    const hoyClave = new Date().toISOString().slice(0, 10);
+    const ultimoCierreHoy = [...estado.historialTareas]
+        .filter(t => String(t.created_at || '').slice(0, 10) === hoyClave)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+    const resumenFecha = new Date().toLocaleDateString('es-CL', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+    });
+
+    function tituloTareaDashboard(tarea) {
+        if (!tarea) return 'Sin informacion';
+        return tarea.otNumero || tarea.ot_numero || tarea.tipo || 'Trabajo sin titulo';
+    }
+
+    function subtituloTareaDashboard(tarea) {
+        if (!tarea) return 'Sin trabajos pendientes por ahora.';
+        const partes = [tarea.tipo || null, tarea.ubicacion || null, tarea.liderNombre || tarea.lider_nombre || null].filter(Boolean);
+        return partes.length > 0 ? partes.join(' · ') : 'Trabajo listo para revisar';
+    }
+
+    mainContent.innerHTML = `
+        <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${estado.usuarioActual !== 'admin' ? 'max-width:800px; margin:0 auto;' : ''}">
+            <div class="dashboard-lists">
+                <div class="panel dashboard-hero">
+                    <div class="dashboard-hero-head">
+                        <div>
+                            <div class="dashboard-eyebrow">Centro de control diario</div>
+                            <h2 style="margin-bottom:0.4rem;"><i class="fa-solid fa-chart-column"></i> Dashboard Operativo</h2>
+                            <p class="dashboard-hero-copy">${resumenFecha}. ${tareasActivas.length > 0 ? `Hay ${tareasActivas.length} trabajo(s) activo(s)` : 'No hay trabajos activos'}${colaTareas.length > 0 ? ` y ${colaTareas.length} en cola` : ''}.</p>
+                        </div>
+                        <div class="dashboard-hero-badges">
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-user-check"></i> Cobertura ${coberturaTurno}%</span>
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-shield-halved"></i> Criticos atendidos ${equiposCriticosActivos}</span>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-metrics">
+                        <article class="dashboard-metric-card">
+                            <span class="dashboard-metric-icon" style="background:#fff7ed; color:#c2410c;"><i class="fa-solid fa-person-digging"></i></span>
+                            <div class="dashboard-metric-value">${tareasActivas.length}</div>
+                            <div class="dashboard-metric-label">Trabajos activos</div>
+                        </article>
+                        <article class="dashboard-metric-card">
+                            <span class="dashboard-metric-icon" style="background:#eff6ff; color:#1d4ed8;"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                            <div class="dashboard-metric-value">${colaTareas.length}</div>
+                            <div class="dashboard-metric-label">Trabajos en cola</div>
+                        </article>
+                        <article class="dashboard-metric-card">
+                            <span class="dashboard-metric-icon" style="background:#ecfdf5; color:#047857;"><i class="fa-solid fa-user-check"></i></span>
+                            <div class="dashboard-metric-value">${trabajadoresConCheckIn}</div>
+                            <div class="dashboard-metric-label">Personal con check-in</div>
+                        </article>
+                        <article class="dashboard-metric-card">
+                            <span class="dashboard-metric-icon" style="background:#fef2f2; color:#b91c1c;"><i class="fa-solid fa-user-clock"></i></span>
+                            <div class="dashboard-metric-value">${trabajadoresSinCheckIn}</div>
+                            <div class="dashboard-metric-label">Sin check-in hoy</div>
+                        </article>
+                    </div>
+
+                    <div class="dashboard-focus-grid">
+                        <article class="dashboard-focus-card">
+                            <div class="dashboard-focus-title"><i class="fa-solid ${focoPrincipal.icon}"></i> Foco del dia</div>
+                            <div class="dashboard-focus-main">${focoPrincipal.label}</div>
+                            <div class="dashboard-focus-sub">${focoPrincipal.count > 0 ? `${focoPrincipal.count} trabajo(s) concentrados en esta especialidad` : 'Sin carga marcada por especialidad todavia'}</div>
+                        </article>
+                        <article class="dashboard-focus-card">
+                            <div class="dashboard-focus-title"><i class="fa-solid fa-forward-step"></i> Siguiente en cola</div>
+                            <div class="dashboard-focus-main">${tituloTareaDashboard(proximaEnCola)}</div>
+                            <div class="dashboard-focus-sub">${subtituloTareaDashboard(proximaEnCola)}</div>
+                        </article>
+                        <article class="dashboard-focus-card">
+                            <div class="dashboard-focus-title"><i class="fa-solid fa-flag-checkered"></i> Ultimo cierre del dia</div>
+                            <div class="dashboard-focus-main">${ultimoCierreHoy ? tituloTareaDashboard(ultimoCierreHoy) : 'Sin cierres registrados'}</div>
+                            <div class="dashboard-focus-sub">${ultimoCierreHoy ? `${(ultimoCierreHoy.lider_nombre || ultimoCierreHoy.liderNombre || 'Sin lider')} - ${new Date(ultimoCierreHoy.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}` : 'Cuando se cierre una OT hoy aparecera aqui.'}</div>
+                        </article>
+                        <article class="dashboard-focus-card">
+                            <div class="dashboard-focus-title"><i class="fa-solid fa-helmet-safety"></i> Cobertura de personal</div>
+                            <div class="dashboard-focus-main">${trabajadoresOcupados} trabajando ahora</div>
+                            <div class="dashboard-focus-sub">${estado.trabajadores.length > 0 ? `${trabajadoresConCheckIn} de ${estado.trabajadores.length} personas disponibles hoy` : 'Aun no hay personal cargado'}</div>
+                        </article>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 // COMPONENTE: Vista Dashboard
@@ -2792,7 +5226,274 @@ function renderDashboardView() {
         const enCola = t.estadoEjecucion === 'en_cola' || t.estadoTarea === 'programada_semana';
         return { ...t, _enCola: enCola, _pos: enCola ? ++_colaPosCounter : 0 };
     });
+    const colaTareas = _tareasConPos.filter(t => t._enCola);
+    const tareasActivas = _tareasConPos.filter(t => !t._enCola);
+    const { vibraciones, lubricacion, otros } = _clasificarTareasPorEspecialidad(_tareasConPos);
+    const trabajadoresConCheckIn = estado.trabajadores.filter(t => t.disponible).length;
+    const trabajadoresOcupados = estado.trabajadores.filter(t => t.ocupado).length;
+    const trabajadoresSinCheckIn = Math.max(estado.trabajadores.length - trabajadoresConCheckIn, 0);
+    const coberturaTurno = estado.trabajadores.length > 0
+        ? Math.round((trabajadoresConCheckIn / estado.trabajadores.length) * 100)
+        : 0;
+    const equiposCriticosActivos = new Set(
+        _tareasConPos
+            .map(t => estado.equipos.find(eq => String(eq.id) === String(t.equipoId)))
+            .filter(eq => eq && ['A', 'B'].includes(String(eq.criticidad || '').toUpperCase()))
+            .map(eq => eq.id)
+    ).size;
+    const resumenEspecialidades = [
+        { label: 'Vibraciones', count: vibraciones.length, icon: 'fa-gear' },
+        { label: 'Lubricacion', count: lubricacion.length, icon: 'fa-droplet' },
+        { label: 'Otros', count: otros.length, icon: 'fa-list-check' }
+    ].sort((a, b) => b.count - a.count);
+    const focoPrincipal = resumenEspecialidades[0];
+    const proximaEnCola = colaTareas[0] || null;
+    const hoyClave = new Date().toISOString().slice(0, 10);
+    const ultimoCierreHoy = [...estado.historialTareas]
+        .filter(t => String(t.created_at || '').slice(0, 10) === hoyClave)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0] || null;
+    const resumenFecha = new Date().toLocaleDateString('es-CL', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long'
+    });
+
+    function tituloTareaDashboard(tarea) {
+        if (!tarea) return 'Sin informacion';
+        return tarea.otNumero || tarea.ot_numero || tarea.tipo || 'Trabajo sin titulo';
+    }
+
+    function subtituloTareaDashboard(tarea) {
+        if (!tarea) return 'Sin trabajos pendientes por ahora.';
+        const partes = [tarea.tipo || null, tarea.ubicacion || null, tarea.liderNombre || tarea.lider_nombre || null].filter(Boolean);
+        return partes.length > 0 ? partes.join(' · ') : 'Trabajo listo para revisar';
+    }
     
+    function extraerUbicacionDesdeTexto(texto) {
+        if (!texto) return '';
+        const bracketMatch = String(texto).match(/^\[([^\]]+)\]/);
+        return bracketMatch ? bracketMatch[1] : '';
+    }
+
+    function obtenerUbicacionTarea(tarea) {
+        if (!tarea) return 'Sin unidad';
+        if (tarea.ubicacion) return tarea.ubicacion;
+        if (tarea.equipoId) {
+            const equipo = estado.equipos.find(eq => String(eq.id) === String(tarea.equipoId));
+            if (equipo?.ubicacion) return equipo.ubicacion;
+        }
+        return extraerUbicacionDesdeTexto(tarea.tipo) || 'Sin unidad';
+    }
+
+    function obtenerFechaRegistro(...valores) {
+        for (const valor of valores) {
+            if (!valor) continue;
+            const fecha = new Date(valor);
+            if (!Number.isNaN(fecha.getTime())) return fecha;
+        }
+        return null;
+    }
+
+    function resolverEspecialidadUnidad(tarea) {
+        const tipos = Array.isArray(tarea?.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0
+            ? tarea.tiposSeleccionados.map(tipo => String(tipo || '').toLowerCase())
+            : [String(tarea?.tipo || '').toLowerCase()];
+        const esVibracion = tipos.some(tipo =>
+            ['vibracion', 'termografia', 'end', 'espesores', 'dureza', 'balanceo', 'tintas penetrantes']
+                .some(valor => tipo.includes(valor))
+        );
+        if (esVibracion) return 'Vibraciones';
+        const esLubricacion = tipos.some(tipo =>
+            ['lubricacion', 'aceite', 'engrase', 'lubs']
+                .some(valor => tipo.includes(valor))
+        );
+        if (esLubricacion) return 'Lubricacion';
+        return 'Otros';
+    }
+
+    function clasificarLecturaUnidad(tipo, valor) {
+        const numero = Number(valor || 0);
+        if (String(tipo || '').toLowerCase() === 'vibracion') {
+            if (numero >= 4.5) return 'critical';
+            if (numero >= 3.2) return 'watch';
+            return 'normal';
+        }
+        if (numero >= 80) return 'critical';
+        if (numero >= 65) return 'watch';
+        return 'normal';
+    }
+
+    const inicioHoy = new Date();
+    inicioHoy.setHours(0, 0, 0, 0);
+    const cierresHoy = (estado.historialTareas || []).filter(item => {
+        const fecha = obtenerFechaRegistro(item.created_at, item.fecha_creacion, item.fecha_completada);
+        return fecha && fecha >= inicioHoy;
+    });
+    const medicionesHoy = (estado.historialMediciones || []).filter(item => {
+        const fecha = obtenerFechaRegistro(item.fecha, item.creado_en, item.created_at);
+        return fecha && fecha >= inicioHoy;
+    });
+    const mapaUnidades = new Map();
+    const asegurarUnidad = nombreUnidad => {
+        const nombre = nombreUnidad || 'Sin unidad';
+        if (!mapaUnidades.has(nombre)) {
+            mapaUnidades.set(nombre, {
+                nombre,
+                active: 0,
+                queue: 0,
+                closedToday: 0,
+                measuresToday: 0,
+                crew: new Set(),
+                specialties: new Map(),
+                criticalMeasures: 0,
+                watchMeasures: 0,
+                criticalAssets: 0,
+                lastEvent: null
+            });
+        }
+        return mapaUnidades.get(nombre);
+    };
+    const registrarUltimaActividad = (bucket, fecha) => {
+        if (!fecha) return;
+        if (!bucket.lastEvent || fecha > bucket.lastEvent) bucket.lastEvent = fecha;
+    };
+
+    _tareasConPos.forEach(tarea => {
+        const unidad = asegurarUnidad(obtenerUbicacionTarea(tarea));
+        if (tarea._enCola) unidad.queue += 1;
+        else unidad.active += 1;
+        if (tarea.liderNombre || tarea.lider_nombre) unidad.crew.add(tarea.liderNombre || tarea.lider_nombre);
+        (tarea.ayudantesNombres || tarea.ayudantes_nombres || []).forEach(nombre => unidad.crew.add(nombre));
+        const especialidad = resolverEspecialidadUnidad(tarea);
+        unidad.specialties.set(especialidad, (unidad.specialties.get(especialidad) || 0) + 1);
+        const equipo = estado.equipos.find(eq => String(eq.id) === String(tarea.equipoId));
+        if (equipo && ['A', 'B'].includes(String(equipo.criticidad || '').toUpperCase())) unidad.criticalAssets += 1;
+        registrarUltimaActividad(unidad, obtenerFechaRegistro(tarea.fechaAsignacion, tarea.created_at, tarea.horaAsignacion));
+    });
+
+    cierresHoy.forEach(registro => {
+        const unidad = asegurarUnidad(registro.ubicacion || extraerUbicacionDesdeTexto(registro.tipo));
+        unidad.closedToday += 1;
+        if (registro.lider_nombre || registro.liderNombre) unidad.crew.add(registro.lider_nombre || registro.liderNombre);
+        registrarUltimaActividad(unidad, obtenerFechaRegistro(registro.created_at, registro.fecha_creacion, registro.fecha_completada));
+    });
+
+    medicionesHoy.forEach(medicion => {
+        const equipo = estado.equipos.find(eq => String(eq.id) === String(medicion.equipo_id || medicion.equipoId));
+        const unidad = asegurarUnidad(equipo?.ubicacion || medicion.ubicacion || 'Sin unidad');
+        unidad.measuresToday += 1;
+        const clasificacion = clasificarLecturaUnidad(medicion.tipo, medicion.valor);
+        if (clasificacion === 'critical') unidad.criticalMeasures += 1;
+        else if (clasificacion === 'watch') unidad.watchMeasures += 1;
+        registrarUltimaActividad(unidad, obtenerFechaRegistro(medicion.fecha, medicion.created_at, medicion.creado_en));
+    });
+
+    const resumenUnidades = [...mapaUnidades.values()].map(unidad => {
+        const topSpecialty = [...unidad.specialties.entries()].sort((a, b) => b[1] - a[1])[0] || ['Otros', 0];
+        let statusClass = 'is-normal';
+        let statusLabel = 'Normal';
+        if (unidad.criticalMeasures > 0 || (unidad.criticalAssets > 0 && unidad.active > 0)) {
+            statusClass = 'is-critical';
+            statusLabel = 'Critica';
+        } else if (unidad.watchMeasures > 0 || unidad.queue > 0 || unidad.active >= 3) {
+            statusClass = 'is-watch';
+            statusLabel = 'Seguimiento';
+        }
+        return {
+            ...unidad,
+            topSpecialty: topSpecialty[0],
+            statusClass,
+            statusLabel,
+            ultimaActividad: unidad.lastEvent
+                ? unidad.lastEvent.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+                : '--:--',
+            score: (unidad.active * 4) + (unidad.queue * 2) + unidad.closedToday + (unidad.measuresToday * 0.5) + (unidad.criticalMeasures * 5) + (unidad.watchMeasures * 2)
+        };
+    }).sort((a, b) => b.score - a.score || a.nombre.localeCompare(b.nombre));
+
+    const unidadFocoDiaria = resumenUnidades[0] || null;
+    const unidadesConActividad = resumenUnidades.length;
+    const unidadesConAlerta = resumenUnidades.filter(unidad => unidad.statusClass !== 'is-normal').length;
+    const metricasMapaUnidad = [
+        {
+            value: unidadesConActividad,
+            label: 'Unidad(es) activas',
+            meta: unidadFocoDiaria ? `Foco: ${unidadFocoDiaria.nombre}` : 'Sin unidades con carga',
+            tone: 'orange',
+            icon: 'fa-layer-group'
+        },
+        {
+            value: medicionesHoy.length,
+            label: 'Mediciones hoy',
+            meta: `${cierresHoy.length} cierre(s) registrados`,
+            tone: 'teal',
+            icon: 'fa-wave-square'
+        },
+        {
+            value: unidadesConAlerta,
+            label: 'Unidad(es) con alerta',
+            meta: unidadesConAlerta > 0 ? 'Requieren revision o seguimiento' : 'Sin alertas relevantes',
+            tone: 'red',
+            icon: 'fa-triangle-exclamation'
+        },
+        {
+            value: trabajadoresOcupados,
+            label: 'Personal desplegado',
+            meta: `${trabajadoresConCheckIn} con check-in hoy`,
+            tone: 'slate',
+            icon: 'fa-users'
+        }
+    ];
+    const metricasMapaUnidadHtml = metricasMapaUnidad.map(item => `
+        <article class="dashboard-metric-card dashboard-metric-card--${item.tone}">
+            <span class="dashboard-metric-icon"><i class="fa-solid ${item.icon}"></i></span>
+            <div class="dashboard-metric-value">${item.value}</div>
+            <div class="dashboard-metric-label">${item.label}</div>
+            <div class="dashboard-metric-meta">${item.meta}</div>
+        </article>
+    `).join('');
+    const mapaUnidadHtml = resumenUnidades.length > 0
+        ? `<div class="daily-unit-map-grid">
+            ${resumenUnidades.map(unidad => {
+                const unidadSafe = String(unidad.nombre || '').replace(/'/g, "\\'");
+                const segmentos = [
+                    unidad.active ? `<span class="daily-unit-map-band-segment is-active" style="flex:${unidad.active}"></span>` : '',
+                    unidad.queue ? `<span class="daily-unit-map-band-segment is-queue" style="flex:${unidad.queue}"></span>` : '',
+                    unidad.closedToday ? `<span class="daily-unit-map-band-segment is-closed" style="flex:${unidad.closedToday}"></span>` : '',
+                    unidad.measuresToday ? `<span class="daily-unit-map-band-segment is-measure" style="flex:${unidad.measuresToday}"></span>` : ''
+                ].join('');
+                return `
+                <button type="button" class="daily-unit-map-card ${unidad.statusClass}" onclick="window.abrirVistaUnidad('${unidadSafe}')">
+                    <div class="daily-unit-map-top">
+                        <div>
+                            <span class="daily-unit-map-label">${unidad.topSpecialty}</span>
+                            <h3>${unidad.nombre}</h3>
+                        </div>
+                        <span class="daily-unit-map-status ${unidad.statusClass}">${unidad.statusLabel}</span>
+                    </div>
+                    <div class="daily-unit-map-main">
+                        <div class="daily-unit-map-number">${unidad.active}</div>
+                        <div>
+                            <strong>${unidad.active === 1 ? 'Activo ahora' : 'Activos ahora'}</strong>
+                            <span>${unidad.active + unidad.queue} trabajo(s) del turno</span>
+                        </div>
+                    </div>
+                    <div class="daily-unit-map-stats">
+                        <div><strong>${unidad.queue}</strong><span>En cola</span></div>
+                        <div><strong>${unidad.closedToday}</strong><span>Cierres hoy</span></div>
+                        <div><strong>${unidad.measuresToday}</strong><span>Mediciones</span></div>
+                        <div><strong>${unidad.crew.size}</strong><span>Personal</span></div>
+                    </div>
+                    <div class="daily-unit-map-band">${segmentos || '<span class="daily-unit-map-band-segment is-empty" style="flex:1"></span>'}</div>
+                    <div class="daily-unit-map-foot">
+                        <span><i class="fa-regular fa-clock"></i> Ult. ${unidad.ultimaActividad}</span>
+                        <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver equipos</span>
+                    </div>
+                </button>`;
+            }).join('')}
+        </div>`
+        : `<div class="empty-state"><div><strong>Sin unidades con movimiento hoy</strong><p>Cuando entren trabajos, cierres o mediciones del dia, el mapa operacional aparecera aqui.</p></div></div>`;
+
     // Validar si el usuario actual es admin
     const isAdmin = estado.usuarioActual === 'admin';
     
@@ -2907,6 +5608,40 @@ function renderDashboardView() {
         ${panelAsignacionHtml}
         <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${!isAdmin ? 'max-width:800px; margin:0 auto;' : ''}">
 
+            <div class="panel dashboard-hero daily-ops-panel">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="dashboard-eyebrow">Diario operativo</div>
+                        <h2 style="margin-bottom:0.4rem;"><i class="fa-solid fa-map-location-dot"></i> Mapa por unidad</h2>
+                        <p class="dashboard-hero-copy">${resumenFecha}. ${unidadesConActividad > 0 ? `${unidadesConActividad} unidad(es) con movimiento entre trabajos, cierres y mediciones de hoy.` : 'Aun no hay unidades con actividad visible en el turno.'}</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-location-dot"></i> ${unidadFocoDiaria ? unidadFocoDiaria.nombre : 'Sin foco'}</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-triangle-exclamation"></i> ${unidadesConAlerta} con alerta</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-metrics dashboard-metrics--daily">
+                    ${metricasMapaUnidadHtml}
+                </div>
+
+                <div class="daily-unit-map-panel">
+                    <div class="daily-unit-map-head">
+                        <div>
+                            <div class="daily-unit-map-title">Radar del turno</div>
+                            <p class="daily-unit-map-copy">Cada tarjeta resume carga, cola, cierres, mediciones y personal por unidad. Toca una unidad para abrir sus equipos.</p>
+                        </div>
+                        <div class="daily-unit-map-legend">
+                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#f97316;"></i> Activos</span>
+                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#2563eb;"></i> Cola</span>
+                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#10b981;"></i> Cierres</span>
+                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#7c3aed;"></i> Mediciones</span>
+                        </div>
+                    </div>
+                    ${mapaUnidadHtml}
+                </div>
+            </div>
+
             <!-- Lista de trabajos (ocupa todo el ancho) -->
             <div class="dashboard-lists">
 
@@ -2927,33 +5662,52 @@ function renderDashboardView() {
                         </div>
                     </div>
                     ${(() => {
-                        if (_tareasConPos.length === 0) return `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos activos en este momento.</p>`;
-                        const colaTareas = _tareasConPos.filter(t => t._enCola);
-                        const { vibraciones, lubricacion, otros } = _clasificarTareasPorEspecialidad(_tareasConPos);
+                        if (_tareasConPos.length === 0) return `<div class="empty-state"><div><strong>Sin trabajos activos</strong><p>Cuando se asignen o inicien tareas aparecerán aquí con su estado y prioridad.</p></div></div>`;
                         const _svgGear = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
                         const _svgDrop = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`;
                         function colHTML(tareas, titulo, svgIcon, subtitulo, emptyMsg) {
-                            return `<div style="flex:1; min-width:280px; border-top:3px solid var(--primary-color); padding-top:1.1rem; padding-bottom:0.25rem;">
-                                <div style="display:flex; align-items:center; gap:0.55rem; margin-bottom:0.85rem;">
-                                    ${svgIcon}
-                                    <span style="font-weight:700; font-size:1rem; color:var(--text-main);">${titulo}</span>
-                                    <span style="background:var(--primary-color); color:#fff; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.72rem; font-weight:700; margin-left:0.1rem;">${tareas.length}</span>
+                            return `<div class="daily-squad-column" style="flex:1; min-width:280px; border-top:3px solid var(--primary-color); padding-top:1.1rem; padding-bottom:0.25rem;">
+                                <div class="daily-squad-header">
+                                    <div class="daily-squad-heading">
+                                        <span class="daily-squad-icon">${svgIcon}</span>
+                                        <div class="daily-squad-heading-copy">
+                                            <span class="daily-squad-title">${titulo}</span>
+                                            <span class="daily-squad-subtitle">${tareas.length > 0 ? `${activos} activo(s) · ${enCola} en cola` : subtitulo}</span>
+                                        </div>
+                                    </div>
+                                    <div class="daily-squad-summary">
+                                        <span class="daily-squad-kpi is-active">${activos} activos</span>
+                                        <span class="daily-squad-kpi is-queue">${enCola} cola</span>
+                                        <span class="daily-squad-total">${tareas.length}</span>
+                                    </div>
                                 </div>
                                 ${tareas.length === 0
-                                    ? `<p style="color:var(--text-muted); font-size:0.85rem; padding:1rem 0; text-align:center;">${emptyMsg}</p>`
-                                    : `<div class="items-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
+                                    ? `<div class="empty-state empty-state--compact"><div><strong>${emptyMsg}</strong><p>Esta columna se llenará automáticamente cuando entren trabajos de esa especialidad.</p></div></div>`
+                                    : `<div class="items-list daily-squad-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
                             </div>`;
                         }
-                        return `<div style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">
-                            ${colHTML(vibraciones, 'Equipo Vibraciones', _svgGear, '', 'Sin trabajos de vibraciones')}
-                            ${colHTML(lubricacion, 'Equipo Lubricación', _svgDrop, '', 'Sin trabajos de lubricación')}
+                        function colHTMLLegacy(tareas, titulo, svgIcon, subtitulo, emptyMsg) {
+                            return `<div class="daily-squad-column" style="flex:1; min-width:280px; border-top:3px solid var(--primary-color); padding-top:1.1rem; padding-bottom:0.25rem;">
+                                <div class="daily-squad-header" style="display:flex; align-items:center; gap:0.55rem; margin-bottom:0.85rem;">
+                                    ${svgIcon}
+                                    <span class="daily-squad-title" style="font-weight:700; font-size:1rem; color:var(--text-main);">${titulo}</span>
+                                    <span class="daily-squad-total" style="background:var(--primary-color); color:#fff; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.72rem; font-weight:700; margin-left:0.1rem;">${tareas.length}</span>
+                                </div>
+                                ${tareas.length === 0
+                                    ? `<div class="empty-state empty-state--compact"><div><strong>${emptyMsg}</strong><p>Esta columna se llenar\u00e1 autom\u00e1ticamente cuando entren trabajos de esa especialidad.</p></div></div>`
+                                    : `<div class="items-list daily-squad-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
+                            </div>`;
+                        }
+                        return `<div class="daily-squad-grid" style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">
+                            ${colHTMLLegacy(vibraciones, 'Equipo Vibraciones', _svgGear, '', 'Sin trabajos de vibraciones')}
+                            ${colHTMLLegacy(lubricacion, 'Equipo Lubricación', _svgDrop, '', 'Sin trabajos de lubricación')}
                         </div>
-                        ${otros.length > 0 ? `<div style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:0.85rem;">
-                            <h3 style="font-size:0.95rem; margin:0 0 0.75rem 0; display:flex; align-items:center; gap:0.5rem; color:var(--text-muted);">
+                        ${otros.length > 0 ? `<div class="daily-squad-extra" style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:0.85rem;">
+                            <h3 class="daily-squad-extra-title" style="font-size:0.95rem; margin:0 0 0.75rem 0; display:flex; align-items:center; gap:0.5rem; color:var(--text-muted);">
                                 <span>📋</span><span>Otros trabajos</span>
-                                <span style="background:#6b728022; color:#6b7280; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.75rem; font-weight:700;">${otros.length}</span>
+                                <span class="daily-squad-extra-count" style="background:#6b728022; color:#6b7280; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.75rem; font-weight:700;">${otros.length}</span>
                             </h3>
-                            <div class="items-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>
+                            <div class="items-list daily-squad-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>
                         </div>` : ''}`;
                     })()}
                 </div>
@@ -3324,6 +6078,137 @@ function renderSemanalView() {
         if (isAdmin) return true;
         return t.liderId === trabajador?.id || (t.ayudantesIds || []).includes(trabajador?.id);
     });
+
+    const normalizarSemanal = (valor) => String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+    const formatearNumeroSemanal = (valor, maxDecimals = 1) => new Intl.NumberFormat('es-CL', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDecimals
+    }).format(Number(valor || 0));
+    const getUbicSemanal = (tarea) => tarea.ubicacion || (String(tarea.tipo || '').match(/^\[([^\]]+)\]/) || [])[1] || 'Sin unidad';
+    const getNombreSemanal = (tarea) => String(tarea.tipo || 'Trabajo programado')
+        .replace(/^\s*\[[^\]]+\]\s*/, '')
+        .replace(/\s*\([^)]+\)\s*$/, '')
+        .trim();
+    const getTiposSemanal = (tarea) => {
+        if (Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0) return tarea.tiposSeleccionados;
+        const match = String(tarea.tipo || '').match(/\(([^)]+)\)/);
+        return match?.[1] ? match[1].split(',').map(tipo => tipo.trim()).filter(Boolean) : [];
+    };
+    const getFechaExpSemanal = (tarea) => {
+        if (!tarea.fechaExpiracion) return null;
+        const fecha = new Date(`${tarea.fechaExpiracion}T00:00:00`);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    };
+    const hoySemanal = new Date();
+    hoySemanal.setHours(0, 0, 0, 0);
+    const limiteSemanal = new Date(hoySemanal);
+    limiteSemanal.setDate(limiteSemanal.getDate() + 2);
+    const { vibraciones: semanalPredictivo, lubricacion: semanalLubricacion, otros: semanalOtros } = _clasificarTareasPorEspecialidad(tareasSemanales);
+    const tareasVencidas = tareasSemanales.filter(t => {
+        const fecha = getFechaExpSemanal(t);
+        return fecha && fecha < hoySemanal;
+    });
+    const tareasPorVencer = tareasSemanales.filter(t => {
+        const fecha = getFechaExpSemanal(t);
+        return fecha && fecha >= hoySemanal && fecha <= limiteSemanal;
+    });
+    const unidadesSemanales = [...new Set(tareasSemanales.map(getUbicSemanal))];
+    const otsSemanales = tareasSemanales.filter(t => String(t.otNumero || t.ot_numero || '').trim()).length;
+    const especialidadesResumenSemanal = [
+        { label: 'Predictivo', count: semanalPredictivo.length, icon: 'fa-wave-square' },
+        { label: 'Lubricacion', count: semanalLubricacion.length, icon: 'fa-oil-can' },
+        { label: 'Otros', count: semanalOtros.length, icon: 'fa-list-check' }
+    ].sort((a, b) => b.count - a.count);
+    const focoSemanal = especialidadesResumenSemanal[0] || { label: 'Sin foco', count: 0, icon: 'fa-compass' };
+    const supervisorPendiente = tareasSemanales.filter(t => !t.liderNombre && !t.liderId).length;
+
+    function getTipoBadgeStyleSemanal(tipo) {
+        const normalizado = normalizarSemanal(tipo);
+        if (normalizado.includes('vibrac') || normalizado.includes('termog') || normalizado.includes('espesor') || normalizado.includes('dureza') || normalizado.includes('end')) {
+            return 'background:#fff7ed;color:#9a3412;border-color:rgba(249,115,22,0.22);';
+        }
+        if (normalizado.includes('lubric') || normalizado.includes('aceite')) {
+            return 'background:#eff6ff;color:#1d4ed8;border-color:rgba(59,130,246,0.20);';
+        }
+        return 'background:#f8fafc;color:#475569;border-color:rgba(203,213,225,0.95);';
+    }
+
+    function renderTipoSemanal(tipo, tareaId) {
+        return `<button type="button" class="weekly-task-type" onclick="window.abrirModalTipoBadge('${String(tipo).replace(/'/g, "\\'")}', '${tareaId}')" style="${getTipoBadgeStyleSemanal(tipo)}">${tipo}</button>`;
+    }
+
+    function renderCardSemanal(tarea) {
+        const nombreLimpio = getNombreSemanal(tarea);
+        const tipos = getTiposSemanal(tarea);
+        const fechaExp = getFechaExpSemanal(tarea);
+        const vencida = fechaExp && fechaExp < hoySemanal;
+        const porVencer = fechaExp && fechaExp >= hoySemanal && fechaExp <= limiteSemanal;
+        const supervisor = tarea.liderNombre || 'Pendiente por asignar';
+        const ayudantes = Array.isArray(tarea.ayudantesNombres) ? tarea.ayudantesNombres : [];
+        const otNumero = tarea.otNumero || tarea.ot_numero || '';
+        const equipoId = tarea.equipoId || tarea.equipo_id || '';
+        const equipoBtn = equipoId
+            ? `<button class="btn btn-outline" type="button" onclick="window.abrirFichaTecnica('${equipoId}')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Equipo</button>`
+            : '';
+
+        return `<article class="weekly-task-card list-item" data-weekly-card data-weekly-search="${normalizarSemanal([
+            nombreLimpio,
+            getUbicSemanal(tarea),
+            otNumero,
+            supervisor,
+            ayudantes.join(' '),
+            tipos.join(' ')
+        ].join(' '))}">
+            <div class="weekly-task-top">
+                <div class="weekly-task-main">
+                    <div class="weekly-task-title">${nombreLimpio}</div>
+                    <div class="weekly-task-flags">
+                        ${otNumero ? `<span class="weekly-group-badge"><i class="fa-solid fa-hashtag"></i> ${otNumero}</span>` : ''}
+                        ${vencida ? `<span class="weekly-group-badge" style="background:#fef2f2;color:#b91c1c;border-color:rgba(239,68,68,0.22);"><i class="fa-solid fa-triangle-exclamation"></i> Vencido</span>` : ''}
+                        ${!vencida && porVencer ? `<span class="weekly-group-badge" style="background:#fffbeb;color:#b45309;border-color:rgba(245,158,11,0.22);"><i class="fa-solid fa-hourglass-half"></i> Por vencer</span>` : ''}
+                    </div>
+                    <div class="weekly-task-meta">
+                        <span><i class="fa-solid fa-location-dot"></i> ${getUbicSemanal(tarea)}</span>
+                        <span><i class="fa-solid fa-user-tie"></i> ${supervisor}</span>
+                        ${fechaExp ? `<span><i class="fa-regular fa-calendar"></i> ${fechaExp.toLocaleDateString('es-CL')}</span>` : `<span><i class="fa-regular fa-calendar"></i> Sin vencimiento</span>`}
+                    </div>
+                    ${tipos.length ? `<div class="weekly-task-types">${tipos.map(tipo => renderTipoSemanal(tipo, tarea.id)).join('')}</div>` : ''}
+                    <div class="weekly-task-summary">
+                        <strong>${ayudantes.length ? 'Apoyo:' : 'Estado:'}</strong>
+                        ${ayudantes.length ? ayudantes.join(', ') : 'Trabajo en espera de asignacion operativa.'}
+                    </div>
+                    <div class="weekly-task-actions">
+                        ${equipoBtn}
+                        ${otNumero ? `<span class="weekly-task-chip"><i class="fa-solid fa-clipboard-list"></i> OT registrada</span>` : `<span class="weekly-task-chip"><i class="fa-regular fa-clipboard"></i> Sin OT</span>`}
+                    </div>
+                </div>
+                <div class="weekly-task-side">
+                    ${isAdmin ? `
+                        <button class="btn btn-outline btn-icon" type="button" title="Eliminar" onclick="window.eliminarTareaExposed('${tarea.id}')" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                        <button class="btn btn-outline" type="button" onclick="asignarPersonalATarea('${tarea.id}')">
+                            <i class="fa-solid fa-user-plus"></i> Asignar
+                        </button>
+                        <button class="btn btn-primary" type="button" onclick="comenzarTrabajoProgramado('${tarea.id}')">
+                            <i class="fa-solid fa-play"></i> Iniciar hoy
+                        </button>
+                    ` : `
+                        <button class="btn btn-primary" type="button" onclick="iniciarTareaDirecto('${tarea.id}')">
+                            <i class="fa-solid fa-play"></i> Iniciar hoy
+                        </button>
+                        <button class="btn btn-success" type="button" onclick="window.completarTareaExposed('${tarea.id}','${tarea.liderId || ''}','${(tarea.ayudantesIds || []).join(',')}')">
+                            <i class="fa-solid fa-flag-checkered"></i> Finalizar
+                        </button>
+                    `}
+                </div>
+            </div>
+        </article>`;
+    }
     
     // Panel de Asignación Semanal (Solo para Admin)
     let panelAsignacionHtml = '';
@@ -3414,76 +6299,123 @@ function renderSemanalView() {
     }
 
     // Template principal
+    const gruposSemanales = tareasSemanales.reduce((acum, tarea) => {
+        const unidad = getUbicSemanal(tarea);
+        if (!acum[unidad]) acum[unidad] = [];
+        acum[unidad].push(tarea);
+        return acum;
+    }, {});
+    const unidadesOrdenadas = Object.keys(gruposSemanales).sort((a, b) => {
+        const diff = gruposSemanales[b].length - gruposSemanales[a].length;
+        return diff !== 0 ? diff : a.localeCompare(b, 'es');
+    });
+
     let html = `
-        <div class="dashboard-grid fade-in" style="${isAdmin ? '' : 'grid-template-columns: 1fr; max-width: 800px; margin: 0 auto;'}">
-            
+        <div class="dashboard-grid fade-in" style="${isAdmin ? '' : 'grid-template-columns: 1fr; max-width: 980px; margin: 0 auto;'}">
             ${panelAsignacionHtml}
 
-            <!-- COLUMNA DERECHA: Listado Semanal -->
-            <div class="dashboard-lists">
-                <div class="panel">
-                    <div class="panel-header" style="justify-content: space-between;">
-                        <h2><i class="fa-solid fa-calendar-week" style="color:var(--primary-color)"></i> Planificación Semanal (${tareasSemanales.length})</h2>
-                        <input type="text" id="input-buscar-semanal" placeholder="Buscar OT, equipo..." class="form-control" style="max-width:200px; font-size:0.8rem;">
+            <div class="dashboard-lists weekly-view">
+                <section class="panel weekly-hero">
+                    <div class="dashboard-hero-head">
+                        <div>
+                            <div class="weekly-eyebrow">Planificacion operativa</div>
+                            <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-calendar-week"></i> Semanal</h1>
+                            <p class="weekly-subtitle">${isAdmin ? 'Centraliza la carga de la semana, detecta vencimientos y mueve rapido los trabajos a asignacion diaria.' : 'Revisa la planificacion semanal disponible y prepara el trabajo de la proxima ventana operativa.'}</p>
+                        </div>
+                        <div class="dashboard-hero-badges">
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-layer-group"></i> ${tareasSemanales.length} trabajo(s)</span>
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-location-dot"></i> ${unidadesSemanales.length} unidad(es)</span>
+                            <span class="dashboard-hero-badge"><i class="fa-solid ${focoSemanal.icon}"></i> Foco ${focoSemanal.label}</span>
+                        </div>
                     </div>
-                    
-                    ${(() => {
-                        if (tareasSemanales.length === 0) return `<p style="color:var(--text-muted); text-align:center; padding: 2rem 0">No hay trabajos programados para la semana.</p>`;
-                        // Agrupar por ubicacion (campo guardado o extraído del título)
-                        const getUbic = t => t.ubicacion || (t.tipo.match(/^\[([^\]]+)\]/) || [])[1] || 'Sin unidad';
-                        const grupos = {};
-                        tareasSemanales.forEach(t => {
-                            const u = getUbic(t);
-                            if (!grupos[u]) grupos[u] = [];
-                            grupos[u].push(t);
-                        });
-                        const unidades = Object.keys(grupos).sort((a,b) => a.localeCompare(b));
-                        const cardSemanal = tarea => {
-                            const nombreLimpio = tarea.tipo.replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '');
-                            const tipos = Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0
-                                ? tarea.tiposSeleccionados
-                                : (tarea.tipo.match(/\(([^)]+)\)/) ? [tarea.tipo.match(/\(([^)]+)\)/)[1]] : []);
-                            const vencido = tarea.fechaExpiracion && new Date(tarea.fechaExpiracion) < new Date();
-                            return `<div class="list-item" style="border-left:3px solid var(--primary-color); margin-bottom:0.5rem;">
-                                <div style="font-size:0.97rem; font-weight:700; color:var(--primary-color);">
-                                    ${nombreLimpio}
-                                    ${tarea.otNumero ? `<span style="font-size:0.75rem;font-weight:600;background:#fff3e0;color:#e65100;border-radius:6px;padding:1px 7px;margin-left:4px;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}
-                                    ${vencido ? `<span class="badge" style="background:#ef4444;color:#fff;font-size:0.72rem;margin-left:4px;"><i class="fa-solid fa-triangle-exclamation"></i> VENCIDO</span>` : ''}
-                                </div>
-                                ${tipos.length ? `<div style="display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.35rem;">${tipos.map(t=>`<span onclick="window.abrirModalTipoBadge('${t.replace(/'/g,"\\'")}', '${tarea.id}')" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;border-radius:999px;font-size:0.7rem;font-weight:600;padding:1px 9px;cursor:pointer;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">${t}</span>`).join('')}</div>` : ''}
-                                <div style="margin:0.55rem 0 0.4rem;border-top:1px solid #f1f5f9;"></div>
-                                <div style="font-size:0.88rem;color:var(--text-main);display:flex;align-items:center;gap:0.4rem;">
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--primary-color)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                                    <span style="color:#64748b;font-size:0.8rem;">Supervisor</span>
-                                    <strong>${tarea.liderNombre || 'Pendiente por asignar'}</strong>
-                                </div>
-                                ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `<div style="font-size:0.82rem;color:#64748b;margin-top:0.25rem;display:flex;align-items:center;gap:0.4rem;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Apoyo: ${tarea.ayudantesNombres.join(', ')}</div>` : ''}
-                                ${tarea.fechaExpiracion ? `<div style="font-size:0.78rem;color:${vencido?'#ef4444':'#94a3b8'};margin-top:0.25rem;"><i class="fa-solid fa-calendar-xmark"></i> Vence: ${new Date(tarea.fechaExpiracion).toLocaleDateString('es-CL')}</div>` : ''}
-                                ${isAdmin ? `
-                                <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
-                                    <button class="btn btn-outline" style="border-color:var(--danger-color);color:var(--danger-color);padding:0.4rem;" onclick="window.eliminarTareaExposed('${tarea.id}')"><i class="fa-solid fa-trash"></i></button>
-                                    <button style="background:#FF6900;color:#fff;border:none;border-radius:8px;padding:0.4rem 0.8rem;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="asignarPersonalATarea('${tarea.id}')"><i class="fa-solid fa-user-plus"></i> Asignar</button>
-                                    <button class="btn btn-primary" style="flex:1;padding:0.4rem;" onclick="comenzarTrabajoProgramado('${tarea.id}')"><i class="fa-solid fa-play"></i> Iniciar Hoy</button>
-                                </div>` : `
-                                <div style="display:flex;gap:0.5rem;margin-top:0.75rem;flex-wrap:wrap;">
-                                    <button class="btn btn-primary" style="font-size:0.85rem;padding:0.4rem 1rem;" onclick="iniciarTareaDirecto('${tarea.id}')"><i class="fa-solid fa-play"></i> Iniciar Hoy</button>
-                                    <button class="btn btn-success" style="font-size:0.85rem;padding:0.4rem 1rem;" onclick="window.completarTareaExposed('${tarea.id}','${tarea.liderId||''}','${(tarea.ayudantesIds||[]).join(',')}')"><i class="fa-solid fa-flag-checkered"></i> Finalizar</button>
-                                </div>`}
-                            </div>`;
-                        };
-                        return `<div id="lista-semanal-items">
-                            ${unidades.map(u => `
-                                <div style="margin-bottom:1.2rem;">
-                                    <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.6rem;padding-bottom:0.4rem;border-bottom:2px solid var(--primary-color);">
-                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                                        <span style="font-weight:700;font-size:0.9rem;color:#1e293b;">${u}</span>
-                                        <span style="background:#FF6900;color:#fff;border-radius:999px;font-size:0.7rem;font-weight:700;padding:1px 8px;">${grupos[u].length}</span>
-                                    </div>
-                                    ${grupos[u].map(cardSemanal).join('')}
-                                </div>`).join('')}
-                        </div>`;
-                    })()}
-                </div>
+
+                    <div class="weekly-kpi-grid">
+                        <article class="weekly-kpi-card">
+                            <span class="weekly-kpi-label"><i class="fa-solid fa-list-check"></i> Carga semanal</span>
+                            <div class="weekly-kpi-value">${tareasSemanales.length}</div>
+                            <div class="weekly-kpi-meta">${otsSemanales} OT con numero asignado y ${supervisorPendiente} trabajo(s) esperando supervisor.</div>
+                        </article>
+                        <article class="weekly-kpi-card">
+                            <span class="weekly-kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Vencimientos</span>
+                            <div class="weekly-kpi-value">${tareasVencidas.length}</div>
+                            <div class="weekly-kpi-meta">${tareasPorVencer.length} por vencer en las proximas 48 horas.</div>
+                        </article>
+                        <article class="weekly-kpi-card">
+                            <span class="weekly-kpi-label"><i class="fa-solid ${focoSemanal.icon}"></i> Especialidad principal</span>
+                            <div class="weekly-kpi-value">${focoSemanal.label}</div>
+                            <div class="weekly-kpi-meta">${focoSemanal.count} trabajo(s) concentrados en esta linea de trabajo.</div>
+                        </article>
+                        <article class="weekly-kpi-card">
+                            <span class="weekly-kpi-label"><i class="fa-solid fa-map"></i> Cobertura</span>
+                            <div class="weekly-kpi-value">${unidadesSemanales.length}</div>
+                            <div class="weekly-kpi-meta">${unidadesSemanales.slice(0, 3).join(' · ') || 'Sin unidades registradas'}${unidadesSemanales.length > 3 ? '...' : ''}</div>
+                        </article>
+                    </div>
+
+                    <div class="weekly-toolbar">
+                        <div class="weekly-toolbar-note">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>${tareasVencidas.length > 0 ? `Hay ${tareasVencidas.length} trabajo(s) vencido(s) que conviene bajar primero.` : 'Sin atrasos criticos en la planificacion actual.'}</span>
+                        </div>
+                        <div style="display:flex; gap:0.65rem; align-items:center; flex-wrap:wrap;">
+                            <input type="text" id="input-buscar-semanal" placeholder="Buscar OT, equipo, unidad..." class="form-control" style="min-width:260px; max-width:320px;">
+                            ${isAdmin && tareasSemanales.length > 0 ? `
+                                <button class="btn btn-outline" style="border-color: var(--danger-color); color: var(--danger-color);" onclick="window.eliminarTodasLasTareasExposed()">
+                                    <i class="fa-solid fa-trash-can"></i> Vaciar plan
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                </section>
+
+                <section class="panel weekly-board">
+                    ${tareasSemanales.length === 0 ? `
+                        <div class="empty-state">
+                            <div>
+                                <strong>Sin trabajos programados</strong>
+                                <p>La planificacion semanal aparecera aqui apenas cargues o programes nuevas actividades.</p>
+                            </div>
+                        </div>
+                    ` : `
+                        <div id="lista-semanal-items" class="weekly-board">
+                            ${unidadesOrdenadas.map(unidad => {
+                                const itemsUnidad = gruposSemanales[unidad].slice().sort((a, b) => {
+                                    const aFecha = getFechaExpSemanal(a);
+                                    const bFecha = getFechaExpSemanal(b);
+                                    const aVencida = aFecha && aFecha < hoySemanal;
+                                    const bVencida = bFecha && bFecha < hoySemanal;
+                                    if (aVencida && !bVencida) return -1;
+                                    if (!aVencida && bVencida) return 1;
+                                    if (aFecha && bFecha) return aFecha - bFecha;
+                                    if (aFecha && !bFecha) return -1;
+                                    if (!aFecha && bFecha) return 1;
+                                    return getNombreSemanal(a).localeCompare(getNombreSemanal(b), 'es');
+                                });
+                                const vencidasUnidad = itemsUnidad.filter(item => {
+                                    const fecha = getFechaExpSemanal(item);
+                                    return fecha && fecha < hoySemanal;
+                                }).length;
+                                return `
+                                    <section class="weekly-group" data-weekly-group>
+                                        <div class="weekly-group-head">
+                                            <div class="weekly-group-title">
+                                                <i class="fa-solid fa-location-dot" style="color:var(--primary-color);"></i>
+                                                <h3>${unidad}</h3>
+                                            </div>
+                                            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                                                <span class="weekly-group-badge"><i class="fa-solid fa-layer-group"></i> ${itemsUnidad.length} trabajo(s)</span>
+                                                ${vencidasUnidad > 0 ? `<span class="weekly-group-badge" style="background:#fef2f2;color:#b91c1c;border-color:rgba(239,68,68,0.22);"><i class="fa-solid fa-triangle-exclamation"></i> ${vencidasUnidad} vencido(s)</span>` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="weekly-group-grid">
+                                            ${itemsUnidad.map(renderCardSemanal).join('')}
+                                        </div>
+                                    </section>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </section>
             </div>
         </div>
     `;
@@ -3631,10 +6563,18 @@ function renderSemanalView() {
     const searchInput = document.getElementById('input-buscar-semanal');
     if(searchInput) {
         searchInput.addEventListener('input', (e) => {
-            const val = e.target.value.toLowerCase();
-            const items = document.querySelectorAll('#lista-semanal-items .list-item');
-            items.forEach(it => {
-                it.style.display = it.textContent.toLowerCase().includes(val) ? 'block' : 'none';
+            const val = normalizarSemanal(e.target.value);
+            const groups = document.querySelectorAll('[data-weekly-group]');
+            groups.forEach(group => {
+                const items = group.querySelectorAll('[data-weekly-card]');
+                let visibles = 0;
+                items.forEach(it => {
+                    const texto = it.dataset.weeklySearch || normalizarSemanal(it.textContent);
+                    const show = !val || texto.includes(val);
+                    it.style.display = show ? '' : 'none';
+                    if (show) visibles += 1;
+                });
+                group.style.display = visibles > 0 ? '' : 'none';
             });
         });
     }
@@ -3950,6 +6890,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
 // Eventos de Navegación
 const navConfig = {
+    'nav-control': 'control',
     'nav-dashboard': 'dashboard',
     'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
@@ -3972,6 +6913,9 @@ function renderizarVistaActual() {
 
     // Renderizar según estado
     switch (vistaActual) {
+        case 'control':
+            renderControlView();
+            break;
         case 'checkin':
             renderCheckInView();
             break;
@@ -4480,6 +7424,506 @@ function renderListasFicha(mediciones) {
 }
 
 // ── Modal informativo de tipo de trabajo ────────────────────────────────────
+function renderFichaTecnicaModal() {
+    injectPlanifyEnhancementStyles();
+    const existingModal = document.getElementById('modal-ficha-tecnica');
+    if (existingModal) {
+        const esModalNuevo = existingModal.querySelector('#ficha-equipo-breadcrumb') &&
+            existingModal.querySelector('#ficha-equipo-overview') &&
+            existingModal.querySelector('.planify-ficha-panel');
+        if (esModalNuevo) return;
+        existingModal.remove();
+    }
+    const html = `
+        <div id="modal-ficha-tecnica" class="login-overlay planify-ficha-overlay" style="display:none; align-items:flex-start;">
+            <div class="login-panel planify-ficha-panel">
+                <div class="planify-ficha-header">
+                    <div id="ficha-equipo-breadcrumb" class="planify-ficha-breadcrumb"></div>
+                    <div class="planify-ficha-title-row">
+                        <div class="planify-ficha-title-wrap">
+                            <h2 id="ficha-equipo-nombre" class="planify-ficha-title"></h2>
+                            <div class="planify-ficha-meta">
+                                <span><i class="fa-solid fa-location-dot"></i> <span id="ficha-equipo-ubicacion"></span></span>
+                                <span><i class="fa-solid fa-barcode"></i> KKS: <span id="ficha-equipo-kks"></span></span>
+                                <span id="ficha-equipo-criticidad" class="badge"></span>
+                                <span id="ficha-equipo-source" class="planify-ficha-source" style="display:none;"></span>
+                            </div>
+                            <div id="ficha-equipo-extra" class="planify-ficha-meta" style="margin-top:.45rem;"></div>
+                        </div>
+                        <div class="planify-ficha-actions">
+                            <div id="ficha-equipo-actions" class="planify-ficha-inline-actions"></div>
+                            <button id="btn-cerrar-ficha" class="btn btn-outline planify-ficha-action-btn"><i class="fa-solid fa-xmark"></i> Cerrar</button>
+                        </div>
+                    </div>
+                    <div id="ficha-equipo-overview" class="planify-ficha-overview"></div>
+                </div>
+                <div class="planify-ficha-tabs">
+                    <button class="tab-btn planify-ficha-tab-btn active" data-target="tab-vibraciones">Vibraciones</button>
+                    <button class="tab-btn planify-ficha-tab-btn" data-target="tab-termografia">Termografía</button>
+                    <button class="tab-btn planify-ficha-tab-btn" data-target="tab-lubricacion">Lubricación / Aceite</button>
+                    <button class="tab-btn planify-ficha-tab-btn" data-target="tab-actividad">Actividad</button>
+                </div>
+                <div class="planify-ficha-body">
+                    <div id="tab-vibraciones" class="tab-pane">
+                        <div class="planify-ficha-grid">
+                            <div class="planify-ficha-stack">
+                                <div id="ficha-resumen-vibracion" class="planify-ficha-subgrid"></div>
+                                <div class="planify-ficha-card">
+                                    <div class="planify-ficha-card-head">
+                                        <div>
+                                            <h3>Tendencia de vibración global</h3>
+                                            <span id="ficha-vib-subtitulo">Comparación histórica del activo seleccionado.</span>
+                                        </div>
+                                    </div>
+                                    <div class="planify-ficha-chart"><canvas id="chart-vibraciones"></canvas></div>
+                                </div>
+                            </div>
+                            <aside class="planify-ficha-card">
+                                <div class="planify-ficha-card-head">
+                                    <div>
+                                        <h3>Últimas mediciones</h3>
+                                        <span>Lecturas recientes y condición del activo.</span>
+                                    </div>
+                                </div>
+                                <div id="lista-mediciones-vibracion" class="planify-ficha-reading-list"></div>
+                            </aside>
+                        </div>
+                    </div>
+                    <div id="tab-termografia" class="tab-pane" style="display:none;">
+                        <div class="planify-ficha-grid">
+                            <div class="planify-ficha-stack">
+                                <div id="ficha-resumen-termografia" class="planify-ficha-subgrid"></div>
+                                <div class="planify-ficha-card">
+                                    <div class="planify-ficha-card-head">
+                                        <div>
+                                            <h3>Tendencia térmica</h3>
+                                            <span id="ficha-termo-subtitulo">Puntos calientes y evolución del activo.</span>
+                                        </div>
+                                    </div>
+                                    <div class="planify-ficha-chart"><canvas id="chart-termografia"></canvas></div>
+                                </div>
+                            </div>
+                            <aside class="planify-ficha-card">
+                                <div class="planify-ficha-card-head">
+                                    <div>
+                                        <h3>Inspecciones térmicas</h3>
+                                        <span>Últimos hallazgos y técnico responsable.</span>
+                                    </div>
+                                </div>
+                                <div id="lista-mediciones-termografia" class="planify-ficha-reading-list"></div>
+                            </aside>
+                        </div>
+                    </div>
+                    <div id="tab-lubricacion" class="tab-pane" style="display:none;">
+                        <div class="planify-ficha-card">
+                            <div class="planify-ficha-card-head">
+                                <div>
+                                    <h3>Registro de lubricación y aceite</h3>
+                                    <span>Cambios, observaciones y registros asociados al activo.</span>
+                                </div>
+                            </div>
+                            <div id="lista-mediciones-lubricacion" class="planify-ficha-reading-list"></div>
+                        </div>
+                    </div>
+                    <div id="tab-actividad" class="tab-pane" style="display:none;">
+                        <div class="planify-ficha-activity">
+                            <section class="planify-ficha-card">
+                                <div class="planify-ficha-card-head">
+                                    <div>
+                                        <h3>Trabajos recientes</h3>
+                                        <span>Últimos cierres e intervenciones asociadas a este activo.</span>
+                                    </div>
+                                </div>
+                                <div id="ficha-actividad-trabajos" class="planify-ficha-activity-list"></div>
+                            </section>
+                            <section class="planify-ficha-card">
+                                <div class="planify-ficha-card-head">
+                                    <div>
+                                        <h3>Componentes relacionados</h3>
+                                        <span>Comparación rápida dentro del mismo activo y unidad.</span>
+                                    </div>
+                                </div>
+                                <div id="ficha-componentes-relacionados" class="planify-ficha-related-list"></div>
+                            </section>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function getTareasRelacionadasFicha(equipo, siblingIds) {
+    const ids = new Set([...siblingIds].map(String));
+    return (estado.historialTareas || [])
+        .filter(task => {
+            if (task.equipo_id && ids.has(String(task.equipo_id))) return true;
+            const tipo = String(task.tipo || '').toLowerCase();
+            return tipo.includes(String(equipo.activo || '').toLowerCase()) &&
+                (tipo.includes(`[${String(equipo.ubicacion || '').toLowerCase()}]`) || (task.ubicacion && task.ubicacion === equipo.ubicacion));
+        })
+        .sort((a, b) => new Date(b.created_at || b.fecha_termino || b.fecha_inicio || 0) - new Date(a.created_at || a.fecha_termino || a.fecha_inicio || 0))
+        .slice(0, 8);
+}
+
+function renderFichaLoadingState(equipo) {
+    if (!document.getElementById('ficha-equipo-breadcrumb') || !document.getElementById('ficha-equipo-overview')) {
+        document.getElementById('modal-ficha-tecnica')?.remove();
+        renderFichaTecnicaModal();
+    }
+    if (!document.getElementById('ficha-equipo-breadcrumb') || !document.getElementById('ficha-equipo-overview')) return;
+    document.getElementById('ficha-equipo-nombre').textContent = `${equipo.activo}${equipo.componente ? ' · ' + equipo.componente : ''}`;
+    document.getElementById('ficha-equipo-ubicacion').textContent = equipo.ubicacion || 'Sin ubicación';
+    document.getElementById('ficha-equipo-kks').textContent = equipo.kks || 'N/A';
+    document.getElementById('ficha-equipo-breadcrumb').innerHTML = `<span>Control</span><i class="fa-solid fa-angle-right"></i><span>${equipo.ubicacion || 'Sin unidad'}</span><i class="fa-solid fa-angle-right"></i><strong>${equipo.activo}</strong>`;
+    document.getElementById('ficha-equipo-overview').innerHTML = `<div class="planify-ficha-empty planify-ficha-loading" style="grid-column:1 / -1;"><div><div style="font-weight:800;color:#0f172a;margin-bottom:.35rem;">Cargando condición del activo...</div><div style="font-size:.85rem;line-height:1.5;">Recopilando mediciones, historial y componentes relacionados.</div></div></div>`;
+    document.getElementById('ficha-resumen-vibracion').innerHTML = emptyFichaState('Preparando tendencia', 'Se están consolidando las mediciones de vibración.');
+    document.getElementById('ficha-resumen-termografia').innerHTML = emptyFichaState('Preparando tendencia', 'Se están consolidando las mediciones térmicas.');
+    document.getElementById('lista-mediciones-vibracion').innerHTML = emptyFichaState('Cargando vibraciones', 'En unos segundos verás las últimas lecturas.');
+    document.getElementById('lista-mediciones-termografia').innerHTML = emptyFichaState('Cargando termografía', 'En unos segundos verás las últimas inspecciones.');
+    document.getElementById('lista-mediciones-lubricacion').innerHTML = emptyFichaState('Cargando actividad de lubricación', 'Buscando cambios de aceite y registros asociados.');
+    document.getElementById('ficha-actividad-trabajos').innerHTML = emptyFichaState('Cargando historial', 'Revisando los últimos cierres relacionados con este activo.');
+    document.getElementById('ficha-componentes-relacionados').innerHTML = emptyFichaState('Cargando componentes', 'Buscando componentes del mismo activo dentro de la unidad.');
+}
+
+function renderLecturaFicha(item, tipo) {
+    const status = getEstadoCondicionFicha(tipo, item.valor);
+    const isVib = tipo === 'vibracion';
+    return `
+        <article id="med-${item.id}" class="planify-ficha-reading ${status.tone}">
+            <div class="planify-ficha-reading-top">
+                <div>
+                    <div class="planify-ficha-reading-title">${item.punto_medicion || item.componente || 'Punto general'}</div>
+                    <div class="planify-ficha-reading-meta">
+                        <span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span>
+                        <span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin técnico'}</span>
+                    </div>
+                </div>
+                <div class="planify-ficha-reading-value ${isVib ? 'is-vib' : 'is-temp'}">${numeroFicha(item.valor, isVib ? 2 : 1)} ${item.unidad || (isVib ? 'mm/s' : '°C')}</div>
+            </div>
+            <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;">
+                <div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.45rem;">
+                    <span class="planify-status-badge ${status.className}"><i class="fa-solid fa-circle"></i> ${status.label}</span>
+                    <button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medición" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button>
+                </div>
+            </div>
+        </article>
+    `;
+}
+
+function renderActividadFicha(task, equipo) {
+    const fecha = task.created_at || task.fecha_termino || task.fecha_inicio;
+    return `
+        <article class="planify-ficha-task">
+            <div class="planify-ficha-task-top">
+                <div>
+                    <div class="planify-ficha-task-title">${String(task.tipo || 'Trabajo registrado').replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '')}</div>
+                    <div class="planify-ficha-task-meta">
+                        <span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(fecha)}</span>
+                        <span><i class="fa-solid fa-user-tie"></i> ${task.lider_nombre || 'Sin líder'}</span>
+                    </div>
+                </div>
+                ${task.ot_numero ? `<span class="planify-ficha-chip"><i class="fa-solid fa-hashtag"></i> ${task.ot_numero}</span>` : ''}
+            </div>
+            <div class="planify-ficha-reading-note">${task.acciones_realizadas || task.observaciones || 'Sin detalle operativo.'}</div>
+            <div class="planify-ficha-task-meta">
+                <span><i class="fa-regular fa-bell"></i> ${task.numero_aviso || 'Sin aviso'}</span>
+                <span><i class="fa-solid fa-business-time"></i> ${task.hh_trabajo || '0'} HH</span>
+                <button class="planify-ficha-link" onclick="window.irAHistorialDeEquipo('${equipo.id}')">Ver en historial</button>
+            </div>
+        </article>
+    `;
+}
+
+function renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds) {
+    const ids = new Set([...siblingIds].map(String));
+    const mismas = medicionesGrupo.filter(m => ids.has(String(m.equipo_id)) && String(m.equipo_id) === String(item.id));
+    const vib = mismas.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0] || null;
+    const termo = mismas.filter(m => m.tipo === 'termografia').sort((a, b) => new Date(b.fecha) - new Date(a.fecha))[0] || null;
+    const estados = [vib ? getEstadoCondicionFicha('vibracion', vib.valor) : null, termo ? getEstadoCondicionFicha('termografia', termo.valor) : null].filter(Boolean);
+    const estado = estados.length ? consolidarEstadoFicha(estados) : { label: 'Sin datos', className: 'is-normal', tone: '' };
+    return `
+        <article class="planify-ficha-related">
+            <div class="planify-ficha-related-main">
+                <button class="planify-ficha-link" onclick="window.abrirFichaTecnica('${item.id}')">${item.componente || item.activo}</button>
+                <span>${item.kks || 'Sin KKS'} · ${vib ? `Vib ${numeroFicha(vib.valor, 2)} mm/s` : 'Sin vib'} · ${termo ? `Temp ${numeroFicha(termo.valor, 1)} °C` : 'Sin termo'}</span>
+            </div>
+            <span class="planify-status-badge ${estado.className}"><i class="fa-solid fa-circle"></i> ${estado.label}</span>
+        </article>
+    `;
+}
+
+function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
+    const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const termos = medicionesEquipo.filter(m => m.tipo === 'termografia').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const lubs = medicionesEquipo.filter(m => m.tipo === 'lubricacion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const siblingEquipos = estado.equipos.filter(item => item.activo === equipo.activo && item.ubicacion === equipo.ubicacion);
+    const siblingIds = new Set(siblingEquipos.map(item => String(item.id)));
+    const vibSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'vibracion');
+    const termoSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'termografia');
+    const overallStatus = consolidarEstadoFicha([vibSummary.count ? vibSummary.status : null, termoSummary.count ? termoSummary.status : null].filter(Boolean));
+    const ultimaActividad = tareasRelacionadas[0] || null;
+    const pulsoActivo = getPulsoActivoFicha(equipo, { vibracion: vibSummary, termografia: termoSummary }, tareasRelacionadas);
+    const brechaVib = getBrechaUmbralFicha('vibracion', vibSummary);
+    const brechaTermo = getBrechaUmbralFicha('termografia', termoSummary);
+    const comparativaVib = getComparativaGrupoFicha(equipo, siblingEquipos, medicionesGrupo, 'vibracion');
+    const comparativaTermo = getComparativaGrupoFicha(equipo, siblingEquipos, medicionesGrupo, 'termografia');
+    const comparativaTone = priorizarToneFicha(comparativaVib.tone, comparativaTermo.tone);
+    const comparativaValue = comparativaVib.value !== 'Sin dato'
+        ? `Vib ${comparativaVib.value}`
+        : (comparativaTermo.value !== 'Sin dato' ? `Temp ${comparativaTermo.value}` : numeroFicha(siblingEquipos.length));
+    const comparativaMeta = [
+        comparativaVib.value !== 'Sin dato' ? `Vibracion: ${comparativaVib.meta}` : '',
+        comparativaTermo.value !== 'Sin dato' ? `Termografia: ${comparativaTermo.meta}` : ''
+    ].filter(Boolean).join(' / ') || (siblingEquipos.length > 1
+        ? 'Hay componentes hermanos, pero aun no existe una base comparable.'
+        : 'Activo sin componentes comparables en esta unidad.');
+    const totalLecturas = vibSummary.count + termoSummary.count + lubs.length;
+    const critStyles = {
+        A: { text: 'Criticidad A', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' },
+        B: { text: 'Criticidad B', bg: '#fff7ed', color: '#b45309', border: '#fdba74' },
+        C: { text: 'Criticidad C', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' }
+    };
+    const crit = critStyles[equipo.criticidad] || { text: equipo.criticidad || 'Sin criticidad', bg: '#f8fafc', color: '#475569', border: '#cbd5e1' };
+    const badgeCrit = document.getElementById('ficha-equipo-criticidad');
+    badgeCrit.className = 'badge';
+    badgeCrit.textContent = crit.text;
+    badgeCrit.style.background = crit.bg;
+    badgeCrit.style.color = crit.color;
+    badgeCrit.style.border = `1px solid ${crit.border}`;
+    document.getElementById('ficha-equipo-nombre').textContent = `${equipo.activo}${equipo.componente ? ' · ' + equipo.componente : ''}`;
+    document.getElementById('ficha-equipo-ubicacion').textContent = equipo.ubicacion || 'Sin ubicación';
+    document.getElementById('ficha-equipo-kks').textContent = equipo.kks || 'N/A';
+    document.getElementById('ficha-equipo-breadcrumb').innerHTML = `<span>Control</span><i class="fa-solid fa-angle-right"></i><span>${equipo.ubicacion || 'Sin unidad'}</span><i class="fa-solid fa-angle-right"></i><strong>${equipo.activo}</strong>${equipo.componente ? `<i class="fa-solid fa-angle-right"></i><span>${equipo.componente}</span>` : ''}`;
+    document.getElementById('ficha-equipo-extra').innerHTML = [
+        equipo.denominacion_ut ? `<span><i class="fa-solid fa-tag"></i> ${equipo.denominacion_ut}</span>` : '',
+        equipo.frecuencia_nueva ? `<span><i class="fa-solid fa-clock-rotate-left"></i> Frecuencia: ${equipo.frecuencia_nueva} días</span>` : '',
+        equipo.ruta ? `<span><i class="fa-solid fa-route"></i> ${equipo.ruta}</span>` : '',
+        equipo.ubicacion_tecnica ? `<span><i class="fa-solid fa-diagram-project"></i> ${equipo.ubicacion_tecnica}</span>` : ''
+    ].filter(Boolean).join('');
+    const sourceEl = document.getElementById('ficha-equipo-source');
+    const sourceMap = {
+        online: '<i class="fa-solid fa-cloud-arrow-down"></i> Datos online',
+        estado: '<i class="fa-solid fa-bolt"></i> Cache de sesión',
+        local: '<i class="fa-solid fa-hard-drive"></i> Cache local',
+        none: '<i class="fa-solid fa-circle-info"></i> Sin mediciones'
+    };
+    sourceEl.innerHTML = sourceMap[fuenteMediciones] || sourceMap.none;
+    sourceEl.style.display = 'inline-flex';
+    document.getElementById('ficha-equipo-actions').innerHTML = `
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.irAHistorialDeEquipo('${equipo.id}')"><i class="fa-solid fa-clock-rotate-left"></i> Historial</button>
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.irAControlConBusqueda('${equipo.id}')"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.abrirVistaUnidad('${String(equipo.ubicacion || '').replace(/'/g, "\\'")}')"><i class="fa-solid fa-location-dot"></i> Unidad</button>
+    `;
+    document.getElementById('ficha-equipo-overview').innerHTML = [
+        crearTarjetaResumenFicha({ label: 'Estado actual', value: overallStatus.label, meta: vibSummary.count || termoSummary.count ? `Vibración ${vibSummary.count ? vibSummary.status.label : 'sin dato'} · Termografía ${termoSummary.count ? termoSummary.status.label : 'sin dato'}` : 'Aun no existen mediciones registradas para este activo.', icon: 'fa-shield-heart', tone: overallStatus.tone }),
+        crearTarjetaResumenFicha({ label: 'Ultima vibración', value: vibSummary.latest ? `${numeroFicha(vibSummary.latest.valor, 2)} ${vibSummary.latest.unidad || 'mm/s'}` : 'Sin dato', meta: vibSummary.latest ? `${formatearFechaFicha(vibSummary.latest.fecha)} · ${vibSummary.latest.punto_medicion || 'General'}` : 'Sin lecturas de vibración.', icon: 'fa-wave-square', tone: vibSummary.count ? vibSummary.status.tone : '' }),
+        crearTarjetaResumenFicha({ label: 'Ultima termografía', value: termoSummary.latest ? `${numeroFicha(termoSummary.latest.valor, 1)} ${termoSummary.latest.unidad || '°C'}` : 'Sin dato', meta: termoSummary.latest ? `${formatearFechaFicha(termoSummary.latest.fecha)} · ${termoSummary.latest.punto_medicion || 'General'}` : 'Sin lecturas térmicas.', icon: 'fa-temperature-three-quarters', tone: termoSummary.count ? termoSummary.status.tone : '' }),
+        crearTarjetaResumenFicha({ label: 'Intervenciones', value: numeroFicha(tareasRelacionadas.length), meta: ultimaActividad ? `Ultimo cierre: ${formatearFechaFicha(ultimaActividad.created_at || ultimaActividad.fecha_termino || ultimaActividad.fecha_inicio)}` : 'Sin cierres registrados en historial.', icon: 'fa-screwdriver-wrench' }),
+        crearTarjetaResumenFicha({ label: 'Componentes', value: numeroFicha(siblingEquipos.length), meta: siblingEquipos.length > 1 ? 'Hay otros componentes del mismo activo en la unidad.' : 'Activo sin componentes adicionales visibles en la unidad.', icon: 'fa-gears' })
+    ].join('');
+    document.getElementById('ficha-resumen-vibracion').innerHTML = vibSummary.count ? [crearTarjetaMiniFicha({ label: 'Tendencia', value: vibSummary.trend.label, meta: vibSummary.trend.meta }), crearTarjetaMiniFicha({ label: 'Promedio', value: `${numeroFicha(vibSummary.avg, 2)} mm/s`, meta: `${numeroFicha(vibSummary.count)} lectura(s) en el rango` }), crearTarjetaMiniFicha({ label: 'Maximo', value: `${numeroFicha(vibSummary.max, 2)} mm/s`, meta: `Estado actual: ${vibSummary.status.label}` })].join('') : emptyFichaState('Sin vibraciones registradas', 'Cuando se agreguen lecturas de vibración aparecerán aqui con tendencia, promedio y maximo.');
+    document.getElementById('ficha-resumen-termografia').innerHTML = termoSummary.count ? [crearTarjetaMiniFicha({ label: 'Tendencia', value: termoSummary.trend.label, meta: termoSummary.trend.meta }), crearTarjetaMiniFicha({ label: 'Promedio', value: `${numeroFicha(termoSummary.avg, 1)} °C`, meta: `${numeroFicha(termoSummary.count)} lectura(s) en el rango` }), crearTarjetaMiniFicha({ label: 'Maximo', value: `${numeroFicha(termoSummary.max, 1)} °C`, meta: `Estado actual: ${termoSummary.status.label}` })].join('') : emptyFichaState('Sin termografía registrada', 'Cuando se agreguen lecturas térmicas aparecerán aqui con tendencia, promedio y maximo.');
+    document.getElementById('lista-mediciones-vibracion').innerHTML = vibs.length ? vibs.slice(0, 6).map(item => renderLecturaFicha(item, 'vibracion')).join('') : emptyFichaState('Sin vibraciones recientes', 'No hay lecturas de vibración para este equipo en el rango disponible.');
+    document.getElementById('lista-mediciones-termografia').innerHTML = termos.length ? termos.slice(0, 6).map(item => renderLecturaFicha(item, 'termografia')).join('') : emptyFichaState('Sin inspecciones térmicas', 'Aun no se registran inspecciones térmicas para este equipo.');
+    document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricación'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin técnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medición" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestaña mostrará registros de lubricación cuando existan.');
+    document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
+    document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
+    document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas para ${equipo.componente || equipo.activo}.` : 'No hay tendencia suficiente para este componente.';
+    document.getElementById('ficha-termo-subtitulo').textContent = termoSummary.count ? `${numeroFicha(termoSummary.count)} inspección(es) térmicas registradas para ${equipo.componente || equipo.activo}.` : 'No hay tendencia térmica disponible para este componente.';
+}
+
+function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
+    const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const termos = medicionesEquipo.filter(m => m.tipo === 'termografia').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const lubs = medicionesEquipo.filter(m => m.tipo === 'lubricacion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    const siblingEquipos = estado.equipos.filter(item => item.activo === equipo.activo && item.ubicacion === equipo.ubicacion);
+    const siblingIds = new Set(siblingEquipos.map(item => String(item.id)));
+    const vibSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'vibracion');
+    const termoSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'termografia');
+    const overallStatus = consolidarEstadoFicha([vibSummary.count ? vibSummary.status : null, termoSummary.count ? termoSummary.status : null].filter(Boolean));
+    const ultimaActividad = tareasRelacionadas[0] || null;
+    const pulsoActivo = getPulsoActivoFicha(equipo, { vibracion: vibSummary, termografia: termoSummary }, tareasRelacionadas);
+    const brechaVib = getBrechaUmbralFicha('vibracion', vibSummary);
+    const brechaTermo = getBrechaUmbralFicha('termografia', termoSummary);
+    const comparativaVib = getComparativaGrupoFicha(equipo, siblingEquipos, medicionesGrupo, 'vibracion');
+    const comparativaTermo = getComparativaGrupoFicha(equipo, siblingEquipos, medicionesGrupo, 'termografia');
+    const comparativaTone = priorizarToneFicha(comparativaVib.tone, comparativaTermo.tone);
+    const comparativaValue = comparativaVib.value !== 'Sin dato'
+        ? `Vib ${comparativaVib.value}`
+        : (comparativaTermo.value !== 'Sin dato' ? `Temp ${comparativaTermo.value}` : numeroFicha(siblingEquipos.length));
+    const comparativaMeta = [
+        comparativaVib.value !== 'Sin dato' ? `Vibracion: ${comparativaVib.meta}` : '',
+        comparativaTermo.value !== 'Sin dato' ? `Termografia: ${comparativaTermo.meta}` : ''
+    ].filter(Boolean).join(' / ') || (siblingEquipos.length > 1
+        ? 'Hay componentes hermanos, pero aun no existe una base comparable.'
+        : 'Activo sin componentes comparables en esta unidad.');
+    const totalLecturas = vibSummary.count + termoSummary.count + lubs.length;
+
+    const critStyles = {
+        A: { text: 'Criticidad A', bg: '#fef2f2', color: '#b91c1c', border: '#fecaca' },
+        B: { text: 'Criticidad B', bg: '#fff7ed', color: '#b45309', border: '#fdba74' },
+        C: { text: 'Criticidad C', bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' }
+    };
+    const crit = critStyles[equipo.criticidad] || { text: equipo.criticidad || 'Sin criticidad', bg: '#f8fafc', color: '#475569', border: '#cbd5e1' };
+    const badgeCrit = document.getElementById('ficha-equipo-criticidad');
+    badgeCrit.className = 'badge';
+    badgeCrit.textContent = crit.text;
+    badgeCrit.style.background = crit.bg;
+    badgeCrit.style.color = crit.color;
+    badgeCrit.style.border = `1px solid ${crit.border}`;
+    document.getElementById('ficha-equipo-nombre').textContent = `${equipo.activo}${equipo.componente ? ' - ' + equipo.componente : ''}`;
+    document.getElementById('ficha-equipo-ubicacion').textContent = equipo.ubicacion || 'Sin ubicacion';
+    document.getElementById('ficha-equipo-kks').textContent = equipo.kks || 'N/A';
+    document.getElementById('ficha-equipo-breadcrumb').innerHTML = `<span>Control</span><i class="fa-solid fa-angle-right"></i><span>${equipo.ubicacion || 'Sin unidad'}</span><i class="fa-solid fa-angle-right"></i><strong>${equipo.activo}</strong>${equipo.componente ? `<i class="fa-solid fa-angle-right"></i><span>${equipo.componente}</span>` : ''}`;
+    document.getElementById('ficha-equipo-extra').innerHTML = [
+        equipo.denominacion_ut ? `<span><i class="fa-solid fa-tag"></i> ${equipo.denominacion_ut}</span>` : '',
+        equipo.frecuencia_nueva ? `<span><i class="fa-solid fa-clock-rotate-left"></i> Frecuencia: ${equipo.frecuencia_nueva} dias</span>` : '',
+        equipo.ruta ? `<span><i class="fa-solid fa-route"></i> ${equipo.ruta}</span>` : '',
+        equipo.ubicacion_tecnica ? `<span><i class="fa-solid fa-diagram-project"></i> ${equipo.ubicacion_tecnica}</span>` : ''
+    ].filter(Boolean).join('');
+
+    const sourceEl = document.getElementById('ficha-equipo-source');
+    const sourceMap = {
+        online: '<i class="fa-solid fa-cloud-arrow-down"></i> Datos online',
+        estado: '<i class="fa-solid fa-bolt"></i> Cache de sesion',
+        local: '<i class="fa-solid fa-hard-drive"></i> Cache local',
+        none: '<i class="fa-solid fa-circle-info"></i> Sin mediciones'
+    };
+    sourceEl.innerHTML = sourceMap[fuenteMediciones] || sourceMap.none;
+    sourceEl.style.display = 'inline-flex';
+
+    document.getElementById('ficha-equipo-actions').innerHTML = `
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.irAHistorialDeEquipo('${equipo.id}')"><i class="fa-solid fa-clock-rotate-left"></i> Historial</button>
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.irAControlConBusqueda('${equipo.id}')"><i class="fa-solid fa-magnifying-glass"></i> Buscar</button>
+        <button class="btn btn-outline planify-ficha-action-btn" onclick="window.abrirVistaUnidad('${String(equipo.ubicacion || '').replace(/'/g, "\\'")}')"><i class="fa-solid fa-location-dot"></i> Unidad</button>
+    `;
+
+    document.getElementById('ficha-equipo-overview').innerHTML = [
+        crearTarjetaResumenFicha({ label: 'Estado actual', value: overallStatus.label, meta: vibSummary.count || termoSummary.count ? `Vibracion ${vibSummary.count ? vibSummary.status.label : 'sin dato'} / Termografia ${termoSummary.count ? termoSummary.status.label : 'sin dato'}` : 'Aun no existen mediciones registradas para este activo.', icon: 'fa-shield-heart', tone: overallStatus.tone }),
+        crearTarjetaResumenFicha({ label: 'Pulso del activo', value: pulsoActivo.value, meta: pulsoActivo.meta, icon: 'fa-heart-pulse', tone: pulsoActivo.tone }),
+        crearTarjetaResumenFicha({ label: 'Ultima vibracion', value: vibSummary.latest ? `${numeroFicha(vibSummary.latest.valor, 2)} ${vibSummary.latest.unidad || 'mm/s'}` : 'Sin dato', meta: vibSummary.latest ? `${formatearFechaFicha(vibSummary.latest.fecha)} / ${vibSummary.latest.punto_medicion || 'General'} / ${vibSummary.status.label}` : 'Sin lecturas de vibracion.', icon: 'fa-wave-square', tone: vibSummary.count ? vibSummary.status.tone : '' }),
+        crearTarjetaResumenFicha({ label: 'Ultima termografia', value: termoSummary.latest ? `${numeroFicha(termoSummary.latest.valor, 1)} ${termoSummary.latest.unidad || 'C'}` : 'Sin dato', meta: termoSummary.latest ? `${formatearFechaFicha(termoSummary.latest.fecha)} / ${termoSummary.latest.punto_medicion || 'General'} / ${termoSummary.status.label}` : 'Sin lecturas termicas.', icon: 'fa-temperature-three-quarters', tone: termoSummary.count ? termoSummary.status.tone : '' }),
+        crearTarjetaResumenFicha({ label: 'Intervenciones', value: numeroFicha(tareasRelacionadas.length), meta: ultimaActividad ? `Ultimo cierre: ${formatearFechaFicha(ultimaActividad.created_at || ultimaActividad.fecha_termino || ultimaActividad.fecha_inicio)} / ${numeroFicha(totalLecturas)} lectura(s) asociadas` : `${numeroFicha(totalLecturas)} lectura(s) en el historial del activo.`, icon: 'fa-screwdriver-wrench' }),
+        crearTarjetaResumenFicha({ label: 'Comparativa del activo', value: comparativaValue, meta: comparativaMeta, icon: 'fa-code-compare', tone: comparativaTone })
+    ].join('');
+
+    document.getElementById('ficha-resumen-vibracion').innerHTML = vibSummary.count ? [
+        crearTarjetaMiniFicha({ label: 'Tendencia', value: vibSummary.trend.label, meta: vibSummary.trend.meta, tone: vibSummary.trend.className }),
+        crearTarjetaMiniFicha({ label: 'Promedio', value: `${numeroFicha(vibSummary.avg, 2)} mm/s`, meta: `${numeroFicha(vibSummary.count)} lectura(s) en el rango`, tone: vibSummary.status.tone }),
+        crearTarjetaMiniFicha({ label: 'Maximo', value: `${numeroFicha(vibSummary.max, 2)} mm/s`, meta: `Estado actual: ${vibSummary.status.label}`, tone: getEstadoCondicionFicha('vibracion', vibSummary.max).tone }),
+        crearTarjetaMiniFicha({ label: 'Brecha al umbral', value: brechaVib.value, meta: brechaVib.meta, tone: brechaVib.tone })
+    ].join('') : emptyFichaState('Sin vibraciones registradas', 'Cuando se agreguen lecturas de vibracion apareceran aqui con tendencia, promedio, maximo y brecha al umbral.');
+
+    document.getElementById('ficha-resumen-termografia').innerHTML = termoSummary.count ? [
+        crearTarjetaMiniFicha({ label: 'Tendencia', value: termoSummary.trend.label, meta: termoSummary.trend.meta, tone: termoSummary.trend.className }),
+        crearTarjetaMiniFicha({ label: 'Promedio', value: `${numeroFicha(termoSummary.avg, 1)} C`, meta: `${numeroFicha(termoSummary.count)} lectura(s) en el rango`, tone: termoSummary.status.tone }),
+        crearTarjetaMiniFicha({ label: 'Maximo', value: `${numeroFicha(termoSummary.max, 1)} C`, meta: `Estado actual: ${termoSummary.status.label}`, tone: getEstadoCondicionFicha('termografia', termoSummary.max).tone }),
+        crearTarjetaMiniFicha({ label: 'Brecha al umbral', value: brechaTermo.value, meta: brechaTermo.meta, tone: brechaTermo.tone })
+    ].join('') : emptyFichaState('Sin termografia registrada', 'Cuando se agreguen lecturas termicas apareceran aqui con tendencia, promedio, maximo y brecha al umbral.');
+
+    document.getElementById('lista-mediciones-vibracion').innerHTML = vibs.length ? vibs.slice(0, 6).map(item => renderLecturaFicha(item, 'vibracion')).join('') : emptyFichaState('Sin vibraciones recientes', 'No hay lecturas de vibracion para este equipo en el rango disponible.');
+    document.getElementById('lista-mediciones-termografia').innerHTML = termos.length ? termos.slice(0, 6).map(item => renderLecturaFicha(item, 'termografia')).join('') : emptyFichaState('Sin inspecciones termicas', 'Aun no se registran inspecciones termicas para este equipo.');
+    document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin tecnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
+    document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
+    document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
+    document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas / ultima ${String(vibSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(vibSummary.max, 2)} mm/s.` : 'No hay tendencia suficiente para este componente.';
+    document.getElementById('ficha-termo-subtitulo').textContent = termoSummary.count ? `${numeroFicha(termoSummary.count)} lectura(s) termicas / ultima ${String(termoSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(termoSummary.max, 1)} C.` : 'No hay tendencia termica disponible para este componente.';
+}
+
+window.abrirFichaTecnica = async function(equipoId) {
+    const equipo = estado.equipos.find(item => String(item.id) === String(equipoId));
+    if (!equipo) return;
+
+    renderFichaTecnicaModal();
+    const modal = document.getElementById('modal-ficha-tecnica');
+    if (!modal) return;
+
+    const siblingEquipos = estado.equipos.filter(item =>
+        item.activo === equipo.activo && item.ubicacion === equipo.ubicacion
+    );
+    const siblingIds = siblingEquipos.length
+        ? siblingEquipos.map(item => item.id)
+        : [equipo.id];
+
+    const getMedEquipoId = med => med?.equipo_id ?? med?.equipoId ?? null;
+    const normalize = value => String(value || '').trim().toLowerCase();
+    const idsSet = new Set(siblingIds.map(id => String(id)));
+    const filtroGrupo = items => (items || []).filter(med => idsSet.has(String(getMedEquipoId(med))));
+
+    renderFichaLoadingState(equipo);
+    modal.style.display = 'flex';
+    setupFichaEvents();
+
+    let medicionesGrupo = [];
+    let fuenteMediciones = 'none';
+
+    if (navigator.onLine && supabaseClient) {
+        const tablas = [...new Set([tablasDb.mediciones, 'mediciones', 'historial_mediciones'].filter(Boolean))];
+        for (const tabla of tablas) {
+            try {
+                const { data, error } = await supabaseClient
+                    .from(tabla)
+                    .select('*')
+                    .in('equipo_id', siblingIds)
+                    .order('fecha', { ascending: false })
+                    .limit(300);
+
+                if (!error && Array.isArray(data) && data.length) {
+                    medicionesGrupo = data;
+                    fuenteMediciones = 'online';
+                    break;
+                }
+
+                if (error && !esErrorTablaNoExiste(error)) {
+                    console.warn('[Ficha] Error obteniendo mediciones desde', tabla, error.message);
+                }
+            } catch (error) {
+                console.warn('[Ficha] Error inesperado consultando mediciones:', error);
+            }
+        }
+    }
+
+    if (!medicionesGrupo.length) {
+        medicionesGrupo = filtroGrupo(estado.historialMediciones);
+        if (medicionesGrupo.length) fuenteMediciones = 'estado';
+    }
+
+    if (!medicionesGrupo.length && window.localDB?.mediciones) {
+        try {
+            const locales = await window.localDB.mediciones.getAll();
+            medicionesGrupo = filtroGrupo(locales);
+            if (medicionesGrupo.length) fuenteMediciones = 'local';
+        } catch (error) {
+            console.warn('[Ficha] No fue posible leer mediciones locales:', error);
+        }
+    }
+
+    let medicionesEquipo = medicionesGrupo.filter(med => String(getMedEquipoId(med)) === String(equipo.id));
+
+    if (!medicionesEquipo.length && equipo.componente) {
+        medicionesEquipo = medicionesGrupo.filter(med =>
+            normalize(med.componente || med.punto_medicion) === normalize(equipo.componente)
+        );
+    }
+
+    if (!medicionesEquipo.length) {
+        medicionesEquipo = medicionesGrupo.filter(med => {
+            const equipoAsociado = estado.equipos.find(item => String(item.id) === String(getMedEquipoId(med)));
+            return equipoAsociado &&
+                equipoAsociado.activo === equipo.activo &&
+                equipoAsociado.ubicacion === equipo.ubicacion;
+        });
+    }
+
+    const tareasRelacionadas = getTareasRelacionadasFicha(equipo, siblingIds);
+    renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones);
+
+    setTimeout(() => initFichaCharts(medicionesEquipo), 40);
+};
+
 window.abrirModalTipoBadge = function(tipo, tareaId) {
     const TIPOS_INFO = {
         'medición de vibraciones': {
@@ -4695,6 +8139,212 @@ function setupFichaEvents() {
     });
 }
 
+function initFichaCharts(mediciones) {
+    activeCharts.forEach(chart => chart?.destroy?.());
+    activeCharts = [];
+
+    if (!window.Chart) return;
+
+    const ordenadas = [...(mediciones || [])].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    const vibraciones = ordenadas.filter(item => item.tipo === 'vibracion');
+    const termografias = ordenadas.filter(item => item.tipo === 'termografia');
+
+    const crearLineaUmbral = (labels, valor, color, texto) => ({
+        label: texto,
+        data: labels.map(() => valor),
+        borderColor: color,
+        borderDash: [6, 6],
+        borderWidth: 1.2,
+        pointRadius: 0,
+        fill: false,
+        tension: 0,
+        order: 99
+    });
+
+    const canvasVib = document.getElementById('chart-vibraciones');
+    if (canvasVib) {
+        const ctxVib = canvasVib.getContext('2d');
+        const gradientVib = ctxVib.createLinearGradient(0, 0, 0, 280);
+        gradientVib.addColorStop(0, 'rgba(255, 105, 0, 0.28)');
+        gradientVib.addColorStop(1, 'rgba(255, 105, 0, 0.02)');
+        const labelsVib = vibraciones.map(item => formatearFechaFicha(item.fecha));
+
+        activeCharts.push(new window.Chart(ctxVib, {
+            type: 'line',
+            data: {
+                labels: labelsVib,
+                datasets: [
+                    {
+                        label: 'Vibración global',
+                        data: vibraciones.map(item => Number(item.valor || 0)),
+                        borderColor: '#ff6900',
+                        backgroundColor: gradientVib,
+                        fill: true,
+                        tension: 0.34,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#ff6900',
+                        pointBorderWidth: 2,
+                        order: 1
+                    },
+                    ...(labelsVib.length ? [
+                        crearLineaUmbral(labelsVib, 3.2, 'rgba(217,119,6,0.9)', 'Seguimiento'),
+                        crearLineaUmbral(labelsVib, 4.5, 'rgba(220,38,38,0.9)', 'Crítico')
+                    ] : [])
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#475569',
+                            usePointStyle: true,
+                            boxWidth: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: context => `${context.dataset.label}: ${numeroFicha(context.parsed.y, 2)} mm/s`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#64748b' },
+                        grid: { color: 'rgba(226,232,240,0.75)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#64748b',
+                            callback: value => `${numeroFicha(value, 1)} mm/s`
+                        },
+                        grid: { color: 'rgba(226,232,240,0.75)' },
+                        suggestedMin: 0,
+                        suggestedMax: Math.max(5, ...vibraciones.map(item => Number(item.valor || 0) + 0.6))
+                    }
+                }
+            }
+        }));
+    }
+
+    const canvasTermo = document.getElementById('chart-termografia');
+    if (canvasTermo) {
+        const ctxTermo = canvasTermo.getContext('2d');
+        const gradientTermo = ctxTermo.createLinearGradient(0, 0, 0, 280);
+        gradientTermo.addColorStop(0, 'rgba(13, 148, 136, 0.26)');
+        gradientTermo.addColorStop(1, 'rgba(13, 148, 136, 0.03)');
+        const labelsTermo = termografias.map(item => formatearFechaFicha(item.fecha));
+
+        activeCharts.push(new window.Chart(ctxTermo, {
+            type: 'line',
+            data: {
+                labels: labelsTermo,
+                datasets: [
+                    {
+                        label: 'Temperatura máxima',
+                        data: termografias.map(item => Number(item.valor || 0)),
+                        borderColor: '#0f766e',
+                        backgroundColor: gradientTermo,
+                        fill: true,
+                        tension: 0.28,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: '#0f766e',
+                        pointBorderWidth: 2,
+                        order: 1
+                    },
+                    ...(labelsTermo.length ? [
+                        crearLineaUmbral(labelsTermo, 65, 'rgba(217,119,6,0.9)', 'Seguimiento'),
+                        crearLineaUmbral(labelsTermo, 80, 'rgba(220,38,38,0.9)', 'Crítico')
+                    ] : [])
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#475569',
+                            usePointStyle: true,
+                            boxWidth: 10
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: context => `${context.dataset.label}: ${numeroFicha(context.parsed.y, 1)} °C`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#64748b' },
+                        grid: { color: 'rgba(226,232,240,0.75)' }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#64748b',
+                            callback: value => `${numeroFicha(value, 0)} °C`
+                        },
+                        grid: { color: 'rgba(226,232,240,0.75)' },
+                        suggestedMin: 0,
+                        suggestedMax: Math.max(85, ...termografias.map(item => Number(item.valor || 0) + 4))
+                    }
+                }
+            }
+        }));
+    }
+}
+
+function setupFichaEvents() {
+    const modal = document.getElementById('modal-ficha-tecnica');
+    if (!modal) return;
+
+    const panes = [...modal.querySelectorAll('.tab-pane')];
+    const tabs = [...modal.querySelectorAll('.tab-btn')];
+    const closeFicha = () => {
+        modal.style.display = 'none';
+    };
+
+    const btnCerrar = document.getElementById('btn-cerrar-ficha');
+    if (btnCerrar) btnCerrar.onclick = closeFicha;
+
+    modal.onclick = event => {
+        if (event.target === modal) closeFicha();
+    };
+
+    if (window._planifyFichaEscHandler) {
+        document.removeEventListener('keydown', window._planifyFichaEscHandler);
+    }
+    window._planifyFichaEscHandler = event => {
+        if (event.key === 'Escape' && modal.style.display !== 'none') {
+            closeFicha();
+        }
+    };
+    document.addEventListener('keydown', window._planifyFichaEscHandler);
+
+    const activarTab = target => {
+        tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.target === target));
+        panes.forEach(pane => {
+            pane.style.display = pane.id === target ? 'block' : 'none';
+        });
+    };
+
+    tabs.forEach(tab => {
+        tab.onclick = () => activarTab(tab.dataset.target);
+    });
+
+    activarTab('tab-vibraciones');
+}
+
 // --- BÚSQUEDA GLOBAL (EQUIPOS Y COMPONENTES) ---
 
 const searchInput = document.getElementById('input-buscar-ot');
@@ -4809,7 +8459,7 @@ if (searchInput) {
                 } else {
                     // Tarjeta agrupada — muestra componentes expandibles
                     const compItems = eqs.map(eq => `
-                        <div onclick="event.stopPropagation(); window.abrirFichaTecnica('${eq.id}')" style="
+                        <div onclick="window.abrirFichaTecnica('${eq.id}')" style="
                             display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem;
                             border-radius:8px; cursor:pointer; transition:background 0.15s;
                             border:1px solid var(--glass-border); margin-bottom:0.4rem;
@@ -4859,6 +8509,341 @@ if (searchInput) {
 
 
 // --- LÓGICA DE LOGIN Y ACCESO ---
+
+function formatearMomentoSyncUI(timestamp) {
+    if (!timestamp) return 'Ultima sincronizacion: aun no registrada';
+
+    const diff = Date.now() - timestamp;
+    if (diff < 60_000) return 'Ultima sincronizacion: hace un momento';
+    if (diff < 3_600_000) return `Ultima sincronizacion: hace ${Math.max(1, Math.floor(diff / 60_000))} min`;
+
+    return 'Ultima sincronizacion: ' + new Date(timestamp).toLocaleString('es-CL', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function renderSyncStatusStripUI(status = {}) {
+    const chip = document.getElementById('sync-strip-state');
+    const queue = document.getElementById('sync-strip-queue');
+    const last = document.getElementById('sync-strip-last');
+    const button = document.getElementById('btn-sync-now');
+    if (!chip || !queue || !last || !button) return;
+
+    const online = status.online !== false;
+    const pendientes = Number(status.pendientes || 0);
+    const errores = Number(status.errores || 0);
+    const sincronizando = Boolean(status.sincronizando);
+
+    let icon = 'fa-circle-check';
+    let text = 'Conectado';
+    let chipClass = 'sync-chip is-online';
+    let queueText = 'Todo al dia';
+
+    if (!online) {
+        icon = 'fa-wifi-slash';
+        text = 'Modo offline';
+        chipClass = 'sync-chip is-offline';
+        queueText = pendientes > 0
+            ? `${pendientes} cambio(s) esperando conexion`
+            : 'Sin conexion, trabajando localmente';
+    } else if (sincronizando) {
+        icon = 'fa-rotate fa-spin';
+        text = 'Sincronizando';
+        chipClass = 'sync-chip is-syncing';
+        queueText = pendientes > 0
+            ? `Procesando ${pendientes} cambio(s) pendiente(s)`
+            : 'Actualizando datos en segundo plano';
+    } else if (errores > 0) {
+        icon = 'fa-triangle-exclamation';
+        text = 'Revision necesaria';
+        chipClass = 'sync-chip is-warning';
+        queueText = `${errores} cambio(s) con error de sincronizacion`;
+    } else if (pendientes > 0) {
+        icon = 'fa-clock';
+        text = 'Pendiente de sincronizar';
+        chipClass = 'sync-chip is-warning';
+        queueText = `${pendientes} cambio(s) listos para enviar`;
+    }
+
+    chip.className = chipClass;
+    chip.innerHTML = `<i class="fa-solid ${icon}"></i><span>${text}</span>`;
+    queue.textContent = queueText;
+    last.textContent = formatearMomentoSyncUI(status.lastSyncAt);
+
+    button.disabled = !online || sincronizando;
+    button.innerHTML = sincronizando
+        ? '<i class="fa-solid fa-rotate fa-spin"></i><span>Sincronizando...</span>'
+        : '<i class="fa-solid fa-rotate-right"></i><span>Sincronizar</span>';
+}
+
+async function actualizarEstadoSyncStripUI() {
+    try {
+        const status = await window.syncQueue?.resumen?.();
+        renderSyncStatusStripUI(status || { online: navigator.onLine });
+    } catch {
+        renderSyncStatusStripUI({ online: navigator.onLine });
+    }
+}
+
+window.addEventListener('planify:sync-status', event => renderSyncStatusStripUI(event.detail || {}));
+window.addEventListener('online', actualizarEstadoSyncStripUI);
+window.addEventListener('offline', actualizarEstadoSyncStripUI);
+
+document.getElementById('btn-sync-now')?.addEventListener('click', async () => {
+    if (!navigator.onLine) {
+        alert('Necesitas conexion para sincronizar cambios.');
+        return;
+    }
+
+    await window.syncQueue?.procesar?.();
+    await actualizarEstadoSyncStripUI();
+});
+
+setInterval(() => {
+    if (document.getElementById('app')?.style.display !== 'none') {
+        actualizarEstadoSyncStripUI();
+    }
+}, 60_000);
+
+const searchInputOriginal = document.getElementById('input-buscar-ot');
+const searchCloseOriginal = document.getElementById('btn-cerrar-busqueda');
+
+if (searchInputOriginal) {
+    const improvedSearchInput = searchInputOriginal.cloneNode(true);
+    searchInputOriginal.parentNode.replaceChild(improvedSearchInput, searchInputOriginal);
+
+    const improvedCloseButton = searchCloseOriginal ? searchCloseOriginal.cloneNode(true) : null;
+    if (searchCloseOriginal && improvedCloseButton) {
+        searchCloseOriginal.parentNode.replaceChild(improvedCloseButton, searchCloseOriginal);
+    }
+
+    const improvedSearchResults = document.getElementById('search-results-list');
+    const improvedSearchOverlay = document.getElementById('search-results-overlay');
+    const improvedSearchContainer = document.getElementById('search-container');
+    const clearSearchButton = document.getElementById('btn-clear-search');
+    let improvedSearchTimer = null;
+
+    function actualizarControlesBusquedaUI() {
+        if (!clearSearchButton) return;
+        clearSearchButton.style.display = improvedSearchInput.value.trim() ? 'inline-flex' : 'none';
+    }
+
+    function cerrarBusquedaUI({ limpiar = false, mantenerFoco = false } = {}) {
+        if (improvedSearchOverlay) improvedSearchOverlay.style.display = 'none';
+        if (improvedSearchResults) improvedSearchResults.innerHTML = '';
+        if (limpiar) improvedSearchInput.value = '';
+        actualizarControlesBusquedaUI();
+        if (mantenerFoco) improvedSearchInput.focus();
+    }
+
+    function construirResumenBusquedaUI(tareasOT, historialOT, equipos) {
+        const chips = [];
+        if (tareasOT.length > 0) chips.push(`<span class="search-summary-chip"><i class="fa-solid fa-person-digging"></i> ${tareasOT.length} OT en curso</span>`);
+        if (historialOT.length > 0) chips.push(`<span class="search-summary-chip"><i class="fa-solid fa-flag-checkered"></i> ${historialOT.length} OT completada(s)</span>`);
+        if (equipos.length > 0) chips.push(`<span class="search-summary-chip"><i class="fa-solid fa-microchip"></i> ${equipos.length} equipo(s)</span>`);
+        return chips.length ? `<div class="search-summary">${chips.join('')}</div>` : '';
+    }
+
+    function renderResultadosOTUI(tareasOT, historialOT) {
+        let html = '';
+
+        if (tareasOT.length > 0) {
+            html += `<p style="font-size:0.8rem; font-weight:600; color:var(--warning-color); margin:0 0 0.5rem 0;"><i class="fa-solid fa-person-digging"></i> OT EN CURSO</p>`;
+            html += tareasOT.map(t => `
+                <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:0.8rem 1rem; margin-bottom:0.6rem;">
+                    <div style="font-weight:700; color:var(--text-main);">OT ${t.otNumero}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">${t.tipo}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem;">
+                        <i class="fa-solid fa-user-tie"></i> ${t.liderNombre || 'Sin lider'} &nbsp;
+                        <span class="badge" style="background:var(--warning-color); color:white; font-size:0.7rem;">EN CURSO</span>
+                    </div>
+                </div>`).join('');
+        }
+
+        if (historialOT.length > 0) {
+            html += `<p style="font-size:0.8rem; font-weight:600; color:var(--success-color); margin:${tareasOT.length > 0 ? '0.8rem' : '0'} 0 0.5rem 0;"><i class="fa-solid fa-flag-checkered"></i> OT COMPLETADAS</p>`;
+            html += historialOT.map(t => `
+                <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:10px; padding:0.8rem 1rem; margin-bottom:0.6rem;">
+                    <div style="font-weight:700; color:var(--text-main);">OT ${t.ot_numero}</div>
+                    <div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.2rem;">${t.tipo}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:0.2rem;">
+                        <i class="fa-solid fa-user-tie"></i> ${t.lider_nombre || 'Sin lider'} &nbsp;
+                        <i class="fa-regular fa-calendar"></i> ${new Date(t.created_at).toLocaleDateString('es-CL')} &nbsp;
+                        <span class="badge" style="background:var(--success-color); color:white; font-size:0.7rem;">COMPLETADA</span>
+                    </div>
+                </div>`).join('');
+        }
+
+        return html;
+    }
+
+    function renderResultadosEquiposUI(equipos) {
+        if (equipos.length === 0) return '';
+
+        const criticidadColor = { A: '#ef4444', B: '#f59e0b', C: '#22c55e' };
+        const grupos = {};
+
+        equipos.forEach(eq => {
+            const key = (eq.activo || '') + '||' + (eq.ubicacion || '');
+            if (!grupos[key]) grupos[key] = [];
+            grupos[key].push(eq);
+        });
+
+        const extractUnitNum = ubicacion => {
+            const match = (ubicacion || '').match(/(\d+)/);
+            return match ? parseInt(match[1], 10) : 9999;
+        };
+
+        const gruposOrdenados = Object.entries(grupos).sort(([, eqsA], [, eqsB]) => {
+            const nombreA = eqsA[0].activo || '';
+            const nombreB = eqsB[0].activo || '';
+            if (nombreA !== nombreB) return nombreA.localeCompare(nombreB);
+            return extractUnitNum(eqsA[0].ubicacion) - extractUnitNum(eqsB[0].ubicacion);
+        });
+
+        const tarjetas = gruposOrdenados.map(([_key, eqs]) => {
+            const eq0 = eqs[0];
+            const nombre = eq0.activo || 'Equipo sin nombre';
+            const crit = (eq0.criticidad || '').toUpperCase();
+            const critColor = criticidadColor[crit] || '#6b7280';
+
+            if (eqs.length === 1) {
+                return `
+                <div onclick="window.abrirFichaTecnica('${eq0.id}')" style="
+                    background:var(--card-bg); border:1px solid var(--glass-border); border-radius:12px;
+                    padding:1rem; cursor:pointer; transition:box-shadow 0.2s,transform 0.2s; position:relative; overflow:hidden;
+                " onmouseenter="this.style.boxShadow='0 4px 20px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)'"
+                   onmouseleave="this.style.boxShadow='none';this.style.transform='translateY(0)'">
+                    ${crit ? `<span style="position:absolute;top:0.8rem;right:0.8rem;background:${critColor}22;color:${critColor};border:1px solid ${critColor}66;border-radius:6px;font-size:0.7rem;font-weight:700;padding:2px 7px;">Crit. ${crit}</span>` : ''}
+                    <div style="font-weight:700;font-size:0.95rem;color:var(--text-main);margin-bottom:0.3rem;padding-right:3rem;line-height:1.3;">${nombre}</div>
+                    ${eq0.componente ? `<div style="font-size:0.82rem;color:var(--primary-color);font-weight:600;margin-bottom:0.6rem;">${eq0.componente}</div>` : ''}
+                    <div style="display:flex;flex-direction:column;gap:0.25rem;font-size:0.78rem;color:var(--text-muted);">
+                        <span><i class="fa-solid fa-location-dot" style="width:14px;"></i> ${eq0.ubicacion || 'Sin ubicacion'}</span>
+                        <span><i class="fa-solid fa-hashtag" style="width:14px;"></i> KKS: ${eq0.kks || 'N/A'}</span>
+                        ${eq0.frecuencia_nueva ? `<span><i class="fa-solid fa-rotate" style="width:14px;"></i> Frec: ${eq0.frecuencia_nueva}</span>` : ''}
+                    </div>
+                    <div style="margin-top:0.8rem;font-size:0.72rem;color:var(--primary-color);font-weight:500;"><i class="fa-solid fa-arrow-right"></i> Ver ficha tecnica</div>
+                </div>`;
+            }
+
+            const compItems = eqs.map(eq => `
+                <div onclick="window.abrirFichaTecnica('${eq.id}')" style="
+                    display:flex; align-items:center; gap:0.6rem; padding:0.5rem 0.7rem;
+                    border-radius:8px; cursor:pointer; transition:background 0.15s;
+                    border:1px solid var(--glass-border); margin-bottom:0.4rem;
+                " onmouseenter="this.style.background='rgba(255,102,0,0.08)'"
+                   onmouseleave="this.style.background='transparent'">
+                    <i class="fa-solid fa-microchip" style="color:var(--primary-color);font-size:0.8rem;flex-shrink:0;"></i>
+                    <span style="font-size:0.82rem;font-weight:600;color:var(--text-main);flex:1;">${eq.componente || 'Sin componente'}</span>
+                    <span style="font-size:0.7rem;color:var(--text-muted);">KKS: ${eq.kks || 'N/A'}</span>
+                    <i class="fa-solid fa-arrow-right" style="font-size:0.7rem;color:var(--primary-color);"></i>
+                </div>`).join('');
+
+            return `
+            <div style="background:var(--card-bg);border:1px solid var(--primary-color)44;border-radius:12px;padding:1rem;position:relative;">
+                ${crit ? `<span style="position:absolute;top:0.8rem;right:0.8rem;background:${critColor}22;color:${critColor};border:1px solid ${critColor}66;border-radius:6px;font-size:0.7rem;font-weight:700;padding:2px 7px;">Crit. ${crit}</span>` : ''}
+                <div style="font-weight:700;font-size:0.95rem;color:var(--text-main);margin-bottom:0.25rem;padding-right:3rem;line-height:1.3;">${nombre}</div>
+                <div style="font-size:0.78rem;color:var(--text-muted);margin-bottom:0.7rem;">
+                    <i class="fa-solid fa-location-dot" style="width:14px;"></i> ${eq0.ubicacion || 'Sin ubicacion'}
+                </div>
+                <div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.6rem;">
+                    <span style="background:var(--primary-color);color:white;border-radius:999px;font-size:0.7rem;font-weight:700;padding:2px 8px;">${eqs.length} componentes</span>
+                </div>
+                ${compItems}
+            </div>`;
+        }).join('');
+
+        return `
+            <p style="font-size:0.8rem; color:var(--text-muted); margin: 0 0 1rem 0;">${equipos.length} equipo(s) encontrado(s)</p>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1rem;">
+                ${tarjetas}
+            </div>`;
+    }
+
+    function ejecutarBusquedaMejorada(rawQuery) {
+        const query = rawQuery.trim().toLowerCase();
+        actualizarControlesBusquedaUI();
+
+        if (query.length < 2) {
+            cerrarBusquedaUI();
+            return;
+        }
+
+        const tareasOT = estado.tareas.filter(t => t.otNumero && t.otNumero.toLowerCase().includes(query));
+        const historialOT = estado.historialTareas.filter(t => t.ot_numero && t.ot_numero.toLowerCase().includes(query));
+        const equipos = estado.equipos.filter(eq =>
+            (eq.activo || '').toLowerCase().includes(query) ||
+            (eq.componente || '').toLowerCase().includes(query) ||
+            (eq.kks || '').toLowerCase().includes(query) ||
+            (eq.ubicacion || '').toLowerCase().includes(query) ||
+            (eq.ubicacion_original || '').toLowerCase().includes(query)
+        );
+
+        const sections = [];
+        const otHtml = renderResultadosOTUI(tareasOT, historialOT);
+        const equiposHtml = renderResultadosEquiposUI(equipos);
+
+        if (otHtml) sections.push(otHtml);
+        if (equiposHtml) sections.push(equiposHtml);
+
+        if (sections.length === 0) {
+            improvedSearchResults.innerHTML = `<p style="padding:1rem; color:var(--text-muted); font-size:0.9rem;"><i class="fa-solid fa-circle-xmark"></i> No se encontraron resultados para "<strong>${query}</strong>"</p>`;
+            improvedSearchOverlay.style.display = 'block';
+            return;
+        }
+
+        improvedSearchResults.innerHTML = construirResumenBusquedaUI(tareasOT, historialOT, equipos) +
+            sections.join('<hr style="margin:1rem 0; border-color:var(--glass-border);">');
+        improvedSearchOverlay.style.display = 'block';
+    }
+
+    function esCampoEditableUI(elemento) {
+        if (!elemento) return false;
+        const tag = (elemento.tagName || '').toLowerCase();
+        return tag === 'input' || tag === 'textarea' || elemento.isContentEditable;
+    }
+
+    improvedSearchInput.addEventListener('input', event => {
+        clearTimeout(improvedSearchTimer);
+        improvedSearchTimer = setTimeout(() => ejecutarBusquedaMejorada(event.target.value || ''), 160);
+    });
+
+    improvedSearchInput.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            cerrarBusquedaUI({ limpiar: true, mantenerFoco: true });
+        }
+    });
+
+    clearSearchButton?.addEventListener('click', () => {
+        cerrarBusquedaUI({ limpiar: true, mantenerFoco: true });
+    });
+
+    improvedCloseButton?.addEventListener('click', () => {
+        cerrarBusquedaUI({ limpiar: true });
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === '/' && !esCampoEditableUI(event.target) && document.getElementById('app')?.style.display !== 'none') {
+            event.preventDefault();
+            improvedSearchInput.focus();
+            improvedSearchInput.select();
+        } else if (event.key === 'Escape' && improvedSearchOverlay?.style.display === 'block') {
+            cerrarBusquedaUI();
+        }
+    });
+
+    document.addEventListener('click', event => {
+        if (improvedSearchOverlay?.style.display !== 'block') return;
+        const target = event.target;
+        if (improvedSearchOverlay.contains(target) || improvedSearchContainer?.contains(target)) return;
+        cerrarBusquedaUI();
+    });
+
+    actualizarControlesBusquedaUI();
+}
 
 const loginOverlay = document.getElementById('login-overlay');
 const pinModal = document.getElementById('pin-container');
@@ -5004,6 +8989,7 @@ function accederApp(rol, trabajadorObj = null) {
     estado.trabajadorLogueado = trabajadorObj;
     loginOverlay.style.display = 'none';
     document.getElementById('app').style.display = 'block';
+    actualizarEstadoSyncStripUI();
 
     // Visibilidad de nav según rol
     const navRoles = {
@@ -5024,13 +9010,14 @@ function accederApp(rol, trabajadorObj = null) {
     // Badge de pendientes solo para planificador
     if (rol === 'admin') actualizarBadgeHE();
 
-    vistaActual = 'dashboard';
+    vistaActual = rol === 'admin' ? 'control' : 'dashboard';
     renderizarVistaActual();
 }
 
 // Inicialización
 window.addEventListener('DOMContentLoaded', () => {
     inicializarDatos();
+    actualizarEstadoSyncStripUI();
 });
 
 // Registrar Service Worker para PWA
