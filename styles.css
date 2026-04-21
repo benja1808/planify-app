@@ -2737,23 +2737,43 @@ h3 {
     }
 
     .nav-links {
-        width: 100%;
-        display: grid;
-        grid-template-columns: 1fr;
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 86%;
+        max-width: 340px;
+        height: 100vh;
+        height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
         gap: 0.55rem;
-        max-height: 0;
-        opacity: 0;
-        overflow: hidden;
-        padding: 0;
+        padding: 5rem 1.1rem 6.5rem 1.1rem;
+        background: #ffffff;
+        box-shadow: -18px 0 40px rgba(15, 23, 42, 0.18);
+        transform: translateX(100%);
+        transition: transform 260ms cubic-bezier(.22,.9,.35,1);
+        z-index: 9500;
+        overflow-y: auto;
         pointer-events: none;
-        transition: max-height 220ms ease, opacity 180ms ease, padding 180ms ease;
+        opacity: 1;
+        max-height: none;
     }
 
     .nav-links.open {
-        max-height: 80vh;
-        opacity: 1;
-        padding-top: 0.15rem;
+        transform: translateX(0);
         pointer-events: auto;
+    }
+
+    .nav-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 9400;
+    }
+    .nav-backdrop.show {
+        display: block;
     }
 
     .nav-links button {

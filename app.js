@@ -9092,15 +9092,14 @@ function renderizarVistaActual() {
             break;
     }
 
-    // Al renderizar, cerramos sidebar si existe
+    // Al renderizar, cerramos sidebar y backdrop si existen
     const sidebar = document.getElementById('sidebar');
-    if (sidebar) {
-        sidebar.classList.remove('open');
-    }
+    if (sidebar) sidebar.classList.remove('open');
     const menuButton = document.getElementById('btn-menu');
-    if (menuButton) {
-        menuButton.setAttribute('aria-expanded', 'false');
-    }
+    if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
+    const navBackdrop = document.querySelector('.nav-backdrop');
+    if (navBackdrop) navBackdrop.classList.remove('show');
+    document.body.style.overflow = '';
 }
 
 Object.keys(navConfig).forEach(id => {
@@ -9119,17 +9118,31 @@ const sidebar = document.getElementById('sidebar');
 const btnMobileMenu = document.getElementById('nav-mobile-menu');
 
 if (btnMenu && sidebar) {
+    // Backdrop para el drawer móvil
+    let navBackdrop = document.querySelector('.nav-backdrop');
+    if (!navBackdrop) {
+        navBackdrop = document.createElement('div');
+        navBackdrop.className = 'nav-backdrop';
+        document.body.appendChild(navBackdrop);
+    }
+
     const closeMobileNav = () => {
         sidebar.classList.remove('open');
+        navBackdrop.classList.remove('show');
         btnMenu.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
     };
 
     btnMenu.addEventListener('click', (event) => {
         event.stopPropagation();
         const nextState = !sidebar.classList.contains('open');
         sidebar.classList.toggle('open', nextState);
+        navBackdrop.classList.toggle('show', nextState);
         btnMenu.setAttribute('aria-expanded', nextState ? 'true' : 'false');
+        document.body.style.overflow = nextState ? 'hidden' : '';
     });
+
+    navBackdrop.addEventListener('click', closeMobileNav);
 
     document.addEventListener('click', (event) => {
         if (window.innerWidth > 768 || !sidebar.classList.contains('open')) return;
