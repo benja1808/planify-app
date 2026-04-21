@@ -11192,16 +11192,38 @@ function copiarEnlaceFicha(id) {
 }
 window.copiarEnlaceFicha = copiarEnlaceFicha;
 
-// Botón "Link Visitas" en la navbar — copia la URL de la app para compartir
-document.getElementById('btn-copy-link')?.addEventListener('click', () => {
+// Botón "Link Visitas" en la navbar — muestra modal con QR + link
+document.getElementById('btn-copy-link')?.addEventListener('click', async () => {
     const url = window.location.origin + window.location.pathname;
-    navigator.clipboard.writeText(url).then(() => {
-        const btn = document.getElementById('btn-copy-link');
-        const orig = btn.innerHTML;
-        btn.innerHTML = '<i class="fa-solid fa-check"></i> ¡Enlace copiado!';
-        setTimeout(() => btn.innerHTML = orig, 2000);
-    }).catch(() => {
-        prompt('Copia este enlace y compártelo:', window.location.href);
+    let qrDataUrl = '';
+    try {
+        if (window.QRCode) {
+            qrDataUrl = await window.QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
+        }
+    } catch (e) { console.warn('QR error:', e); }
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = `
+        <div style="background:var(--bg-card,#fff);color:var(--text-main,#0f172a);border-radius:12px;max-width:360px;width:100%;padding:1.5rem;box-shadow:0 20px 40px rgba(0,0,0,.3);text-align:center;">
+            <h3 style="margin:0 0 1rem 0;font-size:1.1rem;">Link para Visitas</h3>
+            ${qrDataUrl ? `<img src="${qrDataUrl}" alt="QR" style="width:260px;height:260px;max-width:100%;display:block;margin:0 auto 1rem;border-radius:8px;"/>` : '<p style="color:#dc2626;">No se pudo generar el QR</p>'}
+            <div style="background:var(--bg-page,#f1f5f9);padding:.5rem .75rem;border-radius:6px;font-size:.8rem;word-break:break-all;margin-bottom:1rem;">${url}</div>
+            <div style="display:flex;gap:.5rem;">
+                <button id="qr-copy-btn" style="flex:1;padding:.6rem;background:var(--success-color,#16a34a);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;"><i class="fa-solid fa-copy"></i> Copiar link</button>
+                <button id="qr-close-btn" style="flex:1;padding:.6rem;background:var(--text-muted,#64748b);color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;">Cerrar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.querySelector('#qr-close-btn').addEventListener('click', close);
+    overlay.querySelector('#qr-copy-btn').addEventListener('click', () => {
+        navigator.clipboard.writeText(url).then(() => {
+            const b = overlay.querySelector('#qr-copy-btn');
+            b.innerHTML = '<i class="fa-solid fa-check"></i> ¡Copiado!';
+            setTimeout(close, 1000);
+        }).catch(() => prompt('Copia este enlace:', url));
     });
 });
 

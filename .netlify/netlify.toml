@@ -7,7 +7,7 @@ redirects = []
 [functions."*"]
 
 [build]
-publish = "C:\\Users\\benja\\OneDrive\\Desktop\\testcodex"
+publish = "C:\\Users\\benja\\.gemini\\antigravity\\scratch\\planner_app"
 publishOrigin = "default"
 
 [build.environment]
