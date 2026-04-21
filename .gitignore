@@ -5,3 +5,9 @@ error*.txt
 
 # Local Netlify folder
 .netlify
+
+# Claude worktrees and local temp
+.claude/
+temp/
+importar_insumos_excel.mjs
+setup_insumos.sql
