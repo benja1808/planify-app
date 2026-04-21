@@ -684,7 +684,7 @@ async function inicializarDatos() {
             }
         }
         await refrescarDatosInsumos({ preferRemote: false });
-        alert('Hubo un error al conectar con la base de datos. Se usaran datos de respaldo.');
+        alert('Hubo un error al conectar con la base de datos: ' + (error?.message || error) + '. Se usaran datos de respaldo.');
     }
 }
 
