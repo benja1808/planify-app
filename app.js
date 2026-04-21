@@ -2173,9 +2173,38 @@ async function renderInsumosView() {
         renderizarVistaActual();
     };
 
+    // Revierte el efecto de una solicitud aprobada: devuelve stock y borra el movimiento
+    const revertirSolicitudAprobada = async (solicitud) => {
+        if (!solicitud || solicitud.estado !== 'aprobada') return;
+        const cant = enteroSeguro(solicitud.cantidad, 0);
+        if (cant <= 0) return;
+        const insumo = estado.insumos?.find((i) => String(i.id) === String(solicitud.insumo_id));
+        const stockNuevo = enteroSeguro(insumo?.stock_actual, 0) + cant;
+        if (insumo && window.localDB) {
+            await window.localDB.insumos.put({ ...insumo, stock_actual: stockNuevo }).catch(() => {});
+        }
+        if (window.supabaseClient) {
+            try { await window.supabaseClient.from('insumos').update({ stock_actual: stockNuevo }).eq('id', solicitud.insumo_id); } catch (e) { console.warn('[insumos] revertir stock', e); }
+            try { await window.supabaseClient.from('movimientos_inventario').delete().eq('referencia_id', solicitud.id); } catch (e) { console.warn('[insumos] borrar movimiento', e); }
+        }
+        if (window.localDB?.movimientos_inventario) {
+            try {
+                const movs = await window.localDB.movimientos_inventario.getAll();
+                for (const m of (movs || [])) {
+                    if (String(m.referencia_id) === String(solicitud.id)) await window.localDB.movimientos_inventario.delete(m.id);
+                }
+            } catch (e) { /* ignore */ }
+        }
+    };
+
     window._insEliminar = async (id) => {
-        if (!confirm('¿Eliminar esta solicitud del historial? Esta acción no se puede deshacer.')) return;
+        const solicitud = estado.solicitudesInsumos?.find((s) => String(s.id) === String(id));
+        const msg = solicitud?.estado === 'aprobada'
+            ? '¿Eliminar esta solicitud? Se devolverá el stock descontado como si no hubiera existido.'
+            : '¿Eliminar esta solicitud del historial? Esta acción no se puede deshacer.';
+        if (!confirm(msg)) return;
         try {
+            await revertirSolicitudAprobada(solicitud);
             await localDB.solicitudes_insumos.delete(id);
             if (window.supabaseClient) {
                 try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', id); } catch (e) { console.warn('[insumos] remote delete fallo', e); }
@@ -2197,6 +2226,7 @@ async function renderInsumosView() {
         if (!confirm(`Se eliminarán ${resueltas.length} solicitudes aprobadas/rechazadas. ¿Continuar?`)) return;
         try {
             for (const s of resueltas) {
+                await revertirSolicitudAprobada(s);
                 await localDB.solicitudes_insumos.delete(s.id);
                 if (window.supabaseClient) {
                     try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', s.id); } catch (e) { /* ignore */ }
@@ -11064,8 +11094,16 @@ document.getElementById('input-worker-pin')?.addEventListener('keydown', e => {
 
 document.getElementById('btn-submit-worker')?.addEventListener('click', validarWorkerLogin);
 
+// Normaliza RUT: mayúsculas, sin puntos/guiones, y dígito verificador '0' → 'K'
+// (permite que trabajadores con RUT terminado en K también ingresen usando 0)
+function _rutCanon(valor) {
+    let r = String(valor || '').replace(/[.\-\s]/g, '').toUpperCase();
+    if (r.length > 0 && r.endsWith('0')) r = r.slice(0, -1) + 'K';
+    return r;
+}
+
 async function validarWorkerLogin() {
-    const rutInput = (document.getElementById('input-worker-rut')?.value || '').trim().replace(/[.\-\s]/g, '');
+    const rutInput = _rutCanon(document.getElementById('input-worker-rut')?.value || '');
     const pinInput = (document.getElementById('input-worker-pin')?.value || '').trim();
     const errEl   = document.getElementById('worker-login-error');
     const btn     = document.getElementById('btn-submit-worker');
@@ -11085,18 +11123,15 @@ async function validarWorkerLogin() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verificando...';
     errEl.style.display = 'none';
 
-    // Buscar trabajador por RUT (local primero, luego Supabase)
-    let trabajador = estado.trabajadores.find(t =>
-        String(t.rut || '').replace(/[.\-\s]/g, '') === rutInput
-    );
+    // Buscar trabajador por RUT (local primero, luego Supabase). Canónico trata K==0.
+    let trabajador = estado.trabajadores.find(t => _rutCanon(t.rut) === rutInput);
 
     if (!trabajador && navigator.onLine && supabaseClient) {
         try {
-            const { data } = await supabaseClient
+            const { data: lista } = await supabaseClient
                 .from('trabajadores')
-                .select('*')
-                .eq('rut', rutInput)
-                .maybeSingle();
+                .select('*');
+            const data = (lista || []).find(t => _rutCanon(t.rut) === rutInput) || null;
             if (data) {
                 trabajador = data;
                 // Incorporar al estado local si no estaba
