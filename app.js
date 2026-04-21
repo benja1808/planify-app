@@ -7426,6 +7426,7 @@ function renderDashboardView() {
         if (hora < 20) return 'Buenas tardes';
         return 'Buenas noches';
     })();
+    const trabajadorActual = isAdmin ? null : obtenerTrabajadorActual();
     const nombreUsuarioDashboard = isAdmin ? 'Planificador' : (trabajadorActual?.nombre || 'Equipo');
     const nombreUsuarioCorto = String(nombreUsuarioDashboard).trim().split(/\s+/).slice(0, 2).join(' ');
     const rolUsuarioDashboard = isAdmin ? 'Centro de control del turno' : (trabajadorActual?.puesto || 'Personal en terreno');

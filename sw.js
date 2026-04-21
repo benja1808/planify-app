@@ -1,5 +1,5 @@
 // Service Worker — Planify Offline v5
-const CACHE_NAME = 'planify-offline-v11';
+const CACHE_NAME = 'planify-offline-v12';
 
 // En localhost no cacheamos nada — siempre red directa
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -24,7 +24,7 @@ const CDN_RESOURCES = [
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2',
   'https://cdn.jsdelivr.net/npm/pizzip@3.1.1/dist/pizzip.min.js',
   'https://cdn.jsdelivr.net/npm/docxtemplater@3.37.2/build/docxtemplater.js',
-  'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
+  'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.js',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap',
 ];
