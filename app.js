@@ -5164,6 +5164,11 @@ function renderTrabajadoresView() {
                                 <input id="nuevo-trabajador-puesto" type="text" class="form-control" placeholder="Ej: Inspector Predictivo" maxlength="90" autocomplete="off">
                             </div>
                             <div class="form-group">
+                                <label for="nuevo-trabajador-pin">Clave de acceso (4 dígitos) <span style="color:var(--danger-color)">*</span></label>
+                                <input id="nuevo-trabajador-pin" type="text" inputmode="numeric" pattern="[0-9]*" class="form-control" placeholder="Ej: 0510 (día 05, mes 10)" maxlength="4" autocomplete="off">
+                                <p class="form-helper">Formato DDMM (día + mes). Se recomienda usar fecha de nacimiento. El trabajador usará esta clave para ingresar.</p>
+                            </div>
+                            <div class="form-group">
                                 <label>Especializaciones <span style="color:var(--danger-color)">*</span></label>
                                 <div class="skill-option-grid">
                                     ${skillOptionHtml}
@@ -5305,6 +5310,7 @@ function renderTrabajadoresView() {
             .trim()
             .replace(/\s+/g, ' ');
         const habilidades = obtenerHabilidadesNuevoTrabajador();
+        const pinInput = String(document.getElementById('nuevo-trabajador-pin')?.value || '').trim();
 
         if (nombre.length < 3) {
             errorNuevoTrabajador.textContent = 'Ingresa un nombre valido para el trabajador.';
@@ -5326,6 +5332,19 @@ function renderTrabajadoresView() {
             errorNuevoTrabajador.style.display = 'block';
             return;
         }
+        if (!/^\d{4}$/.test(pinInput)) {
+            errorNuevoTrabajador.textContent = 'Ingresa una clave de 4 dígitos (formato DDMM).';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        const pinDia = parseInt(pinInput.slice(0, 2), 10);
+        const pinMes = parseInt(pinInput.slice(2, 4), 10);
+        if (pinDia < 1 || pinDia > 31 || pinMes < 1 || pinMes > 12) {
+            errorNuevoTrabajador.textContent = 'La clave debe tener formato DDMM (día 01-31, mes 01-12).';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        const fechaNacimiento = `2000-${pinInput.slice(2, 4)}-${pinInput.slice(0, 2)}`;
         const rutDuplicado = estado.trabajadores.some((trabajador) => normalizarRut(trabajador.rut) === rut);
         if (rutDuplicado) {
             errorNuevoTrabajador.textContent = 'Ya existe un trabajador registrado con ese RUT.';
@@ -5339,6 +5358,7 @@ function renderTrabajadoresView() {
             rut,
             puesto,
             habilidades,
+            fecha_nacimiento: fechaNacimiento,
             disponible: false,
             ocupado: false,
             puede_aprobar_insumos: false
