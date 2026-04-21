@@ -2586,6 +2586,79 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
 
+            async function exportarPDFPython(datos) {
+                const btn = document.querySelector('[data-accion="exportar-pdf"]');
+                const originalLabel = btn ? btn.innerHTML : '';
+                const endpointCandidates = [
+                    `${window.location.origin}/generar-pdf`,
+                    'http://127.0.0.1:3001/generar-pdf',
+                    'http://localhost:3001/generar-pdf'
+                ];
+
+                if (btn) {
+                    btn.disabled = true;
+                    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando PDF...';
+                }
+
+                try {
+                    let lastError = null;
+                    let result = null;
+
+                    for (const endpoint of endpointCandidates) {
+                        try {
+                            const response = await fetch(endpoint, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(datos)
+                            });
+                            const payload = await response.json().catch(() => ({}));
+
+                            if (!response.ok) {
+                                throw new Error(payload.error || `Error en servidor PDF (${endpoint})`);
+                            }
+                            if (!payload?.pdf) {
+                                throw new Error(`Respuesta PDF invalida (${endpoint})`);
+                            }
+
+                            result = payload;
+                            lastError = null;
+                            break;
+                        } catch (error) {
+                            lastError = error;
+                        }
+                    }
+
+                    if (lastError || !result?.pdf) {
+                        throw lastError || new Error('No se pudo generar el PDF');
+                    }
+
+                    const byteCharacters = atob(result.pdf);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'application/pdf' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    const fallbackName = `Planify_Informe_${datos.rango?.desde || 'periodo'}_${datos.rango?.hasta || ''}.pdf`;
+                    a.href = url;
+                    a.download = String(datos.fileName || fallbackName).replace(/[\\/:*?"<>|]+/g, '-');
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('[Planify] Error al generar PDF:', error);
+                    alert('Error al generar PDF. Verifica que el servidor local de Planify o pdf-server.js esten corriendo y con acceso a Python.');
+                } finally {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = originalLabel;
+                    }
+                }
+            }
+
             function dashboardBuildChartSnapshotMap() {
                 const defs = [
                     { key: 'jobs', id: 'chart-dashboard-jobs', title: 'Trabajos por periodo', subtitle: 'Cantidad de cierres en el rango.', accent: '#f97316' },
@@ -2981,184 +3054,152 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 const originalLabel = exportXlsxBtn ? exportXlsxBtn.innerHTML : '';
                 if (exportXlsxBtn) {
                     exportXlsxBtn.disabled = true;
-                    exportXlsxBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando Excel visual';
+                    exportXlsxBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando Excel...';
                 }
-                const canFallback = !!window.XLSX;
-                const workbook = canFallback ? window.XLSX.utils.book_new() : null;
-                const utils = canFallback ? window.XLSX.utils : null;
-                const setSheetLayout = (sheet, rows) => {
-                    const normalizedRows = Array.isArray(rows) ? rows : [];
-                    const allRows = normalizedRows.length ? normalizedRows : [];
-                    const colCount = allRows.reduce((max, row) => Math.max(max, Object.keys(row || {}).length), 0);
-                    if (colCount > 0) {
-                        const widths = [];
-                        for (let c = 0; c < colCount; c += 1) {
-                            const values = allRows.map(row => Object.values(row || {})[c]);
-                            const maxLen = Math.max(
-                                12,
-                                ...values.map(value => String(value == null ? '' : value).length)
-                            );
-                            widths.push({ wch: Math.min(maxLen + 2, 42) });
-                        }
-                        sheet['!cols'] = widths;
-                        sheet['!autofilter'] = { ref: utils.encode_range({ s: { r: 0, c: 0 }, e: { r: allRows.length, c: Math.max(colCount - 1, 0) } }) };
-                    }
-                };
-                const appendJsonSheet = (name, rows, emptyRow) => {
-                    const normalizedRows = rows.length ? rows : [emptyRow];
-                    const sheet = utils.json_to_sheet(normalizedRows);
-                    setSheetLayout(sheet, normalizedRows);
-                    utils.book_append_sheet(workbook, sheet, name);
-                };
-                const summaryRows = [
-                    { Indicador: 'Desde', Actual: formatDate(rangeStart), Anterior: formatDate(previousRangeStart), Variacion: '' },
-                    { Indicador: 'Hasta', Actual: formatDate(rangeEnd), Anterior: formatDate(previousRangeEnd), Variacion: '' },
-                    { Indicador: 'Trabajos cerrados', Actual: tasks.length, Anterior: previousTasks.length, Variacion: comparisonCards.tasks.shortLabel },
-                    { Indicador: 'Mediciones', Actual: measures.length, Anterior: previousMeasures.length, Variacion: comparisonCards.measures.shortLabel },
-                    { Indicador: 'HH registradas', Actual: Number(hh.toFixed(1)), Anterior: Number(previousHh.toFixed(1)), Variacion: comparisonCards.hh.shortLabel },
-                    { Indicador: 'OT cerradas', Actual: ots.size, Anterior: previousOts.size, Variacion: comparisonCards.ots.shortLabel },
-                    { Indicador: 'Equipos intervenidos', Actual: activeEquipments.size, Anterior: previousActiveEquipments.size, Variacion: comparisonCards.activeEquipments.shortLabel },
-                    { Indicador: 'Participantes', Actual: participants.size, Anterior: previousParticipants.size, Variacion: comparisonCards.participants.shortLabel },
-                    { Indicador: 'Lecturas criticas', Actual: criticalMeasures.length, Anterior: previousCriticalMeasures.length, Variacion: comparisonCards.critical.shortLabel },
-                    { Indicador: 'Lecturas seguimiento', Actual: watchMeasures.length, Anterior: previousWatchMeasures.length, Variacion: comparisonCards.watch.shortLabel }
-                ];
-                const taskRows = tasks.map(item => ({
-                    Fecha: formatDate(item.date),
-                    Unidad: item.unit || '',
-                    Equipo: item.equipment || '',
-                    Especialidad: item.specialty || '',
-                    Lider: item.leader || '',
-                    Ayudantes: item.helpers.join(', '),
-                    OT: item.ot || '',
-                    Aviso: item.aviso || '',
-                    HH: Number((item.hh || 0).toFixed(1)),
-                    Acciones: item.actions || '',
-                    Observaciones: item.observations || '',
-                    Analisis: item.analysis || '',
-                    Recomendacion: item.recommendation || ''
-                }));
-                const measureRows = measures.map(item => ({
-                    Fecha: formatDateTime(item.date),
-                    Tipo: item.type === 'vibracion' ? 'Vibracion' : 'Termografia',
-                    Unidad: item.unit || '',
-                    Equipo: item.equipment || '',
-                    Punto: item.point || '',
-                    Valor: item.value,
-                    UnidadMedida: item.unitLabel || '',
-                    Estado: getMetricStatus(item.type, item.value).label,
-                    Tecnico: item.tech || '',
-                    Observacion: item.observation || ''
-                }));
+
+                // Build alert rows for payload
                 const alertRows = [
                     ...criticalMeasures.map(item => ({
-                        Categoria: 'Critica',
-                        Equipo: item.equipment,
-                        Unidad: item.unit || '',
-                        Punto: item.point || '',
-                        Valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
-                        Fecha: formatDateTime(item.date)
+                        categoria: 'Critica',
+                        equipo: item.equipment,
+                        unidad: item.unit || '',
+                        punto: item.point || '',
+                        valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
+                        fecha: formatDateTime(item.date)
                     })),
                     ...watchMeasures.map(item => ({
-                        Categoria: 'Seguimiento',
-                        Equipo: item.equipment,
-                        Unidad: item.unit || '',
-                        Punto: item.point || '',
-                        Valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
-                        Fecha: formatDateTime(item.date)
+                        categoria: 'Seguimiento',
+                        equipo: item.equipment,
+                        unidad: item.unit || '',
+                        punto: item.point || '',
+                        valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
+                        fecha: formatDateTime(item.date)
                     }))
                 ];
-                const meetingRows = [
-                    { Bloque: 'Reporte', Detalle: 'Planify - Dashboard Ejecutivo de Control' },
-                    { Bloque: 'Rango actual', Detalle: `${formatDate(rangeStart)} - ${formatDate(rangeEnd)}` },
-                    { Bloque: 'Periodo anterior', Detalle: `${formatDate(previousRangeStart)} - ${formatDate(previousRangeEnd)}` },
-                    { Bloque: 'Generado', Detalle: formatDateTime(new Date()) },
-                    { Bloque: 'Unidad foco', Detalle: topUnit ? `${topUnit[0]} (${formatNumber(topUnit[1])} trabajo(s))` : 'Sin unidad dominante' },
-                    { Bloque: 'Especialidad lider', Detalle: topType ? `${topType[0]} (${formatNumber(topType[1])} cierre(s))` : 'Sin especialidad dominante' },
-                    { Bloque: 'Condicion general', Detalle: `${conditionSummary.label} - ${conditionSummary.note}` },
-                    { Bloque: 'Equipo mas intervenido', Detalle: topEquipments[0] ? `${topEquipments[0][0]} (${formatNumber(topEquipments[0][1])})` : 'Sin datos' },
-                    { Bloque: 'Lider con mayor actividad', Detalle: topLeaders[0] ? `${topLeaders[0][0]} (${formatNumber(topLeaders[0][1])} trab.)` : 'Sin datos' },
-                    { Bloque: 'Alertas activas', Detalle: `${formatNumber(criticalMeasures.length)} critica(s) / ${formatNumber(watchMeasures.length)} seguimiento` }
-                ];
-                const rankingRows = [
-                    ...topEquipments.slice(0, 8).map(([label, value], index) => ({
-                        Categoria: 'Equipo',
-                        Ranking: index + 1,
-                        Nombre: label,
-                        Valor: value,
-                        Detalle: equipmentList.find(item => item.equipment === label)?.unit || ''
-                    })),
-                    ...topLeaders.slice(0, 8).map(([label, value], index) => ({
-                        Categoria: 'Lider',
-                        Ranking: index + 1,
-                        Nombre: label,
-                        Valor: value,
-                        Detalle: `${formatNumber((participantStats.get(label)?.units.size) || 0)} unidad(es)`
-                    }))
-                ];
-                const distributionRows = [
-                    ...specialtyEntries.map(([label, value]) => ({
-                        Tipo: 'Especialidad',
-                        Nombre: label,
-                        Total: value,
-                        Participacion: `${tasks.length ? Math.round((value / tasks.length) * 100) : 0}%`
-                    })),
-                    ...unitEntries.map(([label, value]) => ({
-                        Tipo: 'Unidad',
-                        Nombre: label,
-                        Total: value,
-                        Participacion: `${tasks.length ? Math.round((value / tasks.length) * 100) : 0}%`
-                    }))
-                ];
+
+                // Build task rows for payload
+                const taskRows = tasks.map(item => ({
+                    fecha: formatDate(item.date),
+                    unidad: item.unit || '',
+                    equipo: item.equipment || '',
+                    especialidad: item.specialty || '',
+                    lider: item.leader || '',
+                    ot: item.ot || '',
+                    hh: Number((item.hh || 0).toFixed(1))
+                }));
+
+                const payload = {
+                    fileName: `Planify_Control_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.xlsx`,
+                    rango: {
+                        desde: formatDate(rangeStart),
+                        hasta: formatDate(rangeEnd),
+                        diasAnalizados: Math.round((rangeEnd - rangeStart) / 86400000) + 1
+                    },
+                    periodoAnterior: { desde: formatDate(previousRangeStart), hasta: formatDate(previousRangeEnd) },
+                    generado: formatDateTime(new Date()),
+                    kpis: {
+                        trabajosCerrados: { actual: tasks.length, anterior: previousTasks.length, porDia: comparisonCards.tasks.shortLabel, extra: `+${tasks.length - previousTasks.length}` },
+                        mediciones: { actual: measures.length, anterior: previousMeasures.length, porDia: comparisonCards.measures.shortLabel },
+                        hhRegistradas: { actual: Number(hh.toFixed(1)), anterior: Number(previousHh.toFixed(1)), porTrabajo: comparisonCards.hh.shortLabel },
+                        otCerradas: { actual: ots.size, anterior: previousOts.size, avisos: `${ots.size} avisos` },
+                        equiposIntervenidos: { actual: activeEquipments.size, anterior: previousActiveEquipments.size },
+                        personalParticipante: { actual: participants.size, anterior: previousParticipants.size },
+                        lecturasCriticas: { actual: criticalMeasures.length, anterior: previousCriticalMeasures.length },
+                        seguimientoActivo: { actual: watchMeasures.length, anterior: previousWatchMeasures.length }
+                    },
+                    distribucion: {
+                        especialidad: specialtyEntries.map(([nombre, total]) => ({ nombre, total, pct: tasks.length ? Math.round((total / tasks.length) * 100) : 0 })),
+                        unidad: unitEntries.map(([nombre, total]) => ({ nombre, total, pct: tasks.length ? Math.round((total / tasks.length) * 100) : 0 })),
+                        condicion: (() => {
+                            const norm = measures.filter(m => getMetricStatus(m.type, m.value).label === 'Normal').length;
+                            const alerta = measures.filter(m => getMetricStatus(m.type, m.value).label !== 'Normal').length;
+                            const tot = norm + alerta || 1;
+                            return [{ estado: 'Normal', total: norm, pct: Math.round(norm / tot * 100) }, { estado: 'Alerta', total: alerta, pct: Math.round(alerta / tot * 100) }];
+                        })(),
+                        mixMediciones: (() => {
+                            const vib = measures.filter(m => m.type === 'vibracion').length;
+                            const ter = measures.filter(m => m.type === 'termografia').length;
+                            const tot = vib + ter || 1;
+                            return [{ tipo: 'Vibracion', total: vib, pct: Math.round(vib / tot * 100) }, { tipo: 'Termografia', total: ter, pct: Math.round(ter / tot * 100) }];
+                        })()
+                    },
+                    alertas: alertRows,
+                    trabajos: taskRows,
+                    lideres: topLeaders.map(([nombre, trabajos]) => ({ nombre, trabajos, unidades: participantStats.get(nombre)?.units.size || 0 })),
+                    topEquipos: topEquipments.slice(0, 8).map(([nombre, trabajos]) => ({ nombre, trabajos, unidad: equipmentList.find(e => e.equipment === nombre)?.unit || '' })),
+                    mensajes: {
+                        lecturaEjecutiva: { titulo: 'Lectura Ejecutiva', body: conditionSummary.note || '' },
+                        riesgoTecnico: { titulo: 'Riesgo Tecnico', body: `${criticalMeasures.length} lecturas criticas detectadas` },
+                        movimientoSugerido: { titulo: 'Movimiento Sugerido', body: topUnit ? `Priorizar ${topUnit[0]}` : 'Sin datos' },
+                        siguienteAccion: { titulo: 'Siguiente Accion', body: topLeaders[0] ? `Coordinar con ${topLeaders[0][0]}` : 'Sin datos' }
+                    },
+                    accionesSugeridas: [
+                        `Revisar ${watchMeasures.length} alertas activas`,
+                        `Programar seguimiento en ${topUnit ? topUnit[0] : 'unidad principal'}`,
+                        'Actualizar historial de mediciones',
+                        'Generar reporte para supervision'
+                    ],
+                    tendenciaAlertas: []
+                };
 
                 try {
-                    const exportedVisual = await exportVisualDashboardWorkbook({
-                        fileName: `planify_control_visual_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.xlsx`,
-                        summaryRows,
-                        taskRows,
-                        measureRows,
-                        alertRows,
-                        meetingRows,
-                        rankingRows,
-                        distributionRows
-                    });
-                    if (exportedVisual) {
-                        if (exportXlsxBtn) {
-                            exportXlsxBtn.disabled = false;
-                            exportXlsxBtn.innerHTML = originalLabel;
-                        }
-                        return;
-                    }
-                } catch (error) {
-                    console.error('No se pudo generar el Excel visual, se usara el export analitico.', error);
-                }
+                    const endpointCandidates = [
+                        `${window.location.origin}/generar-excel`,
+                        'http://127.0.0.1:3001/generar-excel',
+                        'http://localhost:3001/generar-excel'
+                    ];
+                    let lastError = null;
+                    let result = null;
 
-                if (!canFallback) {
+                    for (const endpoint of endpointCandidates) {
+                        try {
+                            const response = await fetch(endpoint, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+                            const parsed = await response.json().catch(() => ({}));
+
+                            if (!response.ok) {
+                                throw new Error(parsed.error || `Error en servidor Excel (${endpoint})`);
+                            }
+                            if (!parsed?.xlsx) {
+                                throw new Error(`Respuesta Excel invalida (${endpoint})`);
+                            }
+
+                            result = parsed;
+                            lastError = null;
+                            break;
+                        } catch (error) {
+                            lastError = error;
+                        }
+                    }
+
+                    if (lastError || !result?.xlsx) {
+                        throw lastError || new Error('No se pudo generar el Excel');
+                    }
+
+                    // Decode base64 and trigger download
+                    const binary = atob(result.xlsx);
+                    const bytes = new Uint8Array(binary.length);
+                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = payload.fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                } catch (error) {
+                    console.error('[Planify] Error al generar Excel via servidor:', error);
+                    alert('Error al generar Excel. Verifica que el servidor local de Planify o pdf-server.js esten corriendo y con acceso a Python.');
+                } finally {
                     if (exportXlsxBtn) {
                         exportXlsxBtn.disabled = false;
                         exportXlsxBtn.innerHTML = originalLabel;
                     }
-                    return;
-                }
-
-                workbook.Props = {
-                    Title: 'Planify - Dashboard Analitico de Control',
-                    Subject: 'Reporte exportado desde Control',
-                    Author: 'Planify',
-                    Company: 'Planify',
-                    CreatedDate: new Date()
-                };
-
-                appendJsonSheet('Portada', meetingRows, { Bloque: 'Reporte', Detalle: 'Sin informacion' });
-                appendJsonSheet('Resumen', summaryRows, { Indicador: 'Sin datos', Actual: '', Anterior: '', Variacion: '' });
-                appendJsonSheet('Ranking', rankingRows, { Categoria: 'Sin datos', Ranking: '', Nombre: '', Valor: '', Detalle: '' });
-                appendJsonSheet('Distribucion', distributionRows, { Tipo: 'Sin datos', Nombre: '', Total: '', Participacion: '' });
-                appendJsonSheet('Trabajos', taskRows, { Info: 'Sin trabajos en el rango' });
-                appendJsonSheet('Mediciones', measureRows, { Info: 'Sin mediciones en el rango' });
-                appendJsonSheet('Alertas', alertRows, { Info: 'Sin alertas activas en el rango' });
-                window.XLSX.writeFile(workbook, `planify_control_analitico_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.xlsx`);
-                if (exportXlsxBtn) {
-                    exportXlsxBtn.disabled = false;
-                    exportXlsxBtn.innerHTML = originalLabel;
                 }
             }
 
@@ -3207,7 +3248,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
       </div>
       <div class="analytics-toolbar-actions">
         <button id="dashboard-export-xlsx" class="analytics-toolbar-btn" type="button"><i class="fa-solid fa-file-excel"></i> Excel Visual</button>
-        <button id="dashboard-export-print" class="analytics-toolbar-btn" type="button"><i class="fa-solid fa-file-pdf"></i> PDF Gerencial</button>
+        <button id="dashboard-export-print" data-accion="exportar-pdf" class="analytics-toolbar-btn" type="button"><i class="fa-solid fa-file-pdf"></i> PDF Gerencial</button>
       </div>
     </div>
     <div class="analytics-specialty-row">${specialtyHtml}</div>
@@ -3651,12 +3692,97 @@ ${conditionKpiHtml}
 
             const exportPrintBtn = document.getElementById('dashboard-export-print');
             if (exportPrintBtn) {
-                exportPrintBtn.addEventListener('click', () => {
-                    closeDetailDrawer();
-                    document.body.classList.add('analytics-print-mode');
-                    requestAnimationFrame(() => {
-                        setTimeout(() => window.print(), 60);
-                    });
+                exportPrintBtn.addEventListener('click', async () => {
+                    // Build alert rows for payload
+                    const alertRowsPdf = [
+                        ...criticalMeasures.map(item => ({
+                            categoria: 'Critica',
+                            equipo: item.equipment,
+                            unidad: item.unit || '',
+                            punto: item.point || '',
+                            valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
+                            fecha: formatDateTime(item.date)
+                        })),
+                        ...watchMeasures.map(item => ({
+                            categoria: 'Seguimiento',
+                            equipo: item.equipment,
+                            unidad: item.unit || '',
+                            punto: item.point || '',
+                            valor: `${formatNumber(item.value, item.type === 'vibracion' ? 2 : 1)} ${item.type === 'vibracion' ? 'mm/s' : 'C'}`,
+                            fecha: formatDateTime(item.date)
+                        }))
+                    ];
+
+                    const taskRowsPdf = tasks.map(item => ({
+                        fecha: formatDate(item.date),
+                        unidad: item.unit || '',
+                        equipo: item.equipment || '',
+                        especialidad: item.specialty || '',
+                        lider: item.leader || '',
+                        ot: item.ot || '',
+                        hh: Number((item.hh || 0).toFixed(1))
+                    }));
+
+                    const pdfPayload = {
+                        fileName: `Planify_Informe_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.pdf`,
+                        rango: {
+                            desde: formatDate(rangeStart),
+                            hasta: formatDate(rangeEnd),
+                            diasAnalizados: Math.round((rangeEnd - rangeStart) / 86400000) + 1
+                        },
+                        periodoAnterior: { desde: formatDate(previousRangeStart), hasta: formatDate(previousRangeEnd) },
+                        generado: formatDateTime(new Date()),
+                        kpis: {
+                            trabajosCerrados: { actual: tasks.length, anterior: previousTasks.length, porDia: comparisonCards.tasks.shortLabel, extra: `+${tasks.length - previousTasks.length}` },
+                            mediciones: { actual: measures.length, anterior: previousMeasures.length, porDia: comparisonCards.measures.shortLabel },
+                            hhRegistradas: { actual: Number(hh.toFixed(1)), anterior: Number(previousHh.toFixed(1)), porTrabajo: comparisonCards.hh.shortLabel },
+                            otCerradas: { actual: ots.size, anterior: previousOts.size, avisos: `${ots.size} avisos` },
+                            equiposIntervenidos: { actual: activeEquipments.size, anterior: previousActiveEquipments.size },
+                            personalParticipante: { actual: participants.size, anterior: previousParticipants.size },
+                            lecturasCriticas: { actual: criticalMeasures.length, anterior: previousCriticalMeasures.length },
+                            seguimientoActivo: { actual: watchMeasures.length, anterior: previousWatchMeasures.length }
+                        },
+                        distribucion: {
+                            especialidad: specialtyEntries.map(([nombre, total]) => ({ nombre, total, pct: tasks.length ? Math.round((total / tasks.length) * 100) : 0 })),
+                            unidad: unitEntries.map(([nombre, total]) => ({ nombre, total, pct: tasks.length ? Math.round((total / tasks.length) * 100) : 0 })),
+                            condicion: (() => {
+                                const controlado = measures.filter(m => getMetricStatus(m.type, m.value).label === 'Controlado').length;
+                                const seguimiento = measures.filter(m => getMetricStatus(m.type, m.value).label === 'Seguimiento').length;
+                                const critico = measures.filter(m => getMetricStatus(m.type, m.value).label === 'Atencion').length;
+                                const tot = controlado + seguimiento + critico || 1;
+                                return [
+                                    { estado: 'Controlado', total: controlado, pct: Math.round(controlado / tot * 100) },
+                                    { estado: 'Seguimiento', total: seguimiento, pct: Math.round(seguimiento / tot * 100) },
+                                    { estado: 'Critico', total: critico, pct: Math.round(critico / tot * 100) }
+                                ];
+                            })(),
+                            mixMediciones: (() => {
+                                const vib = measures.filter(m => m.type === 'vibracion').length;
+                                const ter = measures.filter(m => m.type === 'termografia').length;
+                                const tot = vib + ter || 1;
+                                return [{ tipo: 'Vibracion', total: vib, pct: Math.round(vib / tot * 100) }, { tipo: 'Termografia', total: ter, pct: Math.round(ter / tot * 100) }];
+                            })()
+                        },
+                        alertas: alertRowsPdf,
+                        trabajos: taskRowsPdf,
+                        lideres: topLeaders.map(([nombre, trabajos]) => ({ nombre, trabajos, unidades: participantStats.get(nombre)?.units.size || 0 })),
+                        topEquipos: topEquipments.slice(0, 8).map(([nombre, trabajos]) => ({ nombre, trabajos, unidad: equipmentList.find(e => e.equipment === nombre)?.unit || '' })),
+                        mensajes: {
+                            lecturaEjecutiva: { titulo: 'Lectura Ejecutiva', body: conditionSummary.note || '' },
+                            riesgoTecnico: { titulo: 'Riesgo Tecnico', body: `${criticalMeasures.length} lecturas criticas detectadas` },
+                            movimientoSugerido: { titulo: 'Movimiento Sugerido', body: topUnit ? `Priorizar ${topUnit[0]}` : 'Sin datos' },
+                            siguienteAccion: { titulo: 'Siguiente Accion', body: topLeaders[0] ? `Coordinar con ${topLeaders[0][0]}` : 'Sin datos' }
+                        },
+                        accionesSugeridas: [
+                            `Revisar ${watchMeasures.length} alertas activas`,
+                            `Programar seguimiento en ${topUnit ? topUnit[0] : 'unidad principal'}`,
+                            'Actualizar historial de mediciones',
+                            'Generar reporte para supervision'
+                        ],
+                        tendenciaAlertas: []
+                    };
+
+                    await exportarPDFPython(pdfPayload);
                 });
             }
 

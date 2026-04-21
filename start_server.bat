@@ -3,7 +3,7 @@ setlocal
 set "APP_DIR=%~dp0"
 if "%APP_DIR:~-1%"=="\" set "APP_DIR=%APP_DIR:~0,-1%"
 cd /d "%APP_DIR%"
-echo Iniciando Planner App en http://localhost:4173
+echo Iniciando Planner App (si 4173 esta ocupado, usara el siguiente puerto libre)
 
 if exist "C:\Program Files\nodejs\node.exe" (
   "C:\Program Files\nodejs\node.exe" "%APP_DIR%\server.js"

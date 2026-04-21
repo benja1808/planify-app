@@ -17,7 +17,10 @@ function _storeLocal(tabla) {
         tareas: 'tareas', trabajadores: 'trabajadores', equipos: 'equipos',
         historial_tareas: 'historial', tareas_historial: 'historial',
         mediciones: 'mediciones', historial_mediciones: 'mediciones',
-        horas_extra: 'horas_extra'
+        horas_extra: 'horas_extra',
+        insumos: 'insumos',
+        solicitudes_insumos: 'solicitudes_insumos',
+        movimientos_inventario: 'movimientos_inventario'
     };
     return map[tabla] || null;
 }
@@ -71,6 +74,10 @@ let estado = {
     historialTareas: [],
     historialMediciones: [],
     equipos: [],
+    insumos: [],
+    solicitudesInsumos: [],
+    movimientosInventario: [],
+    informeNovedadesDiarias: null,
     usuarioActual: 'visita', // 'visita', 'admin', 'trabajador'
     trabajadorLogueado: null  // objeto trabajador cuando rol === 'trabajador'
 };
@@ -109,8 +116,33 @@ const ubicacionesDisponibles = [
 // Compatibilidad de nombres de tablas entre distintas versiones del esquema.
 const tablasDb = {
     historial: 'historial_tareas',
-    mediciones: 'mediciones'
+    mediciones: 'mediciones',
+    insumos: 'insumos',
+    solicitudesInsumos: 'solicitudes_insumos',
+    movimientosInventario: 'movimientos_inventario'
 };
+
+const insumosFeatureState = {
+    tablasRemotas: {
+        insumos: false,
+        solicitudes: false,
+        movimientos: false
+    },
+    aprobadoresPersistentes: false
+};
+
+const INSUMOS_DEMO = [
+    { codigo: 1, nombre: 'Amortiguador de caida', marca: 'SEGMA WORK ON TOP', unidad: 'UNI', stock_inicial: 12, stock_actual: 12, activo: true },
+    { codigo: 2, nombre: 'Antiparra ductile', marca: 'Libus', unidad: 'UNI', stock_inicial: 12, stock_actual: 2, activo: true },
+    { codigo: 3, nombre: 'Arnes 4 argollas', marca: 'MSA', unidad: 'UNI', stock_inicial: 8, stock_actual: 5, activo: true },
+    { codigo: 4, nombre: 'Bala auditiva reusable', marca: '3M', unidad: 'PARES', stock_inicial: 40, stock_actual: 18, activo: true },
+    { codigo: 5, nombre: 'Guante nitrilo', marca: 'Ansell', unidad: 'PARES', stock_inicial: 30, stock_actual: 26, activo: true },
+    { codigo: 6, nombre: 'Casco con barbiquejo', marca: 'Steelpro', unidad: 'UNI', stock_inicial: 10, stock_actual: 7, activo: true },
+    { codigo: 7, nombre: 'Lubricante cadena alta temperatura', marca: 'Mobil', unidad: 'UNI', stock_inicial: 14, stock_actual: 9, activo: true },
+    { codigo: 8, nombre: 'Grasa multiproposito', marca: 'Shell', unidad: 'UNI', stock_inicial: 20, stock_actual: 11, activo: true },
+    { codigo: 9, nombre: 'Paño industrial absorbente', marca: 'Kimberly', unidad: 'UNI', stock_inicial: 50, stock_actual: 17, activo: true },
+    { codigo: 10, nombre: 'Respirador media cara', marca: '3M', unidad: 'UNI', stock_inicial: 16, stock_actual: 6, activo: true }
+];
 
 function esErrorTablaNoExiste(error) {
     if (!error) return false;
@@ -152,6 +184,337 @@ async function resolverTabla(candidatas) {
         if (!esErrorTablaNoExiste(error)) throw error;
     }
     return null;
+}
+
+function enteroSeguro(valor, fallback = 0) {
+    const numero = Number(valor);
+    return Number.isFinite(numero) ? Math.round(numero) : fallback;
+}
+
+function normalizarTextoPlano(valor) {
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toUpperCase();
+}
+
+function normalizarUnidadInsumo(valor) {
+    const base = normalizarTextoPlano(valor);
+    if (!base) return 'UNI';
+    return base.includes('PAR') ? 'PARES' : 'UNI';
+}
+
+const CATEGORIAS_INSUMO = [
+    { id: 'epp_cabeza',     label: 'EPP Cabeza',       icon: 'fa-hard-hat',         color: '#2563eb', keywords: ['casco', 'barbiquejo', 'balaclava', 'cortaviento', 'gorro'] },
+    { id: 'epp_ojos',       label: 'EPP Ojos/Cara',    icon: 'fa-glasses',          color: '#0891b2', keywords: ['antiparra', 'lente', 'careta', 'mascara', 'mascarilla facial', 'facial'] },
+    { id: 'epp_respirat',   label: 'EPP Respiratorio', icon: 'fa-head-side-mask',   color: '#0d9488', keywords: ['respirador', 'filtro', 'mascarilla', 'n95', 'barbijo'] },
+    { id: 'epp_auditivo',   label: 'EPP Auditivo',     icon: 'fa-deaf',             color: '#7c3aed', keywords: ['auditiv', 'tapon', 'tapones', 'bala', 'orejeras', 'protector oido'] },
+    { id: 'epp_manos',      label: 'EPP Manos',        icon: 'fa-hand',             color: '#9333ea', keywords: ['guante', 'manopla'] },
+    { id: 'epp_pies',       label: 'EPP Pies',         icon: 'fa-shoe-prints',      color: '#b45309', keywords: ['bota', 'zapato', 'calzado', 'polaina', 'cubrecalzado'] },
+    { id: 'epp_cuerpo',     label: 'Ropa/Cuerpo',      icon: 'fa-shirt',            color: '#ea580c', keywords: ['buzo', 'chaleco', 'polera', 'pantalon', 'camisa', 'overol', 'traje', 'pechera', 'delantal', 'parka', 'chaqueta', 'ropa'] },
+    { id: 'epp_altura',     label: 'Trabajo en altura', icon: 'fa-person-falling',  color: '#dc2626', keywords: ['arnes', 'amortiguador', 'linea de vida', 'mosqueton', 'eslinga', 'retract', 'cabo de vida'] },
+    { id: 'lubricantes',    label: 'Lubricantes',      icon: 'fa-oil-can',          color: '#eab308', keywords: ['lubricante', 'aceite', 'grasa', 'solvente', 'desengrasante', 'silicona'] },
+    { id: 'limpieza',       label: 'Limpieza',         icon: 'fa-spray-can',        color: '#14b8a6', keywords: ['pano', 'paño', 'wype', 'trapo', 'absorbente', 'detergente', 'jabon', 'escoba', 'virutilla'] },
+    { id: 'herramientas',   label: 'Herramientas',     icon: 'fa-screwdriver-wrench', color: '#475569', keywords: ['llave', 'martillo', 'alicate', 'destornillador', 'herramienta', 'broca', 'lija'] },
+    { id: 'consumibles',    label: 'Consumibles',      icon: 'fa-box-open',         color: '#f97316', keywords: [] }
+];
+
+function inferirCategoriaInsumo(nombre = '') {
+    const texto = normalizarTextoPlano(nombre).toLowerCase();
+    if (!texto) return 'consumibles';
+    for (const cat of CATEGORIAS_INSUMO) {
+        if (cat.keywords.some((kw) => texto.includes(kw))) return cat.id;
+    }
+    return 'consumibles';
+}
+
+function escHtml(valor) {
+    return String(valor ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function abrirModalInsumo({ eyebrow = 'Insumo', titulo = 'Editar', bodyHtml = '', confirmLabel = 'Guardar', onConfirm }) {
+    const modal = document.getElementById('modal-insumo-editar');
+    const eyebrowEl = document.getElementById('insumo-editar-eyebrow');
+    const titleEl = document.getElementById('insumo-editar-titulo');
+    const bodyEl = document.getElementById('insumo-editar-body');
+    const errorEl = document.getElementById('insumo-editar-error');
+    const btnOk = document.getElementById('btn-insumo-editar-confirmar');
+    const btnCancel = document.getElementById('btn-insumo-editar-cancelar');
+    if (!modal || !bodyEl || !btnOk || !btnCancel) return;
+
+    eyebrowEl.textContent = eyebrow;
+    titleEl.textContent = titulo;
+    bodyEl.innerHTML = bodyHtml;
+    errorEl.style.display = 'none';
+    errorEl.textContent = '';
+    btnOk.innerHTML = confirmLabel;
+    btnOk.disabled = false;
+    modal.style.display = 'flex';
+
+    const cerrar = () => { modal.style.display = 'none'; };
+    btnCancel.onclick = cerrar;
+    btnOk.onclick = async () => {
+        errorEl.style.display = 'none';
+        btnOk.disabled = true;
+        const originalLabel = btnOk.innerHTML;
+        btnOk.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+        try {
+            await onConfirm?.();
+            cerrar();
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        } catch (error) {
+            errorEl.textContent = error?.message || 'No se pudo guardar.';
+            errorEl.style.display = 'block';
+            btnOk.disabled = false;
+            btnOk.innerHTML = originalLabel;
+        }
+    };
+}
+
+function obtenerCategoriaInsumoMeta(id) {
+    return CATEGORIAS_INSUMO.find((cat) => cat.id === id) || CATEGORIAS_INSUMO[CATEGORIAS_INSUMO.length - 1];
+}
+
+function calcularStockMinimoEfectivo(item) {
+    const min = enteroSeguro(item?.stock_minimo, 0);
+    if (min > 0) return min;
+    return Math.max(1, Math.round(enteroSeguro(item?.stock_inicial, 0) * 0.3));
+}
+
+function normalizarRegistroInsumo(item = {}, fallback = {}) {
+    const stockInicial = enteroSeguro(
+        item.stock_inicial ?? item.stockInicial ?? fallback.stock_inicial ?? fallback.stockInicial ?? item.stock_actual ?? item.stockActual,
+        0
+    );
+    const stockActual = enteroSeguro(
+        item.stock_actual ?? item.stockActual ?? fallback.stock_actual ?? fallback.stockActual ?? stockInicial,
+        stockInicial
+    );
+    const codigo = enteroSeguro(item.codigo ?? fallback.codigo ?? 0, 0);
+    const nombre = String(item.nombre ?? fallback.nombre ?? '').trim();
+    const categoriaRaw = String(item.categoria ?? fallback.categoria ?? '').trim();
+    const categoria = CATEGORIAS_INSUMO.some((cat) => cat.id === categoriaRaw)
+        ? categoriaRaw
+        : (categoriaRaw ? 'consumibles' : inferirCategoriaInsumo(nombre));
+    return {
+        id: item.id || fallback.id || crypto.randomUUID(),
+        codigo: codigo || null,
+        nombre,
+        marca: String(item.marca ?? fallback.marca ?? '').trim(),
+        unidad: normalizarUnidadInsumo(item.unidad ?? fallback.unidad),
+        stock_actual: stockActual,
+        stock_inicial: stockInicial,
+        stock_minimo: enteroSeguro(item.stock_minimo ?? fallback.stock_minimo, 0),
+        categoria,
+        ubicacion: String(item.ubicacion ?? fallback.ubicacion ?? '').trim(),
+        observaciones: String(item.observaciones ?? fallback.observaciones ?? '').trim(),
+        activo: item.activo !== false && fallback.activo !== false,
+        created_at: item.created_at || fallback.created_at || new Date().toISOString()
+    };
+}
+
+function normalizarSolicitudInsumo(item = {}) {
+    return {
+        id: item.id || crypto.randomUUID(),
+        trabajador_id: item.trabajador_id || item.user_id || item.userId || null,
+        insumo_id: item.insumo_id || item.insumoId || null,
+        cantidad: enteroSeguro(item.cantidad, 0),
+        estado: String(item.estado || 'pendiente').toLowerCase(),
+        aprobado_por: item.aprobado_por || null,
+        fecha_solicitud: item.fecha_solicitud || item.created_at || new Date().toISOString(),
+        fecha_aprobacion: item.fecha_aprobacion || null,
+        observaciones: item.observaciones || item.motivo_rechazo || null,
+        created_at: item.created_at || item.fecha_solicitud || new Date().toISOString()
+    };
+}
+
+function normalizarMovimientoInventario(item = {}) {
+    return {
+        id: item.id || crypto.randomUUID(),
+        insumo_id: item.insumo_id || item.insumoId || null,
+        tipo: String(item.tipo || 'salida').toLowerCase(),
+        cantidad: enteroSeguro(item.cantidad, 0),
+        referencia_id: item.referencia_id || item.referenciaId || null,
+        creado_por: item.creado_por || null,
+        motivo: String(item.motivo || item.observaciones || '').trim(),
+        stock_antes: item.stock_antes != null ? enteroSeguro(item.stock_antes, 0) : null,
+        stock_despues: item.stock_despues != null ? enteroSeguro(item.stock_despues, 0) : null,
+        fecha: item.fecha || item.created_at || new Date().toISOString(),
+        created_at: item.created_at || item.fecha || new Date().toISOString()
+    };
+}
+
+function construirCatalogoDemoInsumos() {
+    return INSUMOS_DEMO.map((item) => normalizarRegistroInsumo(item, {
+        id: `ins_demo_${String(item.codigo).padStart(3, '0')}`
+    }));
+}
+
+function ordenarCatalogoInsumos(a, b) {
+    const codigoA = Number(a?.codigo || 0);
+    const codigoB = Number(b?.codigo || 0);
+    if (codigoA && codigoB && codigoA !== codigoB) return codigoA - codigoB;
+    return String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es');
+}
+
+function obtenerTrabajadorActual() {
+    if (!estado.trabajadorLogueado?.id) return estado.trabajadorLogueado;
+    return estado.trabajadores.find((trabajador) => trabajador.id === estado.trabajadorLogueado.id) || estado.trabajadorLogueado;
+}
+
+function usuarioPuedeAprobarInsumos() {
+    if (estado.usuarioActual === 'admin') return true;
+    return Boolean(obtenerTrabajadorActual()?.puede_aprobar_insumos);
+}
+
+function usuarioSolicitanteActualId() {
+    return estado.usuarioActual === 'trabajador' ? obtenerTrabajadorActual()?.id || null : null;
+}
+
+function nombreAprobadorActual() {
+    if (estado.usuarioActual === 'admin') return 'Planificador';
+    return obtenerTrabajadorActual()?.nombre || 'Supervisor';
+}
+
+function formatearFechaCorta(valor) {
+    if (!valor) return '--';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return '--';
+    return fecha.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatearCantidadInsumo(cantidad, unidad) {
+    const numero = enteroSeguro(cantidad, 0);
+    return `${numero} ${normalizarUnidadInsumo(unidad) === 'PARES' ? 'pares' : 'uni'}`;
+}
+
+function obtenerNombreTrabajadorPorId(id) {
+    const trabajador = estado.trabajadores.find((item) => String(item.id) === String(id));
+    return trabajador?.nombre || 'Sin asignar';
+}
+
+function obtenerInsumosActivos() {
+    return [...(estado.insumos || [])]
+        .filter((item) => item && item.activo !== false && item.nombre)
+        .sort(ordenarCatalogoInsumos);
+}
+
+function obtenerInsumosStockBajo() {
+    return obtenerInsumosActivos()
+        .filter((item) => {
+            const minimo = calcularStockMinimoEfectivo(item);
+            if (minimo <= 0) return false;
+            return enteroSeguro(item.stock_actual, 0) <= minimo;
+        })
+        .sort((a, b) => {
+            const minA = Math.max(calcularStockMinimoEfectivo(a), 1);
+            const minB = Math.max(calcularStockMinimoEfectivo(b), 1);
+            const ratioA = enteroSeguro(a.stock_actual, 0) / minA;
+            const ratioB = enteroSeguro(b.stock_actual, 0) / minB;
+            return ratioA - ratioB || enteroSeguro(a.stock_actual, 0) - enteroSeguro(b.stock_actual, 0);
+        });
+}
+
+async function refrescarDatosInsumos({ preferRemote = true } = {}) {
+    let catalogoLocal = [];
+    let solicitudesLocal = [];
+    let movimientosLocal = [];
+
+    if (window.localDB) {
+        [catalogoLocal, solicitudesLocal, movimientosLocal] = await Promise.all([
+            window.localDB.insumos.getAll().catch(() => []),
+            window.localDB.solicitudes_insumos.getAll().catch(() => []),
+            window.localDB.movimientos_inventario.getAll().catch(() => [])
+        ]);
+    }
+
+    let catalogo = (catalogoLocal || []).map((item) => normalizarRegistroInsumo(item)).filter((item) => item.nombre);
+    let solicitudes = (solicitudesLocal || []).map((item) => normalizarSolicitudInsumo(item));
+    let movimientos = (movimientosLocal || []).map((item) => normalizarMovimientoInventario(item));
+
+    if (preferRemote && navigator.onLine && supabaseClient) {
+        if (insumosFeatureState.tablasRemotas.insumos) {
+            const { data, error } = await supabaseClient
+                .from(tablasDb.insumos)
+                .select('*')
+                .order('codigo', { ascending: true });
+            if (!error && Array.isArray(data)) {
+                const merged = new Map();
+                data.map((item) => normalizarRegistroInsumo(item)).forEach((item) => {
+                    merged.set(String(item.codigo || item.id), item);
+                });
+                catalogo.forEach((item) => {
+                    const key = String(item.codigo || item.id);
+                    if (!merged.has(key)) merged.set(key, item);
+                });
+                catalogo = [...merged.values()];
+                if (window.localDB) {
+                    await window.localDB.insumos.clear().catch(() => {});
+                    if (catalogo.length) await window.localDB.insumos.bulk(catalogo).catch(() => {});
+                }
+            }
+        }
+
+        if (insumosFeatureState.tablasRemotas.solicitudes) {
+            const { data, error } = await supabaseClient
+                .from(tablasDb.solicitudesInsumos)
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (!error && Array.isArray(data)) {
+                const merged = new Map();
+                data.map((item) => normalizarSolicitudInsumo(item)).forEach((item) => {
+                    merged.set(String(item.id), item);
+                });
+                solicitudes.forEach((item) => {
+                    if (!merged.has(String(item.id))) merged.set(String(item.id), item);
+                });
+                solicitudes = [...merged.values()];
+                if (window.localDB) {
+                    await window.localDB.solicitudes_insumos.clear().catch(() => {});
+                    if (solicitudes.length) await window.localDB.solicitudes_insumos.bulk(solicitudes).catch(() => {});
+                }
+            }
+        }
+
+        if (insumosFeatureState.tablasRemotas.movimientos) {
+            const { data, error } = await supabaseClient
+                .from(tablasDb.movimientosInventario)
+                .select('*')
+                .order('fecha', { ascending: false })
+                .limit(200);
+            if (!error && Array.isArray(data)) {
+                const merged = new Map();
+                data.map((item) => normalizarMovimientoInventario(item)).forEach((item) => {
+                    merged.set(String(item.id), item);
+                });
+                movimientos.forEach((item) => {
+                    if (!merged.has(String(item.id))) merged.set(String(item.id), item);
+                });
+                movimientos = [...merged.values()];
+                if (window.localDB) {
+                    await window.localDB.movimientos_inventario.clear().catch(() => {});
+                    if (movimientos.length) await window.localDB.movimientos_inventario.bulk(movimientos).catch(() => {});
+                }
+            }
+        }
+    }
+
+    estado.insumos = [...catalogo].sort(ordenarCatalogoInsumos);
+    estado.solicitudesInsumos = [...solicitudes].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    estado.movimientosInventario = [...movimientos].sort((a, b) => new Date(b.fecha || b.created_at || 0) - new Date(a.fecha || a.created_at || 0));
+
+    return {
+        insumos: estado.insumos,
+        solicitudes: estado.solicitudesInsumos,
+        movimientos: estado.movimientosInventario
+    };
 }
 
 // --- FUNCIONES DE PERSISTENCIA (SUPABASE) ---
@@ -208,12 +571,28 @@ async function inicializarDatos() {
         estado.equipos = equipos || [];
 
         // Resolver tablas opcionales en paralelo
-        const [tablaMediciones, tablaHistorial] = await Promise.all([
+        const [tablaMediciones, tablaHistorial, tablaInsumos, tablaSolicitudesInsumos, tablaMovimientosInventario, permisosAprobadores] = await Promise.all([
             resolverTabla(['mediciones', 'historial_mediciones']),
-            resolverTabla(['historial_tareas', 'tareas_historial'])
+            resolverTabla(['historial_tareas', 'tareas_historial']),
+            resolverTabla(['insumos']),
+            resolverTabla(['solicitudes_insumos']),
+            resolverTabla(['movimientos_inventario']),
+            supabaseClient
+                .from('trabajadores')
+                .select('id, puede_aprobar_insumos')
+                .limit(1)
+                .then(({ error }) => !error)
+                .catch(() => false)
         ]);
         if (tablaMediciones) tablasDb.mediciones = tablaMediciones;
         if (tablaHistorial)  tablasDb.historial  = tablaHistorial;
+        if (tablaInsumos) tablasDb.insumos = tablaInsumos;
+        if (tablaSolicitudesInsumos) tablasDb.solicitudesInsumos = tablaSolicitudesInsumos;
+        if (tablaMovimientosInventario) tablasDb.movimientosInventario = tablaMovimientosInventario;
+        insumosFeatureState.tablasRemotas.insumos = Boolean(tablaInsumos);
+        insumosFeatureState.tablasRemotas.solicitudes = Boolean(tablaSolicitudesInsumos);
+        insumosFeatureState.tablasRemotas.movimientos = Boolean(tablaMovimientosInventario);
+        insumosFeatureState.aprobadoresPersistentes = Boolean(permisosAprobadores);
 
         // Cargar historial en paralelo, limitando a 200 registros más recientes
         const [medResult, histResult] = await Promise.all([
@@ -226,6 +605,7 @@ async function inicializarDatos() {
         ]);
         estado.historialMediciones = medResult.data  || [];
         estado.historialTareas     = histResult.data || [];
+        await refrescarDatosInsumos({ preferRemote: true });
 
         console.log('Datos inicializados correctamente.');
 
@@ -293,6 +673,7 @@ async function inicializarDatos() {
                 estado.equipos            = equipos    || [];
                 estado.historialTareas    = historial  || [];
                 estado.historialMediciones = mediciones || [];
+                await refrescarDatosInsumos({ preferRemote: false });
                 console.log('[offline] Datos locales cargados correctamente.');
                 if (window.syncQueue) window.syncQueue.actualizar();
                 window.syncQueue?.procesar();
@@ -302,7 +683,8 @@ async function inicializarDatos() {
                 console.error('[offline] Error cargando datos locales:', localErr);
             }
         }
-        alert('Hubo un error al conectar con la base de datos. Se usarán datos de respaldo.');
+        await refrescarDatosInsumos({ preferRemote: false });
+        alert('Hubo un error al conectar con la base de datos. Se usaran datos de respaldo.');
     }
 }
 
@@ -343,6 +725,9 @@ function configurarRealtime() {
     let realtimeTimer = null;
     let pendingTareas = false;
     let pendingTrabajadores = false;
+    let pendingInsumos = false;
+    let pendingSolicitudesInsumos = false;
+    let pendingMovimientosInventario = false;
 
     async function flushRealtime() {
         const fetches = [];
@@ -367,8 +752,32 @@ function configurarRealtime() {
                 estado.trabajadores = data || [];
             })
         );
+        if (pendingInsumos && insumosFeatureState.tablasRemotas.insumos) fetches.push(
+            supabaseClient.from(tablasDb.insumos).select('*').order('codigo', { ascending: true }).then(({ data }) => {
+                estado.insumos = (data || []).map((item) => normalizarRegistroInsumo(item)).sort(ordenarCatalogoInsumos);
+                window.localDB?.insumos.clear().catch(() => {});
+                if (data?.length) window.localDB?.insumos.bulk(estado.insumos).catch(() => {});
+            })
+        );
+        if (pendingSolicitudesInsumos && insumosFeatureState.tablasRemotas.solicitudes) fetches.push(
+            supabaseClient.from(tablasDb.solicitudesInsumos).select('*').order('created_at', { ascending: false }).then(({ data }) => {
+                estado.solicitudesInsumos = (data || []).map((item) => normalizarSolicitudInsumo(item));
+                window.localDB?.solicitudes_insumos.clear().catch(() => {});
+                if (data?.length) window.localDB?.solicitudes_insumos.bulk(estado.solicitudesInsumos).catch(() => {});
+            })
+        );
+        if (pendingMovimientosInventario && insumosFeatureState.tablasRemotas.movimientos) fetches.push(
+            supabaseClient.from(tablasDb.movimientosInventario).select('*').order('fecha', { ascending: false }).limit(200).then(({ data }) => {
+                estado.movimientosInventario = (data || []).map((item) => normalizarMovimientoInventario(item));
+                window.localDB?.movimientos_inventario.clear().catch(() => {});
+                if (data?.length) window.localDB?.movimientos_inventario.bulk(estado.movimientosInventario).catch(() => {});
+            })
+        );
         pendingTareas = false;
         pendingTrabajadores = false;
+        pendingInsumos = false;
+        pendingSolicitudesInsumos = false;
+        pendingMovimientosInventario = false;
         await Promise.all(fetches);
         renderizarVistaActual();
     }
@@ -386,6 +795,20 @@ function configurarRealtime() {
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'trabajadores' }, () => {
             pendingTrabajadores = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'insumos' }, () => {
+            pendingInsumos = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_insumos' }, () => {
+            pendingSolicitudesInsumos = true;
+            pendingInsumos = true;
+            pendingMovimientosInventario = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'movimientos_inventario' }, () => {
+            pendingMovimientosInventario = true;
             scheduleFlush();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'equipos' }, async () => {
@@ -748,10 +1171,1272 @@ window.iniciarTareaColaExposed = async function(tareaId) {
     renderizarVistaActual();
 };
 
+function badgeEstadoSolicitudInsumoHtml(estadoSolicitud) {
+    if (estadoSolicitud === 'aprobada') {
+        return '<span class="overtime-status approved"><i class="fa-solid fa-circle-check"></i> Aprobada</span>';
+    }
+    if (estadoSolicitud === 'rechazada') {
+        return '<span class="overtime-status rejected"><i class="fa-solid fa-circle-xmark"></i> Rechazada</span>';
+    }
+    return '<span class="overtime-status pending"><i class="fa-solid fa-hourglass-half"></i> Pendiente</span>';
+}
+
+function obtenerInsumoPorId(insumoId) {
+    return estado.insumos.find((item) => String(item.id) === String(insumoId)) || null;
+}
+
+function obtenerSolicitudInsumoPorId(solicitudId) {
+    return estado.solicitudesInsumos.find((item) => String(item.id) === String(solicitudId)) || null;
+}
+
+async function persistirSolicitudInsumoLocal(registro) {
+    estado.solicitudesInsumos = [
+        normalizarSolicitudInsumo(registro),
+        ...estado.solicitudesInsumos.filter((item) => String(item.id) !== String(registro.id))
+    ].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    await window.localDB?.solicitudes_insumos.upsert(normalizarSolicitudInsumo(registro)).catch(() => {});
+}
+
+async function persistirInsumoLocal(insumo) {
+    const normalizado = normalizarRegistroInsumo(insumo);
+    estado.insumos = [
+        normalizado,
+        ...estado.insumos.filter((item) => String(item.id) !== String(normalizado.id))
+    ].sort(ordenarCatalogoInsumos);
+    await window.localDB?.insumos.upsert(normalizado).catch(() => {});
+}
+
+async function registrarMovimientoInventarioLocal(movimiento) {
+    const normalizado = normalizarMovimientoInventario(movimiento);
+    estado.movimientosInventario = [
+        normalizado,
+        ...estado.movimientosInventario.filter((item) => String(item.id) !== String(normalizado.id))
+    ].sort((a, b) => new Date(b.fecha || b.created_at || 0) - new Date(a.fecha || a.created_at || 0));
+    await window.localDB?.movimientos_inventario.upsert(normalizado).catch(() => {});
+}
+
+async function sincronizarInsumoRemoto(insumo) {
+    if (!navigator.onLine || !supabaseClient || !insumosFeatureState.tablasRemotas.insumos) return false;
+    const payload = {
+        id: insumo.id,
+        codigo: insumo.codigo,
+        nombre: insumo.nombre,
+        marca: insumo.marca,
+        unidad: insumo.unidad,
+        stock_actual: insumo.stock_actual,
+        stock_inicial: insumo.stock_inicial,
+        stock_minimo: insumo.stock_minimo,
+        categoria: insumo.categoria,
+        ubicacion: insumo.ubicacion,
+        observaciones: insumo.observaciones,
+        activo: insumo.activo
+    };
+    const { error } = await supabaseClient.from(tablasDb.insumos).upsert(payload, { onConflict: 'id' });
+    if (error) {
+        console.warn('[insumos] No se pudo sincronizar insumo:', error.message);
+        return false;
+    }
+    return true;
+}
+
+async function sincronizarMovimientoRemoto(movimiento) {
+    if (!navigator.onLine || !supabaseClient || !insumosFeatureState.tablasRemotas.movimientos) return false;
+    const { error } = await supabaseClient.from(tablasDb.movimientosInventario).insert([movimiento]);
+    if (error) {
+        console.warn('[insumos] No se pudo sincronizar movimiento:', error.message);
+        return false;
+    }
+    return true;
+}
+
+async function actualizarConfiguracionInsumo(insumoId, patch = {}) {
+    const actual = obtenerInsumoPorId(insumoId);
+    if (!actual) throw new Error('Insumo no encontrado.');
+    const nuevo = normalizarRegistroInsumo({ ...actual, ...patch }, actual);
+    await persistirInsumoLocal(nuevo);
+    await sincronizarInsumoRemoto(nuevo);
+    return nuevo;
+}
+
+async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '') {
+    const insumo = obtenerInsumoPorId(insumoId);
+    if (!insumo) throw new Error('Insumo no encontrado.');
+    const antes = enteroSeguro(insumo.stock_actual, 0);
+    const despues = enteroSeguro(nuevoStock, antes);
+    if (antes === despues) return { insumo, movimiento: null };
+    const delta = despues - antes;
+    const actualizado = { ...insumo, stock_actual: despues };
+    await persistirInsumoLocal(actualizado);
+    await sincronizarInsumoRemoto(actualizado);
+
+    const movimiento = normalizarMovimientoInventario({
+        id: crypto.randomUUID(),
+        insumo_id: insumoId,
+        tipo: delta > 0 ? 'entrada' : 'ajuste',
+        cantidad: Math.abs(delta),
+        creado_por: nombreAprobadorActual(),
+        motivo: motivo || (delta > 0 ? 'Ingreso manual' : 'Ajuste manual'),
+        stock_antes: antes,
+        stock_despues: despues,
+        fecha: new Date().toISOString()
+    });
+    await registrarMovimientoInventarioLocal(movimiento);
+    await sincronizarMovimientoRemoto(movimiento);
+    return { insumo: actualizado, movimiento };
+}
+
+async function registrarMovimientoManual(insumoId, tipo, cantidad, motivo = '') {
+    const insumo = obtenerInsumoPorId(insumoId);
+    if (!insumo) throw new Error('Insumo no encontrado.');
+    const qty = enteroSeguro(cantidad, 0);
+    if (qty <= 0) throw new Error('La cantidad debe ser mayor a cero.');
+    const antes = enteroSeguro(insumo.stock_actual, 0);
+    const signo = (tipo === 'entrada') ? 1 : -1;
+    const despues = antes + signo * qty;
+    return ajustarStockInsumo(insumoId, despues, motivo || (tipo === 'entrada' ? 'Ingreso' : 'Salida manual'));
+}
+
+async function eliminarInsumoCatalogo(insumoId) {
+    const insumo = obtenerInsumoPorId(insumoId);
+    if (!insumo) return;
+    const actualizado = { ...insumo, activo: false };
+    await persistirInsumoLocal(actualizado);
+    await sincronizarInsumoRemoto(actualizado);
+}
+
+async function guardarSolicitudInsumo(trabajadorId, insumoId, cantidad) {
+    const solicitud = normalizarSolicitudInsumo({
+        id: crypto.randomUUID(),
+        trabajador_id: trabajadorId,
+        insumo_id: insumoId,
+        cantidad,
+        estado: 'pendiente',
+        aprobado_por: null,
+        fecha_solicitud: new Date().toISOString(),
+        fecha_aprobacion: null,
+        observaciones: null,
+        created_at: new Date().toISOString()
+    });
+
+    await persistirSolicitudInsumoLocal(solicitud);
+
+    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
+        const payload = {
+            id: solicitud.id,
+            trabajador_id: solicitud.trabajador_id,
+            insumo_id: solicitud.insumo_id,
+            cantidad: solicitud.cantidad,
+            estado: solicitud.estado,
+            aprobado_por: solicitud.aprobado_por,
+            fecha_solicitud: solicitud.fecha_solicitud,
+            fecha_aprobacion: solicitud.fecha_aprobacion,
+            observaciones: solicitud.observaciones
+        };
+        const { error } = await supabaseClient.from(tablasDb.solicitudesInsumos).insert([payload]);
+        if (error) console.warn('[insumos] No se pudo sincronizar la solicitud:', error.message);
+    }
+
+    actualizarBadgeInsumos();
+
+    return solicitud;
+}
+
+async function aprobarSolicitudInsumo(solicitudId) {
+    const solicitud = obtenerSolicitudInsumoPorId(solicitudId);
+    const insumo = obtenerInsumoPorId(solicitud?.insumo_id);
+    if (!solicitud || !insumo || solicitud.estado !== 'pendiente') return;
+
+    const ahora = new Date().toISOString();
+    const actualizada = {
+        ...solicitud,
+        estado: 'aprobada',
+        aprobado_por: nombreAprobadorActual(),
+        fecha_aprobacion: ahora,
+        observaciones: null,
+        created_at: solicitud.created_at || ahora
+    };
+    await persistirSolicitudInsumoLocal(actualizada);
+
+    const insumoActualizado = {
+        ...insumo,
+        stock_actual: enteroSeguro(insumo.stock_actual, 0) - enteroSeguro(solicitud.cantidad, 0)
+    };
+    await persistirInsumoLocal(insumoActualizado);
+
+    const usaTriggerRemoto = navigator.onLine
+        && insumosFeatureState.tablasRemotas.insumos
+        && insumosFeatureState.tablasRemotas.solicitudes
+        && insumosFeatureState.tablasRemotas.movimientos;
+
+    if (!usaTriggerRemoto) {
+        await registrarMovimientoInventarioLocal({
+            id: crypto.randomUUID(),
+            insumo_id: solicitud.insumo_id,
+            tipo: 'salida',
+            cantidad: solicitud.cantidad,
+            referencia_id: solicitud.id,
+            creado_por: nombreAprobadorActual(),
+            fecha: ahora,
+            created_at: ahora
+        });
+    }
+
+    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
+        const { error } = await supabaseClient
+            .from(tablasDb.solicitudesInsumos)
+            .update({
+                estado: 'aprobada',
+                aprobado_por: actualizada.aprobado_por,
+                fecha_aprobacion: ahora,
+                observaciones: null
+            })
+            .eq('id', solicitudId);
+        if (error) console.warn('[insumos] No se pudo aprobar remotamente:', error.message);
+    }
+
+    actualizarBadgeInsumos();
+}
+
+async function rechazarSolicitudInsumo(solicitudId, observaciones) {
+    const solicitud = obtenerSolicitudInsumoPorId(solicitudId);
+    if (!solicitud || solicitud.estado !== 'pendiente') return;
+
+    const ahora = new Date().toISOString();
+    const actualizada = {
+        ...solicitud,
+        estado: 'rechazada',
+        aprobado_por: nombreAprobadorActual(),
+        fecha_aprobacion: ahora,
+        observaciones,
+        created_at: solicitud.created_at || ahora
+    };
+    await persistirSolicitudInsumoLocal(actualizada);
+
+    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
+        const { error } = await supabaseClient
+            .from(tablasDb.solicitudesInsumos)
+            .update({
+                estado: 'rechazada',
+                aprobado_por: actualizada.aprobado_por,
+                fecha_aprobacion: ahora,
+                observaciones
+            })
+            .eq('id', solicitudId);
+        if (error) console.warn('[insumos] No se pudo rechazar remotamente:', error.message);
+    }
+
+    actualizarBadgeInsumos();
+}
+
+async function actualizarPermisoAprobadorInsumos(trabajadorId, puedeAprobar) {
+    const trabajador = estado.trabajadores.find((item) => String(item.id) === String(trabajadorId));
+    if (!trabajador) return;
+
+    const actualizado = { ...trabajador, puede_aprobar_insumos: puedeAprobar };
+    estado.trabajadores = estado.trabajadores.map((item) =>
+        String(item.id) === String(trabajadorId) ? actualizado : item
+    );
+    if (estado.trabajadorLogueado?.id === trabajadorId) estado.trabajadorLogueado = actualizado;
+    await window.localDB?.trabajadores.upsert(actualizado).catch(() => {});
+
+    if (navigator.onLine && supabaseClient && insumosFeatureState.aprobadoresPersistentes) {
+        const { error } = await supabaseClient
+            .from('trabajadores')
+            .update({ puede_aprobar_insumos: puedeAprobar })
+            .eq('id', trabajadorId);
+        if (error) console.warn('[insumos] No se pudo actualizar permiso remoto:', error.message);
+    }
+}
+
+function obtenerValorFilaInventario(fila, alias = []) {
+    for (const clave of alias) {
+        const normalizada = normalizarTextoPlano(clave);
+        if (Object.prototype.hasOwnProperty.call(fila, normalizada)) {
+            return fila[normalizada];
+        }
+    }
+    return '';
+}
+
+function extraerFilasInventarioDesdeLibro(libro) {
+    const nombreHoja = libro.SheetNames.find((nombre) => normalizarTextoPlano(nombre) === 'INVENTARIO') || libro.SheetNames[0];
+    if (!nombreHoja) throw new Error('El archivo no contiene hojas para importar.');
+    const hoja = libro.Sheets[nombreHoja];
+    const matriz = window.XLSX.utils.sheet_to_json(hoja, { header: 1, defval: '' });
+    const indiceHeader = matriz.findIndex((fila) => {
+        const headers = fila.map((celda) => normalizarTextoPlano(celda));
+        return headers.includes('CODIGO') && (headers.includes('PRODUCTO') || headers.includes('NOMBRE'));
+    });
+    if (indiceHeader === -1) {
+        throw new Error('No se encontro la cabecera esperada en la hoja INVENTARIO.');
+    }
+    const headers = matriz[indiceHeader].map((celda) => normalizarTextoPlano(celda));
+    return matriz
+        .slice(indiceHeader + 1)
+        .map((fila) => headers.reduce((acc, header, index) => {
+            if (header) acc[header] = fila[index];
+            return acc;
+        }, {}))
+        .filter((fila) => Object.values(fila).some((valor) => String(valor || '').trim() !== ''));
+}
+
+async function importarCatalogoInsumosDesdeExcel(file) {
+    if (!file) throw new Error('Selecciona un archivo Excel primero.');
+    if (!window.XLSX) throw new Error('SheetJS no esta disponible en el navegador.');
+
+    const workbook = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
+    const filas = extraerFilasInventarioDesdeLibro(workbook);
+    const existentesPorCodigo = new Map((estado.insumos || []).map((item) => [String(item.codigo || ''), item]));
+
+    const catalogo = filas.map((fila) => {
+        const codigo = enteroSeguro(obtenerValorFilaInventario(fila, ['CODIGO', 'COD']));
+        const nombre = String(obtenerValorFilaInventario(fila, ['PRODUCTO', 'NOMBRE', 'INSUMO']) || '').trim();
+        if (!codigo || !nombre) return null;
+        const base = existentesPorCodigo.get(String(codigo)) || { id: crypto.randomUUID() };
+        const stockInicial = enteroSeguro(obtenerValorFilaInventario(fila, ['STOCK INICIAL', 'STOCK', 'STOCK_INICIAL']));
+        const stockFinalRaw = obtenerValorFilaInventario(fila, ['STOCK FINAL', 'STOCK ACTUAL']);
+        const stockActual = stockFinalRaw !== '' && stockFinalRaw != null
+            ? enteroSeguro(stockFinalRaw, stockInicial)
+            : stockInicial;
+        return normalizarRegistroInsumo({
+            id: base.id,
+            codigo,
+            nombre,
+            marca: String(obtenerValorFilaInventario(fila, ['MARCA']) || '').trim(),
+            unidad: obtenerValorFilaInventario(fila, ['UNIDAD DE MEDIDA', 'UNIDAD', 'UNIDAD MEDIDA']),
+            stock_inicial: stockInicial,
+            stock_actual: stockActual,
+            categoria: base.categoria,
+            stock_minimo: base.stock_minimo,
+            ubicacion: base.ubicacion,
+            observaciones: base.observaciones,
+            activo: true,
+            created_at: base.created_at || new Date().toISOString()
+        }, base);
+    }).filter(Boolean);
+
+    if (!catalogo.length) throw new Error('No se encontraron insumos validos en la hoja INVENTARIO.');
+
+    estado.insumos = [...catalogo].sort(ordenarCatalogoInsumos);
+    await window.localDB?.insumos.clear().catch(() => {});
+    await window.localDB?.insumos.bulk(estado.insumos).catch(() => {});
+
+    let remoteSynced = false;
+    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.insumos) {
+        const { error } = await supabaseClient
+            .from(tablasDb.insumos)
+            .upsert(estado.insumos, { onConflict: 'codigo' });
+        remoteSynced = !error;
+        if (error) console.warn('[insumos] El catalogo se importo solo en local:', error.message);
+    }
+
+    return {
+        total: estado.insumos.length,
+        remoteSynced
+    };
+}
+
+function renderDashboardInsumosOverviewHtml() {
+    const bajos = obtenerInsumosStockBajo().slice(0, 4);
+    const pendientes = (estado.solicitudesInsumos || []).filter((item) => item.estado === 'pendiente').length;
+    const totalCatalogo = obtenerInsumosActivos().length;
+
+    return `
+        <section class="panel" style="margin-bottom:1rem;">
+            <div class="panel-header" style="justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                <div>
+                    <h2 style="margin-bottom:0.25rem;"><i class="fa-solid fa-boxes-stacked" style="color:#f97316;"></i> Stock de insumos</h2>
+                    <p style="margin:0; color:var(--text-muted); font-size:0.86rem;">Resumen rapido del inventario, solicitudes pendientes y alertas de reposicion.</p>
+                </div>
+                <button id="btn-open-insumos-dashboard" class="btn btn-outline" type="button" style="white-space:nowrap;">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Ir al modulo
+                </button>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.9rem; margin-top:1rem;">
+                <article class="overtime-kpi-card">
+                    <span class="overtime-kpi-label"><i class="fa-solid fa-box-open"></i> Catalogo activo</span>
+                    <div class="overtime-kpi-value">${totalCatalogo}</div>
+                    <div class="overtime-kpi-meta">Items listos para solicitud</div>
+                </article>
+                <article class="overtime-kpi-card">
+                    <span class="overtime-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
+                    <div class="overtime-kpi-value">${pendientes}</div>
+                    <div class="overtime-kpi-meta">Solicitudes esperando revision</div>
+                </article>
+                <article class="overtime-kpi-card">
+                    <span class="overtime-kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Stock bajo</span>
+                    <div class="overtime-kpi-value">${obtenerInsumosStockBajo().length}</div>
+                    <div class="overtime-kpi-meta">Items bajo 30% del stock inicial</div>
+                </article>
+            </div>
+            <div style="margin-top:1rem;">
+                ${bajos.length
+                    ? bajos.map((item) => `
+                        <div style="display:flex; justify-content:space-between; gap:1rem; padding:0.7rem 0; border-top:1px solid var(--border-color);">
+                            <div>
+                                <strong>${item.nombre}</strong>
+                                <div style="color:var(--text-muted); font-size:0.8rem;">Codigo ${item.codigo || '--'} · ${item.marca || 'Sin marca'}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <strong style="color:#dc2626;">${item.stock_actual}</strong>
+                                <div style="color:var(--text-muted); font-size:0.8rem;">de ${item.stock_inicial}</div>
+                            </div>
+                        </div>
+                    `).join('')
+                    : '<div class="empty-state empty-state--compact"><div><strong>Sin alertas de stock bajo</strong><p>El inventario actual esta por sobre el umbral critico.</p></div></div>'}
+            </div>
+        </section>
+    `;
+}
+
 
 // --- COMPONENTES Y VISTAS ---
 
 const mainContent = document.getElementById('main-content');
+
+async function renderInsumosView() {
+    mainContent.innerHTML = '<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando inventario...</p></div></div>';
+
+    await refrescarDatosInsumos({ preferRemote: true });
+
+    const trabajador = obtenerTrabajadorActual();
+    const esAdmin = estado.usuarioActual === 'admin';
+    const puedeAprobar = usuarioPuedeAprobarInsumos();
+    const puedeSolicitar = estado.usuarioActual === 'trabajador';
+    const catalogoActivo = obtenerInsumosActivos();
+    const stockBajo = obtenerInsumosStockBajo();
+    const solicitudesBase = (esAdmin || puedeAprobar)
+        ? [...estado.solicitudesInsumos]
+        : estado.solicitudesInsumos.filter((item) => String(item.trabajador_id) === String(trabajador?.id));
+    const pendientes = solicitudesBase.filter((item) => item.estado === 'pendiente').length;
+    const aprobadasMes = solicitudesBase.filter((item) => item.estado === 'aprobada' && String(item.fecha_aprobacion || '').slice(0, 7) === new Date().toISOString().slice(0, 7)).length;
+    const mensajeModo = (insumosFeatureState.tablasRemotas.insumos && insumosFeatureState.tablasRemotas.solicitudes)
+        ? 'Supabase listo para sincronizar inventario y solicitudes.'
+        : 'Modo local activo. Ejecuta el SQL de insumos en Supabase para sincronizacion multiusuario.';
+
+    const opcionesTrabajadores = [
+        '<option value="">Todos los solicitantes</option>',
+        ...estado.trabajadores
+            .slice()
+            .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
+            .map((item) => `<option value="${item.id}">${item.nombre}</option>`)
+    ].join('');
+
+    const categoriasPresentes = Array.from(new Set(catalogoActivo.map((i) => i.categoria))).filter(Boolean);
+    const categoriasDisponibles = CATEGORIAS_INSUMO.filter((cat) => categoriasPresentes.includes(cat.id));
+    const marcasDisponibles = Array.from(new Set(catalogoActivo.map((i) => i.marca).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'));
+    const ubicacionesExistentes = Array.from(new Set(catalogoActivo.map((i) => i.ubicacion).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'es'));
+
+    const hayCatalogo = catalogoActivo.length > 0;
+    const defaultTab = (esAdmin || puedeAprobar) ? 'catalogo' : (puedeSolicitar ? 'solicitudes' : 'catalogo');
+
+    mainContent.innerHTML = `
+        <div class="fade-in overtime-view inv-view" style="max-width:1180px; margin:0 auto;">
+            <section class="panel overtime-hero inv-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="overtime-eyebrow">Inventario operacional</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-boxes-stacked"></i> Inventario &amp; Insumos</h1>
+                        <p class="overtime-subtitle">Controla stock, categorias y solicitudes de EPP, lubricantes y consumibles.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-box-open"></i> ${catalogoActivo.length} items</span>
+                        <span class="dashboard-hero-badge" style="${stockBajo.length ? 'background:rgba(220,38,38,0.12); color:#dc2626;' : ''}"><i class="fa-solid fa-triangle-exclamation"></i> ${stockBajo.length} stock bajo</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-hourglass-half"></i> ${pendientes} pendientes</span>
+                    </div>
+                </div>
+                <div class="inv-kpi-grid">
+                    <article class="inv-kpi-card">
+                        <span class="inv-kpi-label"><i class="fa-solid fa-box"></i> Catalogo activo</span>
+                        <div class="inv-kpi-value">${catalogoActivo.length}</div>
+                        <div class="inv-kpi-meta">${categoriasDisponibles.length} categoria(s) · ${marcasDisponibles.length} marca(s)</div>
+                    </article>
+                    <article class="inv-kpi-card inv-kpi-card--danger">
+                        <span class="inv-kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Stock bajo</span>
+                        <div class="inv-kpi-value" style="color:#dc2626;">${stockBajo.length}</div>
+                        <div class="inv-kpi-meta">Items en o bajo su minimo</div>
+                    </article>
+                    <article class="inv-kpi-card">
+                        <span class="inv-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
+                        <div class="inv-kpi-value">${pendientes}</div>
+                        <div class="inv-kpi-meta">${esAdmin || puedeAprobar ? 'Esperando revision' : 'Tus solicitudes'}</div>
+                    </article>
+                    <article class="inv-kpi-card">
+                        <span class="inv-kpi-label"><i class="fa-solid fa-circle-check"></i> Aprobadas mes</span>
+                        <div class="inv-kpi-value">${aprobadasMes}</div>
+                        <div class="inv-kpi-meta">Solicitudes cerradas</div>
+                    </article>
+                </div>
+                <div class="inv-hero-note">
+                    <i class="fa-solid ${insumosFeatureState.tablasRemotas.insumos && insumosFeatureState.tablasRemotas.solicitudes ? 'fa-circle-check' : 'fa-floppy-disk'}"></i>
+                    <span>${mensajeModo}</span>
+                </div>
+            </section>
+
+            <nav class="inv-tabs" role="tablist">
+                <button class="inv-tab" data-tab="catalogo" role="tab"><i class="fa-solid fa-warehouse"></i> Catalogo <span class="inv-tab-count">${catalogoActivo.length}</span></button>
+                <button class="inv-tab" data-tab="solicitudes" role="tab"><i class="fa-solid fa-list-check"></i> Solicitudes <span class="inv-tab-count">${solicitudesBase.length}</span></button>
+                <button class="inv-tab" data-tab="movimientos" role="tab"><i class="fa-solid fa-arrow-right-arrow-left"></i> Movimientos <span class="inv-tab-count">${estado.movimientosInventario.length}</span></button>
+                ${esAdmin ? '<button class="inv-tab" data-tab="aprobadores" role="tab"><i class="fa-solid fa-user-shield"></i> Aprobadores</button>' : ''}
+            </nav>
+
+            <section class="inv-panel" data-tab-panel="catalogo">
+                <div class="inv-toolbar">
+                    <div class="inv-toolbar-row">
+                        <input id="inv-search" type="search" class="form-control" placeholder="Buscar por nombre, marca o codigo..." autocomplete="off">
+                        ${marcasDisponibles.length ? `
+                            <select id="inv-marca" class="form-control" style="max-width:200px;">
+                                <option value="">Todas las marcas</option>
+                                ${marcasDisponibles.map((m) => `<option value="${m}">${m}</option>`).join('')}
+                            </select>
+                        ` : ''}
+                        <label class="inv-toggle">
+                            <input id="inv-solo-bajo" type="checkbox">
+                            <span>Solo stock bajo</span>
+                        </label>
+                        ${esAdmin ? `
+                            <div class="inv-toolbar-actions">
+                                <input id="input-insumos-excel" type="file" accept=".xlsx,.xls" style="display:none;">
+                                <button id="btn-importar-insumos-excel" class="btn btn-outline" type="button"><i class="fa-solid fa-file-arrow-up"></i> Importar Excel</button>
+                                <button id="btn-nuevo-insumo" class="btn btn-primary" type="button"><i class="fa-solid fa-plus"></i> Nuevo item</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                    ${categoriasDisponibles.length ? `
+                        <div class="inv-chip-row" id="inv-chips-cat">
+                            <button class="inv-chip is-active" data-cat="">Todas <span>${catalogoActivo.length}</span></button>
+                            ${categoriasDisponibles.map((cat) => {
+                                const count = catalogoActivo.filter((i) => i.categoria === cat.id).length;
+                                return `<button class="inv-chip" data-cat="${cat.id}" style="--chip-color:${cat.color};"><i class="fa-solid ${cat.icon}"></i> ${cat.label} <span>${count}</span></button>`;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+                <div id="inv-catalogo-list"></div>
+            </section>
+
+            <section class="inv-panel" data-tab-panel="solicitudes" hidden>
+                ${puedeSolicitar ? `
+                    <div class="inv-solicitud-form panel">
+                        <div class="panel-header"><h2 style="margin:0;"><i class="fa-solid fa-plus"></i> Nueva solicitud</h2></div>
+                        <form id="form-insumo-solicitud" class="inv-solicitud-grid">
+                            <div class="form-group">
+                                <label for="insumo-select">Insumo</label>
+                                <select id="insumo-select" class="form-control">
+                                    <option value="">Selecciona un insumo...</option>
+                                    ${catalogoActivo.map((item) => `<option value="${item.id}">${item.codigo || '--'} · ${item.nombre}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="insumo-cantidad">Cantidad</label>
+                                <input id="insumo-cantidad" type="number" min="1" step="1" class="form-control" placeholder="Ej: 2">
+                            </div>
+                            <div id="insumo-select-meta" class="inv-meta-box">
+                                <strong>Selecciona un item para ver el stock actual.</strong>
+                                <p>Veras marca, unidad y alerta de disponibilidad antes de enviar.</p>
+                            </div>
+                            <p id="insumo-cantidad-hint" class="inv-hint">No se permite solicitar mas del doble del stock disponible.</p>
+                            <button id="btn-enviar-solicitud-insumo" class="btn btn-primary" type="submit">
+                                <i class="fa-solid fa-paper-plane"></i> Enviar solicitud
+                            </button>
+                        </form>
+                    </div>
+                ` : ''}
+                <div class="inv-toolbar">
+                    <div class="inv-toolbar-row">
+                        <select id="insumos-filtro-estado" class="form-control" style="max-width:180px;">
+                            <option value="todos">Todos</option>
+                            <option value="pendiente" ${(esAdmin || puedeAprobar) ? 'selected' : ''}>Pendientes</option>
+                            <option value="aprobada">Aprobadas</option>
+                            <option value="rechazada">Rechazadas</option>
+                        </select>
+                        ${(esAdmin || puedeAprobar) ? `<select id="insumos-filtro-trabajador" class="form-control" style="max-width:220px;">${opcionesTrabajadores}</select>` : ''}
+                        <input id="insumos-filtro-texto" type="search" class="form-control" placeholder="Buscar por insumo o solicitante...">
+                        ${esAdmin ? `<button id="btn-insumos-limpiar-resueltas" type="button" class="btn btn-outline btn-small"><i class="fa-solid fa-broom"></i> Limpiar resueltas</button>` : ''}
+                    </div>
+                </div>
+                <div id="inv-solicitudes-list"></div>
+            </section>
+
+            <section class="inv-panel" data-tab-panel="movimientos" hidden>
+                <div class="inv-toolbar">
+                    <div class="inv-toolbar-row">
+                        <input id="inv-mov-search" type="search" class="form-control" placeholder="Buscar por insumo o motivo...">
+                        <select id="inv-mov-tipo" class="form-control" style="max-width:180px;">
+                            <option value="">Todos los tipos</option>
+                            <option value="entrada">Entradas</option>
+                            <option value="salida">Salidas</option>
+                            <option value="ajuste">Ajustes</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="inv-movimientos-list"></div>
+            </section>
+
+            ${esAdmin ? `
+                <section class="inv-panel" data-tab-panel="aprobadores" hidden>
+                    <div class="inv-toolbar">
+                        <p style="margin:0; color:var(--text-muted); font-size:0.82rem;">
+                            ${insumosFeatureState.aprobadoresPersistentes
+                                ? 'Los cambios quedan guardados tambien en Supabase.'
+                                : 'Los cambios quedan disponibles en modo local. Ejecuta el SQL de permisos en Supabase para persistirlos.'}
+                        </p>
+                    </div>
+                    <div id="inv-aprobadores-list"></div>
+                </section>
+            ` : ''}
+        </div>
+
+        ${puedeSolicitar ? `<button class="inv-fab" id="inv-fab-solicitud" type="button" title="Nueva solicitud"><i class="fa-solid fa-plus"></i></button>` : ''}
+    `;
+
+    let filtroEstado = (esAdmin || puedeAprobar) ? 'pendiente' : 'todos';
+    let filtroTrabajador = '';
+    let filtroTexto = '';
+    let filtroCat = '';
+    let filtroMarca = '';
+    let filtroBusqueda = '';
+    let soloBajo = false;
+    let filtroMovTipo = '';
+    let filtroMovTexto = '';
+    let tabActiva = defaultTab;
+
+    const existeTab = (t) => Boolean(mainContent.querySelector(`[data-tab-panel="${t}"]`));
+    if (!existeTab(tabActiva)) tabActiva = 'catalogo';
+
+    function activarTab(tab) {
+        if (!existeTab(tab)) return;
+        tabActiva = tab;
+        mainContent.querySelectorAll('.inv-tab').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.dataset.tab === tab);
+        });
+        mainContent.querySelectorAll('[data-tab-panel]').forEach((panel) => {
+            panel.hidden = panel.dataset.tabPanel !== tab;
+        });
+        if (tab === 'catalogo') renderCatalogoCards();
+        if (tab === 'solicitudes') renderTablaSolicitudes();
+        if (tab === 'movimientos') renderMovimientos();
+        if (tab === 'aprobadores') renderAprobadores();
+    }
+
+    function renderCatalogoCards() {
+        const container = document.getElementById('inv-catalogo-list');
+        if (!container) return;
+        if (!hayCatalogo) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div>
+                        <strong>Aun no hay catalogo cargado</strong>
+                        <p>${esAdmin ? 'Importa tu Excel de inventario para comenzar.' : 'El planificador debe importar el Excel de inventario.'}</p>
+                        ${esAdmin ? '<button class="btn btn-primary" type="button" onclick="document.getElementById(\'btn-importar-insumos-excel\').click();"><i class="fa-solid fa-file-arrow-up"></i> Importar Excel</button>' : ''}
+                    </div>
+                </div>`;
+            return;
+        }
+        const texto = filtroBusqueda.toLowerCase();
+        const items = catalogoActivo.filter((item) => {
+            if (filtroCat && item.categoria !== filtroCat) return false;
+            if (filtroMarca && item.marca !== filtroMarca) return false;
+            if (soloBajo) {
+                const min = calcularStockMinimoEfectivo(item);
+                if (enteroSeguro(item.stock_actual, 0) > min) return false;
+            }
+            if (!texto) return true;
+            return [item.nombre, item.marca, item.ubicacion, String(item.codigo || '')]
+                .some((v) => String(v || '').toLowerCase().includes(texto));
+        });
+        if (!items.length) {
+            container.innerHTML = '<div class="empty-state empty-state--compact"><div><strong>Sin resultados</strong><p>Ajusta los filtros o la busqueda.</p></div></div>';
+            return;
+        }
+        container.innerHTML = `<div class="inv-card-grid">${items.map((item) => renderCatalogoCardHtml(item)).join('')}</div>`;
+    }
+
+    function renderCatalogoCardHtml(item) {
+        const meta = obtenerCategoriaInsumoMeta(item.categoria);
+        const stock = enteroSeguro(item.stock_actual, 0);
+        const inicial = enteroSeguro(item.stock_inicial, 0);
+        const minimo = calcularStockMinimoEfectivo(item);
+        const pct = inicial > 0 ? Math.min(100, Math.max(0, Math.round((stock / inicial) * 100))) : 0;
+        const bajo = stock <= minimo && minimo > 0;
+        const criticoColor = stock <= 0 ? '#7f1d1d' : bajo ? '#dc2626' : 'var(--text-main)';
+        const barColor = stock <= 0 ? '#7f1d1d' : bajo ? '#dc2626' : '#cbd5e1';
+        const acciones = esAdmin ? `
+            <div class="inv-card-actions">
+                <button type="button" class="btn btn-outline btn-small" onclick="window._invAjustarStock('${item.id}')"><i class="fa-solid fa-pen-to-square"></i> Ajustar</button>
+                <button type="button" class="btn btn-outline btn-small" onclick="window._invEditar('${item.id}')"><i class="fa-solid fa-sliders"></i> Editar</button>
+                <button type="button" class="btn btn-outline btn-small inv-danger-btn" onclick="window._invEliminar('${item.id}')" title="Archivar"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        ` : '';
+        return `
+            <article class="inv-card ${bajo ? 'inv-card--bajo' : ''}">
+                <header class="inv-card-head">
+                    <span class="inv-cat-tag" style="--chip-color:${meta.color};"><i class="fa-solid ${meta.icon}"></i> ${meta.label}</span>
+                    <span class="inv-code">#${item.codigo || '--'}</span>
+                </header>
+                <h3 class="inv-card-title">${item.nombre}</h3>
+                <div class="inv-card-sub">${item.marca || 'Sin marca'} · ${item.unidad}${item.ubicacion ? ` · <i class="fa-solid fa-location-dot"></i> ${item.ubicacion}` : ''}</div>
+                <div class="inv-card-stock">
+                    <div class="inv-stock-big" style="color:${criticoColor};">${stock}</div>
+                    <div class="inv-stock-meta">
+                        <span>de ${inicial} inicial</span>
+                        <span>minimo ${minimo}</span>
+                    </div>
+                </div>
+                <div class="inv-bar"><div class="inv-bar-fill" style="width:${pct}%; background:${barColor};"></div></div>
+                ${bajo ? '<div class="inv-alert"><i class="fa-solid fa-triangle-exclamation"></i> Reponer: bajo el minimo.</div>' : ''}
+                ${item.observaciones ? `<p class="inv-card-note">${item.observaciones}</p>` : ''}
+                ${acciones}
+            </article>
+        `;
+    }
+
+    function renderMovimientos() {
+        const container = document.getElementById('inv-movimientos-list');
+        if (!container) return;
+        const texto = filtroMovTexto.toLowerCase();
+        const items = estado.movimientosInventario.filter((mov) => {
+            if (filtroMovTipo && mov.tipo !== filtroMovTipo) return false;
+            if (!texto) return true;
+            const ins = obtenerInsumoPorId(mov.insumo_id);
+            return [ins?.nombre, ins?.marca, mov.motivo, mov.creado_por]
+                .some((v) => String(v || '').toLowerCase().includes(texto));
+        });
+        if (!items.length) {
+            container.innerHTML = '<div class="empty-state empty-state--compact"><div><strong>Sin movimientos</strong><p>Ingresos, salidas y ajustes apareceran aqui.</p></div></div>';
+            return;
+        }
+        container.innerHTML = `
+            <div class="inv-mov-list">
+                ${items.map((mov) => {
+                    const ins = obtenerInsumoPorId(mov.insumo_id);
+                    const esIngreso = mov.tipo === 'entrada';
+                    const esAjuste = mov.tipo === 'ajuste';
+                    const color = esIngreso ? '#16a34a' : esAjuste ? '#b45309' : '#dc2626';
+                    const icon = esIngreso ? 'fa-arrow-down' : esAjuste ? 'fa-wrench' : 'fa-arrow-up';
+                    const sign = esIngreso ? '+' : esAjuste ? '±' : '-';
+                    return `
+                        <div class="inv-mov-row">
+                            <div class="inv-mov-icon" style="background:${color}1a; color:${color};"><i class="fa-solid ${icon}"></i></div>
+                            <div class="inv-mov-body">
+                                <strong>${ins?.nombre || 'Insumo eliminado'}</strong>
+                                <div class="inv-mov-meta">
+                                    <span>${formatearFechaCorta(mov.fecha)}</span>
+                                    ${mov.creado_por ? `<span>· ${mov.creado_por}</span>` : ''}
+                                    ${mov.motivo ? `<span>· ${mov.motivo}</span>` : ''}
+                                </div>
+                            </div>
+                            <div class="inv-mov-qty" style="color:${color};">${sign}${mov.cantidad}</div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    function renderAprobadores() {
+        const container = document.getElementById('inv-aprobadores-list');
+        if (!container) return;
+        const trabajadoresOrdenados = estado.trabajadores.slice().sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+        container.innerHTML = `
+            <div class="inv-aprob-list">
+                ${trabajadoresOrdenados.map((item) => `
+                    <div class="inv-aprob-row">
+                        <div>
+                            <strong>${item.nombre}</strong>
+                            <div style="font-size:0.76rem; color:var(--text-muted);">${item.puesto || 'Sin cargo'}</div>
+                        </div>
+                        <label class="inv-switch">
+                            <input type="checkbox" ${item.puede_aprobar_insumos ? 'checked' : ''} onchange="window._insToggleAprobador('${item.id}', this.checked)">
+                            <span>${item.puede_aprobar_insumos ? 'Puede aprobar' : 'Solo solicita'}</span>
+                        </label>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    function actualizarMetaInsumoSeleccionado() {
+        const select = document.getElementById('insumo-select');
+        const cantidadInput = document.getElementById('insumo-cantidad');
+        const meta = document.getElementById('insumo-select-meta');
+        const hint = document.getElementById('insumo-cantidad-hint');
+        if (!select || !meta || !hint) return;
+        const insumo = obtenerInsumoPorId(select.value);
+        const cantidad = enteroSeguro(cantidadInput?.value, 0);
+        if (!insumo) {
+            meta.innerHTML = '<strong style="display:block; margin-bottom:0.3rem;">Selecciona un item para ver el stock actual.</strong><p style="margin:0; color:var(--text-muted); font-size:0.82rem;">Veras marca, unidad de medida y alerta de disponibilidad antes de enviar.</p>';
+            hint.textContent = 'No se permite solicitar mas del doble del stock disponible.';
+            hint.style.color = 'var(--text-muted)';
+            return;
+        }
+
+        const stock = enteroSeguro(insumo.stock_actual, 0);
+        const stockInicial = enteroSeguro(insumo.stock_inicial, 0);
+        const superaStock = cantidad > stock && stock > 0;
+        const superaDoble = cantidad > (stock * 2) && stock > 0;
+        meta.innerHTML = `
+            <strong style="display:block; margin-bottom:0.25rem;">${insumo.nombre}</strong>
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.45rem;">${insumo.marca || 'Sin marca'} · ${insumo.unidad}</div>
+            <div style="display:flex; gap:0.9rem; flex-wrap:wrap;">
+                <span><strong>${stock}</strong> disponibles</span>
+                <span><strong>${stockInicial}</strong> stock inicial</span>
+            </div>
+        `;
+        if (superaDoble) {
+            hint.textContent = 'La cantidad supera el maximo permitido (doble del stock actual).';
+            hint.style.color = '#dc2626';
+        } else if (superaStock) {
+            hint.textContent = 'La solicitud supera el stock actual. Se permitira, pero quedara visible para revision.';
+            hint.style.color = '#b45309';
+        } else {
+            hint.textContent = 'No se permite solicitar mas del doble del stock disponible.';
+            hint.style.color = 'var(--text-muted)';
+        }
+    }
+
+    function renderTablaSolicitudes() {
+        const container = document.getElementById('inv-solicitudes-list');
+        if (!container) return;
+
+        const filas = solicitudesBase.filter((item) => {
+            if (filtroEstado !== 'todos' && item.estado !== filtroEstado) return false;
+            if (filtroTrabajador && String(item.trabajador_id) !== String(filtroTrabajador)) return false;
+            if (!filtroTexto) return true;
+            const insumo = obtenerInsumoPorId(item.insumo_id);
+            const nombreSolicitante = obtenerNombreTrabajadorPorId(item.trabajador_id);
+            const textoBase = `${insumo?.nombre || ''} ${insumo?.marca || ''} ${nombreSolicitante}`.toLowerCase();
+            return textoBase.includes(filtroTexto);
+        });
+
+        if (!filas.length) {
+            container.innerHTML = '<div class="empty-state empty-state--compact"><div><strong>Sin solicitudes para este filtro</strong><p>Ajusta el estado o crea una nueva solicitud.</p></div></div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="inv-sol-list">
+                ${filas.map((item) => {
+                    const insumo = obtenerInsumoPorId(item.insumo_id);
+                    const stockActual = enteroSeguro(insumo?.stock_actual, 0);
+                    const observaciones = item.observaciones
+                        ? `<div class="inv-sol-note">${item.observaciones}</div>`
+                        : item.aprobado_por
+                            ? `<div class="inv-sol-note">Gestionado por ${item.aprobado_por}</div>`
+                            : '';
+                    const botonesEstado = (esAdmin || puedeAprobar) && item.estado === 'pendiente'
+                        ? `
+                                <button type="button" class="btn btn-small inv-btn-approve" onclick="window._insAprobar('${item.id}')"><i class="fa-solid fa-check"></i> Aprobar</button>
+                                <button type="button" class="btn btn-small inv-btn-reject" onclick="window._insRechazar('${item.id}')"><i class="fa-solid fa-ban"></i> Rechazar</button>
+                        ` : '';
+                    const botonEliminar = esAdmin
+                        ? `<button type="button" class="btn btn-outline btn-small inv-danger-btn" onclick="window._insEliminar('${item.id}')" title="Eliminar solicitud"><i class="fa-solid fa-trash"></i></button>`
+                        : '';
+                    const acciones = (botonesEstado || botonEliminar)
+                        ? `<div class="inv-sol-actions">${botonesEstado}${botonEliminar}</div>`
+                        : '';
+                    return `
+                        <div class="inv-sol-row">
+                            <div class="inv-sol-main">
+                                <div class="inv-sol-head">
+                                    <strong>${insumo?.nombre || 'Insumo no disponible'}</strong>
+                                    ${badgeEstadoSolicitudInsumoHtml(item.estado)}
+                                </div>
+                                <div class="inv-sol-sub">
+                                    ${(esAdmin || puedeAprobar) ? `<span><i class="fa-solid fa-user"></i> ${obtenerNombreTrabajadorPorId(item.trabajador_id)}</span>` : ''}
+                                    <span>${insumo?.marca || 'Sin marca'} · ${insumo?.unidad || 'UNI'}</span>
+                                    <span><i class="fa-solid fa-calendar"></i> ${formatearFechaCorta(item.fecha_solicitud)}</span>
+                                </div>
+                                ${observaciones}
+                            </div>
+                            <div class="inv-sol-qty">
+                                <div class="inv-sol-qty-big">${formatearCantidadInsumo(item.cantidad, insumo?.unidad)}</div>
+                                <div class="inv-sol-qty-meta">stock: ${stockActual}</div>
+                            </div>
+                            ${acciones}
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
+    document.getElementById('insumo-select')?.addEventListener('change', actualizarMetaInsumoSeleccionado);
+    document.getElementById('insumo-cantidad')?.addEventListener('input', actualizarMetaInsumoSeleccionado);
+    actualizarMetaInsumoSeleccionado();
+
+    document.getElementById('form-insumo-solicitud')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const select = document.getElementById('insumo-select');
+        const cantidadInput = document.getElementById('insumo-cantidad');
+        const boton = document.getElementById('btn-enviar-solicitud-insumo');
+        const insumo = obtenerInsumoPorId(select?.value);
+        const cantidad = enteroSeguro(cantidadInput?.value, 0);
+
+        if (!insumo || !insumo.activo) {
+            alert('Selecciona un insumo activo.');
+            return;
+        }
+        if (cantidad <= 0) {
+            alert('La cantidad debe ser mayor a cero.');
+            return;
+        }
+        if (cantidad > Math.max(enteroSeguro(insumo.stock_actual, 0) * 2, 1)) {
+            alert('La cantidad solicitada supera el maximo permitido para este item.');
+            return;
+        }
+
+        const textoOriginal = boton.innerHTML;
+        boton.disabled = true;
+        boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+        try {
+            await guardarSolicitudInsumo(usuarioSolicitanteActualId(), insumo.id, cantidad);
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudo guardar la solicitud.');
+            boton.disabled = false;
+            boton.innerHTML = textoOriginal;
+        }
+    });
+
+    document.getElementById('insumos-filtro-estado')?.addEventListener('change', (event) => {
+        filtroEstado = event.target.value;
+        renderTablaSolicitudes();
+    });
+    document.getElementById('insumos-filtro-trabajador')?.addEventListener('change', (event) => {
+        filtroTrabajador = event.target.value;
+        renderTablaSolicitudes();
+    });
+    document.getElementById('insumos-filtro-texto')?.addEventListener('input', (event) => {
+        filtroTexto = String(event.target.value || '').trim().toLowerCase();
+        renderTablaSolicitudes();
+    });
+
+    document.getElementById('btn-importar-insumos-excel')?.addEventListener('click', () => {
+        document.getElementById('input-insumos-excel')?.click();
+    });
+    document.getElementById('input-insumos-excel')?.addEventListener('change', async (event) => {
+        const archivo = event.target.files?.[0];
+        if (!archivo) return;
+        try {
+            const resumen = await importarCatalogoInsumosDesdeExcel(archivo);
+            alert(`Catalogo importado: ${resumen.total} item(s).${resumen.remoteSynced ? ' Supabase actualizado.' : ' Guardado en modo local.'}`);
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudo importar el Excel.');
+        } finally {
+            event.target.value = '';
+        }
+    });
+
+    window._insAprobar = async (id) => {
+        await aprobarSolicitudInsumo(id);
+        vistaActual = 'insumos';
+        renderizarVistaActual();
+    };
+
+    window._insRechazar = (id) => {
+        const modal = document.getElementById('modal-insumos-rechazo');
+        const textarea = document.getElementById('insumos-rechazo-observaciones');
+        const error = document.getElementById('insumos-rechazo-error');
+        const btnConfirmar = document.getElementById('btn-insumos-rechazo-confirmar');
+        const btnCancelar = document.getElementById('btn-insumos-rechazo-cancelar');
+        if (!modal || !textarea || !error || !btnConfirmar || !btnCancelar) return;
+
+        textarea.value = '';
+        error.style.display = 'none';
+        modal.style.display = 'flex';
+
+        btnCancelar.onclick = () => { modal.style.display = 'none'; };
+        btnConfirmar.onclick = async () => {
+            const motivo = textarea.value.trim();
+            if (!motivo) {
+                error.style.display = 'block';
+                return;
+            }
+            btnConfirmar.disabled = true;
+            btnConfirmar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+            await rechazarSolicitudInsumo(id, motivo);
+            modal.style.display = 'none';
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerHTML = 'Guardar rechazo';
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        };
+    };
+
+    window._insToggleAprobador = async (trabajadorId, checked) => {
+        await actualizarPermisoAprobadorInsumos(trabajadorId, checked);
+        vistaActual = 'insumos';
+        renderizarVistaActual();
+    };
+
+    window._insEliminar = async (id) => {
+        if (!confirm('¿Eliminar esta solicitud del historial? Esta acción no se puede deshacer.')) return;
+        try {
+            await localDB.solicitudes_insumos.delete(id);
+            if (window.supabaseClient) {
+                try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', id); } catch (e) { console.warn('[insumos] remote delete fallo', e); }
+            }
+            await refrescarDatosInsumos();
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudo eliminar la solicitud.');
+        }
+    };
+
+    document.getElementById('btn-insumos-limpiar-resueltas')?.addEventListener('click', async () => {
+        const resueltas = solicitudesBase.filter((s) => s.estado !== 'pendiente');
+        if (!resueltas.length) {
+            alert('No hay solicitudes resueltas para limpiar.');
+            return;
+        }
+        if (!confirm(`Se eliminarán ${resueltas.length} solicitudes aprobadas/rechazadas. ¿Continuar?`)) return;
+        try {
+            for (const s of resueltas) {
+                await localDB.solicitudes_insumos.delete(s.id);
+                if (window.supabaseClient) {
+                    try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', s.id); } catch (e) { /* ignore */ }
+                }
+            }
+            await refrescarDatosInsumos();
+            vistaActual = 'insumos';
+            renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudieron limpiar las solicitudes.');
+        }
+    });
+
+    window._invAjustarStock = (insumoId) => {
+        const insumo = obtenerInsumoPorId(insumoId);
+        if (!insumo) return;
+        abrirModalInsumo({
+            eyebrow: 'Movimiento manual',
+            titulo: `Ajustar stock: ${insumo.nombre}`,
+            bodyHtml: `
+                <p class="inv-modal-info">Stock actual: <strong>${insumo.stock_actual}</strong> · Minimo: <strong>${calcularStockMinimoEfectivo(insumo)}</strong></p>
+                <div class="form-group">
+                    <label>Tipo de movimiento</label>
+                    <div class="inv-seg">
+                        <label><input type="radio" name="inv-mov" value="entrada" checked> <span>Ingreso (+)</span></label>
+                        <label><input type="radio" name="inv-mov" value="salida"> <span>Salida (-)</span></label>
+                        <label><input type="radio" name="inv-mov" value="ajuste"> <span>Fijar total</span></label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="inv-ajuste-cantidad">Cantidad</label>
+                    <input id="inv-ajuste-cantidad" type="number" min="0" step="1" class="form-control" placeholder="Ej: 5">
+                </div>
+                <div class="form-group">
+                    <label for="inv-ajuste-motivo">Motivo</label>
+                    <input id="inv-ajuste-motivo" type="text" class="form-control" placeholder="Ej: Compra, correccion de inventario, entrega a cuadrilla...">
+                </div>
+            `,
+            onConfirm: async () => {
+                const tipo = document.querySelector('input[name="inv-mov"]:checked')?.value || 'entrada';
+                const cantidad = enteroSeguro(document.getElementById('inv-ajuste-cantidad')?.value, 0);
+                const motivo = String(document.getElementById('inv-ajuste-motivo')?.value || '').trim();
+                if (cantidad <= 0) throw new Error('La cantidad debe ser mayor a cero.');
+                if (!motivo) throw new Error('Indica un motivo para el movimiento.');
+                if (tipo === 'ajuste') {
+                    await ajustarStockInsumo(insumoId, cantidad, motivo);
+                } else {
+                    await registrarMovimientoManual(insumoId, tipo, cantidad, motivo);
+                }
+            }
+        });
+    };
+
+    window._invEditar = (insumoId) => {
+        const insumo = obtenerInsumoPorId(insumoId);
+        if (!insumo) return;
+        const categoriasOpts = CATEGORIAS_INSUMO.map((cat) => `<option value="${cat.id}" ${insumo.categoria === cat.id ? 'selected' : ''}>${cat.label}</option>`).join('');
+        abrirModalInsumo({
+            eyebrow: 'Configuracion',
+            titulo: `Editar: ${insumo.nombre}`,
+            bodyHtml: `
+                <div class="form-group">
+                    <label for="inv-ed-nombre">Nombre</label>
+                    <input id="inv-ed-nombre" type="text" class="form-control" value="${escHtml(insumo.nombre)}">
+                </div>
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-ed-marca">Marca</label>
+                        <input id="inv-ed-marca" type="text" class="form-control" value="${escHtml(insumo.marca)}">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-ed-cat">Categoria</label>
+                        <select id="inv-ed-cat" class="form-control">${categoriasOpts}</select>
+                    </div>
+                </div>
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-ed-min">Stock minimo</label>
+                        <input id="inv-ed-min" type="number" min="0" step="1" class="form-control" value="${insumo.stock_minimo || ''}" placeholder="30% del inicial por defecto">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-ed-inicial">Stock inicial</label>
+                        <input id="inv-ed-inicial" type="number" min="0" step="1" class="form-control" value="${insumo.stock_inicial}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="inv-ed-ubic">Ubicacion</label>
+                    <input id="inv-ed-ubic" type="text" class="form-control" value="${escHtml(insumo.ubicacion)}" placeholder="Ej: Bodega B - Estante 3">
+                </div>
+                <div class="form-group">
+                    <label for="inv-ed-obs">Observaciones</label>
+                    <textarea id="inv-ed-obs" class="form-control" rows="2" placeholder="Notas internas...">${escHtml(insumo.observaciones)}</textarea>
+                </div>
+            `,
+            onConfirm: async () => {
+                const nombre = String(document.getElementById('inv-ed-nombre')?.value || '').trim();
+                if (!nombre) throw new Error('El nombre es obligatorio.');
+                await actualizarConfiguracionInsumo(insumoId, {
+                    nombre,
+                    marca: String(document.getElementById('inv-ed-marca')?.value || '').trim(),
+                    categoria: document.getElementById('inv-ed-cat')?.value || insumo.categoria,
+                    stock_minimo: enteroSeguro(document.getElementById('inv-ed-min')?.value, 0),
+                    stock_inicial: enteroSeguro(document.getElementById('inv-ed-inicial')?.value, insumo.stock_inicial),
+                    ubicacion: String(document.getElementById('inv-ed-ubic')?.value || '').trim(),
+                    observaciones: String(document.getElementById('inv-ed-obs')?.value || '').trim()
+                });
+            }
+        });
+    };
+
+    window._invEliminar = async (insumoId) => {
+        const insumo = obtenerInsumoPorId(insumoId);
+        if (!insumo) return;
+        if (!confirm(`¿Archivar "${insumo.nombre}"? Se ocultara del catalogo pero se conservara el historial.`)) return;
+        await eliminarInsumoCatalogo(insumoId);
+        vistaActual = 'insumos';
+        renderizarVistaActual();
+    };
+
+    window._invNuevoItem = () => {
+        const codigosUsados = new Set(estado.insumos.map((i) => Number(i.codigo)).filter(Boolean));
+        let nextCodigo = 1;
+        while (codigosUsados.has(nextCodigo)) nextCodigo++;
+        const categoriasOpts = CATEGORIAS_INSUMO.map((cat) => `<option value="${cat.id}">${cat.label}</option>`).join('');
+        abrirModalInsumo({
+            eyebrow: 'Catalogo',
+            titulo: 'Nuevo item de inventario',
+            bodyHtml: `
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-nv-codigo">Codigo</label>
+                        <input id="inv-nv-codigo" type="number" min="1" step="1" class="form-control" value="${nextCodigo}">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-nv-cat">Categoria</label>
+                        <select id="inv-nv-cat" class="form-control">${categoriasOpts}</select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="inv-nv-nombre">Nombre</label>
+                    <input id="inv-nv-nombre" type="text" class="form-control" placeholder="Ej: Guante nitrilo talla M">
+                </div>
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-nv-marca">Marca</label>
+                        <input id="inv-nv-marca" type="text" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-nv-unidad">Unidad</label>
+                        <select id="inv-nv-unidad" class="form-control">
+                            <option value="UNI">UNI</option>
+                            <option value="PARES">PARES</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-nv-inicial">Stock inicial</label>
+                        <input id="inv-nv-inicial" type="number" min="0" step="1" class="form-control" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-nv-min">Stock minimo</label>
+                        <input id="inv-nv-min" type="number" min="0" step="1" class="form-control" placeholder="opcional">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="inv-nv-ubic">Ubicacion</label>
+                    <input id="inv-nv-ubic" type="text" class="form-control" placeholder="Ej: Bodega B">
+                </div>
+            `,
+            onConfirm: async () => {
+                const nombre = String(document.getElementById('inv-nv-nombre')?.value || '').trim();
+                if (!nombre) throw new Error('El nombre es obligatorio.');
+                const codigo = enteroSeguro(document.getElementById('inv-nv-codigo')?.value, 0);
+                if (!codigo) throw new Error('El codigo es obligatorio.');
+                if (estado.insumos.some((i) => Number(i.codigo) === codigo)) throw new Error('Ya existe un item con ese codigo.');
+                const nuevo = normalizarRegistroInsumo({
+                    id: crypto.randomUUID(),
+                    codigo,
+                    nombre,
+                    marca: String(document.getElementById('inv-nv-marca')?.value || '').trim(),
+                    unidad: document.getElementById('inv-nv-unidad')?.value || 'UNI',
+                    categoria: document.getElementById('inv-nv-cat')?.value || 'consumibles',
+                    stock_inicial: enteroSeguro(document.getElementById('inv-nv-inicial')?.value, 0),
+                    stock_actual: enteroSeguro(document.getElementById('inv-nv-inicial')?.value, 0),
+                    stock_minimo: enteroSeguro(document.getElementById('inv-nv-min')?.value, 0),
+                    ubicacion: String(document.getElementById('inv-nv-ubic')?.value || '').trim(),
+                    activo: true,
+                    created_at: new Date().toISOString()
+                });
+                await persistirInsumoLocal(nuevo);
+                await sincronizarInsumoRemoto(nuevo);
+            }
+        });
+    };
+
+    // Tabs
+    mainContent.querySelectorAll('.inv-tab').forEach((btn) => {
+        btn.addEventListener('click', () => activarTab(btn.dataset.tab));
+    });
+
+    // Catalogo filters
+    document.getElementById('inv-search')?.addEventListener('input', (e) => {
+        filtroBusqueda = String(e.target.value || '').trim();
+        renderCatalogoCards();
+    });
+    document.getElementById('inv-marca')?.addEventListener('change', (e) => {
+        filtroMarca = e.target.value;
+        renderCatalogoCards();
+    });
+    document.getElementById('inv-solo-bajo')?.addEventListener('change', (e) => {
+        soloBajo = e.target.checked;
+        renderCatalogoCards();
+    });
+    mainContent.querySelectorAll('#inv-chips-cat .inv-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+            filtroCat = chip.dataset.cat || '';
+            mainContent.querySelectorAll('#inv-chips-cat .inv-chip').forEach((c) => c.classList.toggle('is-active', c === chip));
+            renderCatalogoCards();
+        });
+    });
+    document.getElementById('btn-nuevo-insumo')?.addEventListener('click', () => window._invNuevoItem());
+
+    // Movimientos filters
+    document.getElementById('inv-mov-search')?.addEventListener('input', (e) => {
+        filtroMovTexto = String(e.target.value || '').trim();
+        renderMovimientos();
+    });
+    document.getElementById('inv-mov-tipo')?.addEventListener('change', (e) => {
+        filtroMovTipo = e.target.value;
+        renderMovimientos();
+    });
+
+    // FAB
+    document.getElementById('inv-fab-solicitud')?.addEventListener('click', () => activarTab('solicitudes'));
+
+    // Activar tab inicial
+    activarTab(tabActiva);
+    actualizarBadgeInsumos();
+}
 
 // COMPONENTE: Vista Check-In
 function renderCheckInView() {
@@ -1287,6 +2972,29 @@ async function actualizarBadgeHE() {
     const n = todos.length;
     if (n > 0) {
         badge.textContent = n;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+async function actualizarBadgeInsumos() {
+    const badge = document.getElementById('badge-insumos-pendientes');
+    if (!badge) return;
+
+    let solicitudes = estado.solicitudesInsumos || [];
+    if (!solicitudes.length && window.localDB?.solicitudes_insumos) {
+        solicitudes = await window.localDB.solicitudes_insumos.getAll().catch(() => []);
+    }
+
+    const pendientes = (solicitudes || []).filter((item) => {
+        if (String(item.estado || 'pendiente') !== 'pendiente') return false;
+        if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos()) return true;
+        return String(item.trabajador_id || '') === String(usuarioSolicitanteActualId() || '');
+    }).length;
+
+    if (pendientes > 0) {
+        badge.textContent = pendientes;
         badge.style.display = 'inline-block';
     } else {
         badge.style.display = 'none';
@@ -2501,6 +4209,7 @@ function renderHistorialView() {
         const hhTotal = registros.reduce((acum, registro) => acum + registro.hh, 0);
         const equipos = new Set(registros.map(registro => `${normalizar(registro.unidad)}|${normalizar(registro.nombre)}`));
         const unidades = new Set(registros.map(registro => normalizar(registro.unidad)).filter(Boolean));
+        const unidadesPreview = [...new Set(registros.map(registro => registro.unidad).filter(Boolean))].slice(0, 2).join(' · ');
         const topEspecialidad = getTopEspecialidad(registros);
         const topLider = getTopLider(registros);
 
@@ -2508,32 +4217,32 @@ function renderHistorialView() {
             <article class="history-kpi">
                 <span class="history-kpi-label"><i class="fa-solid fa-book-open"></i> Registros</span>
                 <div class="history-kpi-value">${registros.length}</div>
-                <div class="history-kpi-meta">Cierres visibles para el rango seleccionado.</div>
+                <div class="history-kpi-meta">Visibles</div>
             </article>
             <article class="history-kpi">
-                <span class="history-kpi-label"><i class="fa-solid fa-user-clock"></i> HH acumuladas</span>
+                <span class="history-kpi-label"><i class="fa-solid fa-user-clock"></i> HH</span>
                 <div class="history-kpi-value">${formatearNumero(hhTotal)}</div>
-                <div class="history-kpi-meta">Horas hombre registradas en los trabajos filtrados.</div>
+                <div class="history-kpi-meta">Acumuladas</div>
             </article>
             <article class="history-kpi">
-                <span class="history-kpi-label"><i class="fa-solid fa-gears"></i> Equipos intervenidos</span>
+                <span class="history-kpi-label"><i class="fa-solid fa-gears"></i> Equipos</span>
                 <div class="history-kpi-value">${equipos.size}</div>
-                <div class="history-kpi-meta">Activos distintos con actividad dentro del rango.</div>
+                <div class="history-kpi-meta">Intervenidos</div>
             </article>
             <article class="history-kpi">
                 <span class="history-kpi-label"><i class="fa-solid fa-location-dot"></i> Unidades</span>
                 <div class="history-kpi-value">${unidades.size}</div>
-                <div class="history-kpi-meta">${[...new Set(registros.map(registro => registro.unidad))].slice(0, 3).join(' · ') || 'Sin unidades detectadas'}</div>
+                <div class="history-kpi-meta">${unidadesPreview || 'Sin unidad'}</div>
             </article>
             <article class="history-kpi">
-                <span class="history-kpi-label"><i class="fa-solid fa-chart-pie"></i> Especialidad dominante</span>
+                <span class="history-kpi-label"><i class="fa-solid fa-chart-pie"></i> Especialidad</span>
                 <div class="history-kpi-value">${escapeHtml(topEspecialidad?.label || 'Sin dato')}</div>
-                <div class="history-kpi-meta">${topEspecialidad ? `${topEspecialidad.total} registro(s) dentro del rango.` : 'Aun no hay especialidades para analizar.'}</div>
+                <div class="history-kpi-meta">${topEspecialidad ? `${topEspecialidad.total} registro(s)` : 'Sin dominante'}</div>
             </article>
             <article class="history-kpi">
-                <span class="history-kpi-label"><i class="fa-solid fa-user-tie"></i> Lider principal</span>
+                <span class="history-kpi-label"><i class="fa-solid fa-user-tie"></i> Lider</span>
                 <div class="history-kpi-value">${escapeHtml(topLider?.nombre || 'Sin dato')}</div>
-                <div class="history-kpi-meta">${topLider ? `${topLider.total} cierre(s) liderados en este periodo.` : 'Todavia no hay registros en el rango actual.'}</div>
+                <div class="history-kpi-meta">${topLider ? `${topLider.total} cierre(s)` : 'Sin registros'}</div>
             </article>
         `;
     };
@@ -3005,22 +4714,22 @@ async function renderHorasExtraAdminView() {
 
             return `
                 <tr id="he-row-${registro.id}" style="${registro.estado === 'rechazado' ? 'opacity:0.72;' : ''}">
-                    <td>
+                    <td data-label="Trabajador">
                         <div style="font-weight:700; color:#0f172a;">${registro.nombreTrabajador}</div>
                         <div class="overtime-note">${registro.aprobado_por ? `Gestionado por ${registro.aprobado_por}` : 'Sin resolucion aun'}</div>
                     </td>
-                    <td>
+                    <td data-label="Fecha">
                         <div style="font-weight:700; color:#0f172a;">${formatFecha(registro.fecha)}</div>
                         <div class="overtime-note">${registro.created_at ? new Date(registro.created_at).toLocaleDateString('es-CL') : 'Sin fecha de carga'}</div>
                     </td>
-                    <td>
+                    <td data-label="Horas">
                         <div style="font-weight:800; color:var(--primary-color);">${formatHoras(registro.horasNumero)} hrs</div>
                     </td>
-                    <td style="max-width:260px;">
+                    <td data-label="Motivo" style="max-width:260px;">
                         <div style="color:#475569; font-size:0.83rem; line-height:1.55;">${registro.motivo || 'Sin motivo registrado.'}</div>
                     </td>
-                    <td>${getStatusHtml(registro.estado, registro.motivo_rechazo)}</td>
-                    <td>
+                    <td data-label="Estado">${getStatusHtml(registro.estado, registro.motivo_rechazo)}</td>
+                    <td data-label="Acciones">
                         <div style="display:flex; flex-wrap:wrap; gap:0.45rem;">
                             ${btnAprobar}
                             ${btnRechazar}
@@ -3066,22 +4775,22 @@ async function renderHorasExtraAdminView() {
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
                         <div id="he-stat-pendientes" class="overtime-kpi-value">${pendientesInicial}</div>
-                        <div class="overtime-kpi-meta">Solicitudes aun sin resolucion administrativa.</div>
+                        <div class="overtime-kpi-meta">Por resolver</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-circle-check"></i> Aprobadas mes</span>
                         <div id="he-stat-aprobadas" class="overtime-kpi-value">${formatHoras(aprobadasInicial)} hrs</div>
-                        <div class="overtime-kpi-meta">Horas aprobadas durante el mes actual.</div>
+                        <div class="overtime-kpi-meta">Este mes</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-chart-column"></i> Solicitadas mes</span>
                         <div id="he-stat-total" class="overtime-kpi-value">${formatHoras(totalInicial)} hrs</div>
-                        <div class="overtime-kpi-meta">Total solicitado, incluyendo pendientes y rechazadas.</div>
+                        <div class="overtime-kpi-meta">Este mes</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-user-group"></i> Trabajadores</span>
                         <div id="he-stat-trabajadores" class="overtime-kpi-value">${trabajadoresActivos}</div>
-                        <div class="overtime-kpi-meta">Personas con solicitudes cargadas en el periodo consultado.</div>
+                        <div class="overtime-kpi-meta">Con registros</div>
                     </article>
                 </div>
 
@@ -3125,7 +4834,7 @@ async function renderHorasExtraAdminView() {
 
             <section class="panel" style="padding:0;">
                 <div class="table-shell" style="border:none; border-radius:18px;">
-                    <table class="table-clean" style="width:100%;">
+                    <table class="table-clean table-clean--stacked" style="width:100%;">
                         <thead>
                             <tr>
                                 <th>Trabajador</th>
@@ -3279,6 +4988,21 @@ function renderTrabajadoresView() {
         });
         return [...conteo.entries()].sort((a, b) => b[1] - a[1])[0] || null;
     })();
+    const opcionesHabilidad = tipicosTrabajos.filter((habilidad) => habilidad !== 'OTRO');
+    const normalizarRut = (valor) => String(valor || '')
+        .replace(/[.\-\s]/g, '')
+        .toUpperCase()
+        .trim();
+    const dividirEspecialidades = (valor) => String(valor || '')
+        .split(/[\n,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean);
+    const skillOptionHtml = opcionesHabilidad.map((habilidad) => `
+        <label style="display:flex; gap:0.55rem; align-items:flex-start; padding:0.7rem 0.8rem; border:1px solid var(--border-color); border-radius:14px; background:#fff;">
+            <input type="checkbox" name="nuevo-trabajador-habilidades" value="${habilidad}" style="margin-top:0.18rem;">
+            <span style="font-size:0.9rem; color:var(--text-main); line-height:1.35;">${habilidad}</span>
+        </label>
+    `).join('');
 
     const getTareasTrabajador = (trabajadorId) => tareasActivas.filter(t =>
         t.liderId === trabajadorId || (t.ayudantesIds || []).includes(trabajadorId)
@@ -3352,9 +5076,14 @@ function renderTrabajadoresView() {
                         <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-users"></i> Trabajadores</h1>
                         <p class="crew-subtitle">Lectura rapida de disponibilidad, carga activa y cobertura de habilidades del equipo en terreno.</p>
                     </div>
-                    <div class="dashboard-hero-badges">
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-user-check"></i> Cobertura ${cobertura}%</span>
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-screwdriver-wrench"></i> ${habilidadesActivas} habilidades</span>
+                    <div class="crew-hero-actions">
+                        <div class="dashboard-hero-badges">
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-user-check"></i> Cobertura ${cobertura}%</span>
+                            <span class="dashboard-hero-badge"><i class="fa-solid fa-screwdriver-wrench"></i> ${habilidadesActivas} habilidades</span>
+                        </div>
+                        <button id="btn-nuevo-trabajador" class="btn btn-primary" type="button" style="white-space:nowrap;">
+                            <i class="fa-solid fa-user-plus"></i> Agregar trabajador
+                        </button>
                     </div>
                 </div>
 
@@ -3362,22 +5091,22 @@ function renderTrabajadoresView() {
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-circle-check"></i> Disponibles</span>
                         <div class="crew-kpi-value">${disponibles.length}</div>
-                        <div class="crew-kpi-meta">Personal con check-in y sin tarea activa asignada.</div>
+                        <div class="crew-kpi-meta">Con check-in libre</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-person-digging"></i> Trabajando</span>
                         <div class="crew-kpi-value">${ocupados.length}</div>
-                        <div class="crew-kpi-meta">Personas ejecutando al menos un trabajo en este momento.</div>
+                        <div class="crew-kpi-meta">En ejecucion</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-user-clock"></i> Sin check-in</span>
                         <div class="crew-kpi-value">${ausentes.length}</div>
-                        <div class="crew-kpi-meta">Trabajadores aun fuera de jornada o sin marcar ingreso.</div>
+                        <div class="crew-kpi-meta">Fuera de jornada</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-star"></i> Habilidad dominante</span>
                         <div class="crew-kpi-value">${topHabilidad ? topHabilidad[0] : 'Sin dato'}</div>
-                        <div class="crew-kpi-meta">${topHabilidad ? `${topHabilidad[1]} persona(s) con esta especialidad.` : 'Todavia no hay habilidades registradas.'}</div>
+                        <div class="crew-kpi-meta">${topHabilidad ? `${topHabilidad[1]} persona(s)` : 'Sin registros'}</div>
                     </article>
                 </div>
 
@@ -3392,7 +5121,7 @@ function renderTrabajadoresView() {
                             <i class="fa-solid fa-circle-info"></i>
                             <span>${ocupados.length > 0 ? `${ocupados.length} persona(s) estan en ejecucion ahora.` : 'No hay personal trabajando en este momento.'}</span>
                         </div>
-                        <input id="trabajadores-search" type="text" class="form-control" placeholder="Buscar trabajador, puesto o habilidad..." style="min-width:260px; max-width:320px;">
+                        <input id="trabajadores-search" type="text" class="form-control crew-search-input" placeholder="Buscar trabajador, puesto o habilidad...">
                     </div>
                 </div>
             </section>
@@ -3408,6 +5137,50 @@ function renderTrabajadoresView() {
                     ${ausentes.length ? ausentes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'ausente')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin ausencias</strong><p>Todo el personal ya marco check-in hoy.</p></div></div>`}
                 </div>
             </section>
+
+            <div id="modal-nuevo-trabajador" class="modal-overlay-base" style="z-index:9600;">
+                <div class="modal-shell modal-shell--medium">
+                    <div class="modal-head">
+                        <div class="modal-title-wrap">
+                            <span class="modal-eyebrow"><i class="fa-solid fa-id-badge"></i> Maestro de personal</span>
+                            <h2 class="modal-title"><i class="fa-solid fa-user-plus"></i> Agregar trabajador</h2>
+                            <p class="modal-subtitle">Crea un perfil operativo con nombre, RUT, cargo y especializaciones para dejarlo disponible en la planificacion.</p>
+                        </div>
+                        <button id="btn-nuevo-trabajador-cerrar" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+                    </div>
+                    <form id="form-nuevo-trabajador">
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label for="nuevo-trabajador-nombre">Nombre completo <span style="color:var(--danger-color)">*</span></label>
+                                <input id="nuevo-trabajador-nombre" type="text" class="form-control" placeholder="Ej: Juan Perez Rojas" maxlength="120" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label for="nuevo-trabajador-rut">RUT <span style="color:var(--danger-color)">*</span></label>
+                                <input id="nuevo-trabajador-rut" type="text" class="form-control" placeholder="Ej: 12345678K o 12.345.678-K" maxlength="16" autocomplete="off">
+                                <p class="form-helper">Se normaliza automaticamente para el acceso por RUT.</p>
+                            </div>
+                            <div class="form-group">
+                                <label for="nuevo-trabajador-puesto">Cargo <span style="color:var(--danger-color)">*</span></label>
+                                <input id="nuevo-trabajador-puesto" type="text" class="form-control" placeholder="Ej: Inspector Predictivo" maxlength="90" autocomplete="off">
+                            </div>
+                            <div class="form-group">
+                                <label>Especializaciones <span style="color:var(--danger-color)">*</span></label>
+                                <div class="skill-option-grid">
+                                    ${skillOptionHtml}
+                                </div>
+                                <input id="nuevo-trabajador-habilidades-extra" type="text" class="form-control" placeholder="Especializaciones extra separadas por coma (opcional)" maxlength="200" autocomplete="off">
+                            </div>
+                            <p id="nuevo-trabajador-error" style="display:none; color:var(--danger-color); font-size:0.84rem; margin:0;"></p>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="btn-nuevo-trabajador-cancelar" class="btn btn-outline" type="button">Cancelar</button>
+                            <button id="btn-nuevo-trabajador-guardar" class="btn btn-primary" type="submit">
+                                <i class="fa-solid fa-floppy-disk"></i> Guardar trabajador
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
     `;
 
@@ -3457,6 +5230,149 @@ function renderTrabajadoresView() {
                 panel.querySelectorAll('[data-helper-id]').forEach((helper) => helper.remove());
             }
         });
+    });
+
+    const modalNuevoTrabajador = document.getElementById('modal-nuevo-trabajador');
+    const formNuevoTrabajador = document.getElementById('form-nuevo-trabajador');
+    const errorNuevoTrabajador = document.getElementById('nuevo-trabajador-error');
+    const btnGuardarNuevoTrabajador = document.getElementById('btn-nuevo-trabajador-guardar');
+    const mostrarToastTrabajadores = (mensaje, tone = 'success') => {
+        const colors = tone === 'danger'
+            ? { bg: '#991b1b', shadow: 'rgba(153, 27, 27, 0.28)' }
+            : { bg: '#0f766e', shadow: 'rgba(15, 118, 110, 0.28)' };
+        const toast = document.createElement('div');
+        toast.textContent = mensaje;
+        Object.assign(toast.style, {
+            position: 'fixed',
+            bottom: '1.5rem',
+            right: '1.5rem',
+            background: colors.bg,
+            color: '#fff',
+            padding: '0.85rem 1.1rem',
+            borderRadius: '12px',
+            fontSize: '0.9rem',
+            zIndex: '10000',
+            boxShadow: `0 12px 30px ${colors.shadow}`,
+            maxWidth: '320px',
+            lineHeight: '1.4'
+        });
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3200);
+    };
+    const limpiarErrorNuevoTrabajador = () => {
+        if (!errorNuevoTrabajador) return;
+        errorNuevoTrabajador.style.display = 'none';
+        errorNuevoTrabajador.textContent = '';
+    };
+    const abrirModalNuevoTrabajador = () => {
+        if (!modalNuevoTrabajador || !formNuevoTrabajador) return;
+        formNuevoTrabajador.reset();
+        limpiarErrorNuevoTrabajador();
+        modalNuevoTrabajador.style.display = 'flex';
+        setTimeout(() => document.getElementById('nuevo-trabajador-nombre')?.focus(), 60);
+    };
+    const cerrarModalNuevoTrabajador = () => {
+        if (!modalNuevoTrabajador || !formNuevoTrabajador) return;
+        formNuevoTrabajador.reset();
+        limpiarErrorNuevoTrabajador();
+        btnGuardarNuevoTrabajador.disabled = false;
+        btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar trabajador';
+        modalNuevoTrabajador.style.display = 'none';
+    };
+    const obtenerHabilidadesNuevoTrabajador = () => {
+        const seleccionadas = [...document.querySelectorAll('input[name="nuevo-trabajador-habilidades"]:checked')]
+            .map((input) => input.value.trim())
+            .filter(Boolean);
+        const extras = dividirEspecialidades(document.getElementById('nuevo-trabajador-habilidades-extra')?.value || '');
+        return [...new Set([...seleccionadas, ...extras])];
+    };
+
+    document.getElementById('btn-nuevo-trabajador')?.addEventListener('click', abrirModalNuevoTrabajador);
+    document.getElementById('btn-nuevo-trabajador-cerrar')?.addEventListener('click', cerrarModalNuevoTrabajador);
+    document.getElementById('btn-nuevo-trabajador-cancelar')?.addEventListener('click', cerrarModalNuevoTrabajador);
+    modalNuevoTrabajador?.addEventListener('click', (event) => {
+        if (event.target === modalNuevoTrabajador) cerrarModalNuevoTrabajador();
+    });
+    formNuevoTrabajador?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        limpiarErrorNuevoTrabajador();
+
+        const nombre = String(document.getElementById('nuevo-trabajador-nombre')?.value || '')
+            .trim()
+            .replace(/\s+/g, ' ');
+        const rut = normalizarRut(document.getElementById('nuevo-trabajador-rut')?.value || '');
+        const puesto = String(document.getElementById('nuevo-trabajador-puesto')?.value || '')
+            .trim()
+            .replace(/\s+/g, ' ');
+        const habilidades = obtenerHabilidadesNuevoTrabajador();
+
+        if (nombre.length < 3) {
+            errorNuevoTrabajador.textContent = 'Ingresa un nombre valido para el trabajador.';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        if (rut.length < 7) {
+            errorNuevoTrabajador.textContent = 'Ingresa un RUT valido.';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        if (!puesto) {
+            errorNuevoTrabajador.textContent = 'Ingresa el cargo del trabajador.';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        if (!habilidades.length) {
+            errorNuevoTrabajador.textContent = 'Selecciona al menos una especializacion.';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+        const rutDuplicado = estado.trabajadores.some((trabajador) => normalizarRut(trabajador.rut) === rut);
+        if (rutDuplicado) {
+            errorNuevoTrabajador.textContent = 'Ya existe un trabajador registrado con ese RUT.';
+            errorNuevoTrabajador.style.display = 'block';
+            return;
+        }
+
+        const nuevoTrabajador = {
+            id: crypto.randomUUID(),
+            nombre,
+            rut,
+            puesto,
+            habilidades,
+            disponible: false,
+            ocupado: false,
+            puede_aprobar_insumos: false
+        };
+
+        const textoOriginal = btnGuardarNuevoTrabajador.innerHTML;
+        btnGuardarNuevoTrabajador.disabled = true;
+        btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+
+        try {
+            const { data, error } = await _db.insert('trabajadores', nuevoTrabajador);
+            if (error) throw error;
+
+            const guardado = {
+                ...nuevoTrabajador,
+                ...(data || {}),
+                rut,
+                puesto,
+                habilidades
+            };
+            estado.trabajadores = [
+                ...estado.trabajadores.filter((trabajador) => trabajador.id !== guardado.id),
+                guardado
+            ];
+
+            cerrarModalNuevoTrabajador();
+            renderizarVistaActual();
+            mostrarToastTrabajadores(`${guardado.nombre} fue agregado al equipo.`);
+        } catch (error) {
+            errorNuevoTrabajador.textContent = error?.message || 'No se pudo guardar el trabajador.';
+            errorNuevoTrabajador.style.display = 'block';
+            btnGuardarNuevoTrabajador.disabled = false;
+            btnGuardarNuevoTrabajador.innerHTML = textoOriginal;
+        }
     });
 }
 
@@ -3513,22 +5429,22 @@ async function renderMisHorasView() {
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-calendar-days"></i> Mes actual</span>
                         <div class="overtime-kpi-value">${formatHoras(totalMesAprobado)} hrs</div>
-                        <div class="overtime-kpi-meta">Horas aprobadas durante este mes.</div>
+                        <div class="overtime-kpi-meta">Aprobadas</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-chart-line"></i> Historico</span>
                         <div class="overtime-kpi-value">${formatHoras(totalHistorico)} hrs</div>
-                        <div class="overtime-kpi-meta">Total aprobado acumulado en tu historial.</div>
+                        <div class="overtime-kpi-meta">Acumuladas</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
                         <div class="overtime-kpi-value">${pendientes}</div>
-                        <div class="overtime-kpi-meta">Solicitudes aun en revision administrativa.</div>
+                        <div class="overtime-kpi-meta">En revision</div>
                     </article>
                     <article class="overtime-kpi-card">
                         <span class="overtime-kpi-label"><i class="fa-solid fa-circle-xmark"></i> Rechazadas</span>
                         <div class="overtime-kpi-value">${rechazadas}</div>
-                        <div class="overtime-kpi-meta">Registros no aprobados o con observaciones.</div>
+                        <div class="overtime-kpi-meta">Con observacion</div>
                     </article>
                 </div>
 
@@ -3558,7 +5474,7 @@ async function renderMisHorasView() {
                     </div>
                 ` : `
                     <div class="table-shell">
-                        <table class="table-clean" style="width:100%;">
+                        <table class="table-clean table-clean--stacked" style="width:100%;">
                             <thead>
                                 <tr>
                                     <th>Fecha</th>
@@ -3571,20 +5487,20 @@ async function renderMisHorasView() {
                             <tbody>
                                 ${registros.map((registro) => `
                                     <tr style="${registro.estado === 'rechazado' ? 'opacity:0.72;' : ''}">
-                                        <td>
+                                        <td data-label="Fecha">
                                             <div style="font-weight:700; color:#0f172a;">${formatFecha(registro.fecha)}</div>
                                             <div class="overtime-note">${registro.created_at ? new Date(registro.created_at).toLocaleDateString('es-CL') : 'Sin fecha de carga'}</div>
                                         </td>
-                                        <td><div style="font-weight:800; color:var(--primary-color);">${formatHoras(registro.horas)} hrs</div></td>
-                                        <td style="max-width:280px;"><div style="color:#475569; font-size:0.83rem; line-height:1.55;">${registro.motivo || 'Sin motivo registrado.'}</div></td>
-                                        <td>
+                                        <td data-label="Horas"><div style="font-weight:800; color:var(--primary-color);">${formatHoras(registro.horas)} hrs</div></td>
+                                        <td data-label="Motivo" style="max-width:280px;"><div style="color:#475569; font-size:0.83rem; line-height:1.55;">${registro.motivo || 'Sin motivo registrado.'}</div></td>
+                                        <td data-label="Estado">
                                             ${registro.estado === 'aprobado'
                                                 ? `<span class="overtime-status approved"><i class="fa-solid fa-circle-check"></i> Aprobado</span>`
                                                 : registro.estado === 'rechazado'
                                                 ? `<span class="overtime-status rejected"><i class="fa-solid fa-circle-xmark"></i> Rechazado</span>${registro.motivo_rechazo ? `<div class="overtime-note" style="margin-top:0.35rem; color:#dc2626;">${registro.motivo_rechazo}</div>` : ''}`
                                                 : `<span class="overtime-status pending"><i class="fa-solid fa-hourglass-half"></i> Pendiente</span>`}
                                         </td>
-                                        <td>
+                                        <td data-label="Acciones">
                                             <button type="button" class="btn btn-outline btn-icon" title="Eliminar" onclick="window._eliminarHoraExtra('${registro.id}')" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
                                                 <i class="fa-solid fa-trash"></i>
                                             </button>
@@ -3642,7 +5558,7 @@ function renderPerfilView() {
                         </div>
                         <div class="profile-header" style="margin-top:1rem;">
                             <label style="font-weight:700; color:#475569;">Ver perfil de</label>
-                            <select id="select-perfil-admin" class="form-control" style="min-width:260px; max-width:420px;">
+                            <select id="select-perfil-admin" class="form-control profile-select">
                                 <option value="">-- Selecciona un trabajador --</option>
                                 ${todos.map(t => `<option value="${t.id}" ${t.id === wId ? 'selected' : ''}>${t.nombre} - ${t.puesto}</option>`).join('')}
                             </select>
@@ -3756,7 +5672,7 @@ function renderPerfilView() {
                             </div>
                         </div>
                     </div>
-                    <div style="display:flex; gap:0.65rem; flex-wrap:wrap;">
+                    <div class="profile-actions">
                         <button type="button" class="btn btn-outline" onclick="vistaActual='mis_horas'; renderizarVistaActual();">
                             <i class="fa-regular fa-clock"></i> Mis horas extra
                         </button>
@@ -5125,6 +7041,7 @@ function renderControlView() {
         day: 'numeric',
         month: 'long'
     });
+    const trabajadorActual = obtenerTrabajadorActual();
 
     function tituloTareaDashboard(tarea) {
         if (!tarea) return 'Sin informacion';
@@ -5452,6 +7369,191 @@ function renderDashboardView() {
             <div class="dashboard-metric-meta">${item.meta}</div>
         </article>
     `).join('');
+    const isAdmin = estado.usuarioActual === 'admin';
+    const saludoDashboard = (() => {
+        const hora = new Date().getHours();
+        if (hora < 12) return 'Buen dia';
+        if (hora < 20) return 'Buenas tardes';
+        return 'Buenas noches';
+    })();
+    const nombreUsuarioDashboard = isAdmin ? 'Planificador' : (trabajadorActual?.nombre || 'Equipo');
+    const nombreUsuarioCorto = String(nombreUsuarioDashboard).trim().split(/\s+/).slice(0, 2).join(' ');
+    const rolUsuarioDashboard = isAdmin ? 'Centro de control del turno' : (trabajadorActual?.puesto || 'Personal en terreno');
+    const tareasPersonales = !isAdmin && trabajadorActual
+        ? _tareasConPos.filter((tarea) =>
+            tarea.liderId === trabajadorActual.id ||
+            (tarea.ayudantesIds || []).includes(trabajadorActual.id)
+        )
+        : [];
+    const tareasPersonalesActivas = tareasPersonales.filter((tarea) => !tarea._enCola);
+    const tareasPersonalesCola = tareasPersonales.filter((tarea) => tarea._enCola);
+    const tareasPersonalesSemana = !isAdmin && trabajadorActual
+        ? estado.tareas
+            .filter((tarea) =>
+                tarea.estadoTarea === 'programada_semana' &&
+                (tarea.liderId === trabajadorActual.id || (tarea.ayudantesIds || []).includes(trabajadorActual.id))
+            )
+            .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+        : [];
+    const estadoUsuarioDashboard = isAdmin
+        ? `${trabajadoresConCheckIn} con check-in hoy`
+        : (trabajadorActual?.disponible
+            ? (trabajadorActual?.ocupado ? 'En terreno ahora' : 'Disponible para asignacion')
+            : 'Sin check-in registrado');
+    const ubicacionUsuarioDashboard = isAdmin
+        ? (unidadFocoDiaria?.nombre || 'Sin unidad foco')
+        : (tareasPersonales[0] ? obtenerUbicacionTarea(tareasPersonales[0]) : 'Sin unidad asignada');
+    const mobilePrimaryStats = isAdmin
+        ? [
+            { label: 'Activos', value: tareasActivas.length, meta: 'OT en ejecucion', icon: 'fa-person-digging' },
+            { label: 'En cola', value: colaTareas.length, meta: 'Listas para partir', icon: 'fa-layer-group' },
+            { label: 'Cobertura', value: `${coberturaTurno}%`, meta: 'Personal con check-in', icon: 'fa-user-check' },
+            { label: 'Alertas', value: unidadesConAlerta, meta: 'Unidades a revisar', icon: 'fa-triangle-exclamation' }
+        ]
+        : [
+            { label: 'Hoy', value: tareasPersonales.length, meta: tareasPersonalesActivas.length ? `${tareasPersonalesActivas.length} activas` : 'Sin carga activa', icon: 'fa-briefcase' },
+            { label: 'En cola', value: tareasPersonalesCola.length, meta: tareasPersonalesCola.length ? 'Pendientes del turno' : 'Sin tareas en cola', icon: 'fa-list-check' },
+            { label: 'Semana', value: tareasPersonalesSemana.length, meta: tareasPersonalesSemana.length ? 'Planificacion asignada' : 'Sin plan semanal', icon: 'fa-calendar-week' },
+            { label: 'Estado', value: trabajadorActual?.disponible ? 'Listo' : 'Pend.', meta: estadoUsuarioDashboard, icon: 'fa-circle-check' }
+        ];
+    const mobileQuickActions = isAdmin
+        ? [
+            { view: 'control', icon: 'fa-sliders', label: 'Control' },
+            { view: 'semanal', icon: 'fa-calendar-week', label: 'Semana' },
+            { view: 'trabajadores', icon: 'fa-users', label: 'Equipo' },
+            { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
+        ]
+        : [
+            { view: 'perfil', icon: 'fa-id-badge', label: 'Perfil' },
+            { view: 'semanal', icon: 'fa-calendar-week', label: 'Semana' },
+            { view: 'mis_horas', icon: 'fa-clock', label: 'Horas' },
+            { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
+        ];
+    const mobileHighlights = isAdmin
+        ? [
+            {
+                label: 'Unidad foco',
+                value: unidadFocoDiaria?.nombre || 'Sin foco',
+                meta: unidadFocoDiaria ? `${unidadFocoDiaria.active} activa(s) y ${unidadFocoDiaria.queue} en cola` : 'Aun no hay actividad relevante'
+            },
+            {
+                label: 'Siguiente OT',
+                value: tituloTareaDashboard(proximaEnCola),
+                meta: subtituloTareaDashboard(proximaEnCola)
+            },
+            {
+                label: 'Ultimo cierre',
+                value: ultimoCierreHoy ? tituloTareaDashboard(ultimoCierreHoy) : 'Sin cierres',
+                meta: ultimoCierreHoy ? new Date(ultimoCierreHoy.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : 'Se mostrara cuando se cierre una OT'
+            }
+        ]
+        : [
+            {
+                label: 'Trabajo actual',
+                value: tituloTareaDashboard(tareasPersonalesActivas[0] || tareasPersonales[0] || null),
+                meta: subtituloTareaDashboard(tareasPersonalesActivas[0] || tareasPersonales[0] || null)
+            },
+            {
+                label: 'Lo que sigue',
+                value: tituloTareaDashboard(tareasPersonalesCola[0] || tareasPersonalesSemana[0] || null),
+                meta: subtituloTareaDashboard(tareasPersonalesCola[0] || tareasPersonalesSemana[0] || null)
+            }
+        ];
+    const tareasPreviewMobile = (isAdmin ? _tareasConPos : tareasPersonales).slice(0, 3);
+    const mobilePreviewAction = isAdmin
+        ? { view: 'control', label: 'Abrir control' }
+        : { view: 'perfil', label: 'Ver mi perfil' };
+    const mobileHomeHtml = `
+        <section class="dashboard-mobile-shell">
+            <div class="dashboard-mobile-hero">
+                <div class="dashboard-mobile-kicker">${saludoDashboard}</div>
+                <div class="dashboard-mobile-profile">
+                    <div class="dashboard-mobile-profile-main">
+                        <span class="dashboard-mobile-avatar">${escapeHtml(String(nombreUsuarioCorto || 'P').charAt(0).toUpperCase())}</span>
+                        <div class="dashboard-mobile-profile-copy">
+                            <strong>${escapeHtml(nombreUsuarioCorto || 'Planify')}</strong>
+                            <span>${escapeHtml(rolUsuarioDashboard)}</span>
+                        </div>
+                    </div>
+                    <span class="dashboard-mobile-status-pill">${escapeHtml(estadoUsuarioDashboard)}</span>
+                </div>
+                <div class="dashboard-mobile-meta-row">
+                    <span><i class="fa-regular fa-calendar"></i> ${escapeHtml(resumenFecha)}</span>
+                    <span><i class="fa-solid fa-location-dot"></i> ${escapeHtml(ubicacionUsuarioDashboard)}</span>
+                </div>
+            </div>
+
+            <div class="dashboard-mobile-stats">
+                ${mobilePrimaryStats.map((item) => `
+                    <article class="dashboard-mobile-stat-card">
+                        <span class="dashboard-mobile-stat-icon"><i class="fa-solid ${item.icon}"></i></span>
+                        <strong>${escapeHtml(String(item.value))}</strong>
+                        <span>${escapeHtml(item.label)}</span>
+                        <small>${escapeHtml(item.meta)}</small>
+                    </article>
+                `).join('')}
+            </div>
+
+            <div class="dashboard-mobile-panel">
+                <div class="dashboard-mobile-panel-head">
+                    <div>
+                        <span class="dashboard-mobile-panel-label">Accesos rapidos</span>
+                        <h3>${isAdmin ? 'Gestiona el turno' : 'Tu jornada'}</h3>
+                    </div>
+                </div>
+                <div class="dashboard-mobile-actions-grid">
+                    ${mobileQuickActions.map((item) => `
+                        <button type="button" class="dashboard-mobile-action-btn" onclick="window.dashboardMobileNavigate('${item.view}')">
+                            <i class="fa-solid ${item.icon}"></i>
+                            <span>${escapeHtml(item.label)}</span>
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="dashboard-mobile-panel">
+                <div class="dashboard-mobile-panel-head">
+                    <div>
+                        <span class="dashboard-mobile-panel-label">${isAdmin ? 'Panorama rapido' : 'Tu foco de hoy'}</span>
+                        <h3>${isAdmin ? 'Lo mas importante del turno' : 'Tus trabajos y proximos pasos'}</h3>
+                    </div>
+                </div>
+                <div class="dashboard-mobile-highlight-grid">
+                    ${mobileHighlights.map((item) => `
+                        <article class="dashboard-mobile-highlight-card">
+                            <span>${escapeHtml(item.label)}</span>
+                            <strong>${escapeHtml(item.value)}</strong>
+                            <small>${escapeHtml(item.meta)}</small>
+                        </article>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="dashboard-mobile-panel">
+                <div class="dashboard-mobile-panel-head">
+                    <div>
+                        <span class="dashboard-mobile-panel-label">${isAdmin ? 'Radar de tareas' : 'Tus trabajos'}</span>
+                        <h3>${isAdmin ? 'Vista rapida del tablero' : 'Lo que tienes asignado ahora'}</h3>
+                    </div>
+                    <button type="button" class="dashboard-mobile-inline-link" onclick="window.dashboardMobileNavigate('${mobilePreviewAction.view}')">${mobilePreviewAction.label}</button>
+                </div>
+                ${tareasPreviewMobile.length
+                    ? `<div class="dashboard-mobile-task-list">
+                        ${tareasPreviewMobile.map((tarea) => `
+                            <article class="dashboard-mobile-task-item">
+                                <div class="dashboard-mobile-task-copy">
+                                    <strong>${escapeHtml(tituloTareaDashboard(tarea))}</strong>
+                                    <span>${escapeHtml(subtituloTareaDashboard(tarea))}</span>
+                                </div>
+                                <span class="dashboard-mobile-task-state ${tarea._enCola ? 'is-queue' : 'is-active'}">${tarea._enCola ? 'En cola' : 'Activo'}</span>
+                            </article>
+                        `).join('')}
+                    </div>`
+                    : `<div class="empty-state empty-state--compact"><div><strong>${isAdmin ? 'Sin movimiento aun' : 'Sin trabajos asignados'}</strong><p>${isAdmin ? 'Cuando entren OTs o mediciones veras el resumen del turno aqui.' : 'Cuando te asignen trabajo o una OT entre en cola aparecera aqui.'}</p></div></div>`
+                }
+            </div>
+        </section>
+    `;
     const mapaUnidadHtml = resumenUnidades.length > 0
         ? `<div class="daily-unit-map-grid">
             ${resumenUnidades.map(unidad => {
@@ -5494,9 +7596,6 @@ function renderDashboardView() {
         </div>`
         : `<div class="empty-state"><div><strong>Sin unidades con movimiento hoy</strong><p>Cuando entren trabajos, cierres o mediciones del dia, el mapa operacional aparecera aqui.</p></div></div>`;
 
-    // Validar si el usuario actual es admin
-    const isAdmin = estado.usuarioActual === 'admin';
-    
     // Panel de Asignación — Drawer deslizable (solo admin)
     let panelAsignacionHtml = '';
     if (isAdmin) {
@@ -5608,42 +7707,24 @@ function renderDashboardView() {
         ${panelAsignacionHtml}
         <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${!isAdmin ? 'max-width:800px; margin:0 auto;' : ''}">
 
-            <div class="panel dashboard-hero daily-ops-panel">
-                <div class="dashboard-hero-head">
-                    <div>
-                        <div class="dashboard-eyebrow">Diario operativo</div>
-                        <h2 style="margin-bottom:0.4rem;"><i class="fa-solid fa-map-location-dot"></i> Mapa por unidad</h2>
-                        <p class="dashboard-hero-copy">${resumenFecha}. ${unidadesConActividad > 0 ? `${unidadesConActividad} unidad(es) con movimiento entre trabajos, cierres y mediciones de hoy.` : 'Aun no hay unidades con actividad visible en el turno.'}</p>
-                    </div>
-                    <div class="dashboard-hero-badges">
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-location-dot"></i> ${unidadFocoDiaria ? unidadFocoDiaria.nombre : 'Sin foco'}</span>
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-triangle-exclamation"></i> ${unidadesConAlerta} con alerta</span>
-                    </div>
-                </div>
-
-                <div class="dashboard-metrics dashboard-metrics--daily">
-                    ${metricasMapaUnidadHtml}
-                </div>
-
-                <div class="daily-unit-map-panel">
-                    <div class="daily-unit-map-head">
-                        <div>
-                            <div class="daily-unit-map-title">Radar del turno</div>
-                            <p class="daily-unit-map-copy">Cada tarjeta resume carga, cola, cierres, mediciones y personal por unidad. Toca una unidad para abrir sus equipos.</p>
-                        </div>
-                        <div class="daily-unit-map-legend">
-                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#f97316;"></i> Activos</span>
-                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#2563eb;"></i> Cola</span>
-                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#10b981;"></i> Cierres</span>
-                            <span class="daily-unit-map-legend-chip"><i class="fa-solid fa-square" style="color:#7c3aed;"></i> Mediciones</span>
-                        </div>
-                    </div>
-                    ${mapaUnidadHtml}
-                </div>
-            </div>
-
             <!-- Lista de trabajos (ocupa todo el ancho) -->
             <div class="dashboard-lists">
+                ${mobileHomeHtml}
+
+                <section class="panel daily-news-entry-panel">
+                    <div class="daily-news-entry-copy">
+                        <span class="dashboard-eyebrow">Documento operativo</span>
+                        <h2>&#x1F4CB; Informe de Novedades Diarias</h2>
+                        <p>Completa categorías, OTs, actividades, observaciones y fotos manualmente. La exportación usa el Word de referencia APPLUS como plantilla real.</p>
+                    </div>
+                    <div class="daily-news-entry-actions">
+                        <button type="button" class="btn btn-success" onclick="window.abrirInformeNovedadesDiarias()">
+                            <i class="fa-solid fa-file-word"></i> Abrir informe
+                        </button>
+                    </div>
+                </section>
+
+                ${isAdmin || usuarioPuedeAprobarInsumos() ? renderDashboardInsumosOverviewHtml() : ''}
 
                 <div class="panel">
                     <div class="panel-header" style="justify-content: space-between;">
@@ -5716,8 +7797,17 @@ function renderDashboardView() {
         </div>
     `;
     mainContent.innerHTML = html;
+    window.dashboardMobileNavigate = function(view) {
+        vistaActual = view;
+        renderizarVistaActual();
+    };
 
     // --- Funciones del drawer de asignación ---
+    document.getElementById('btn-open-insumos-dashboard')?.addEventListener('click', () => {
+        vistaActual = 'insumos';
+        renderizarVistaActual();
+    });
+
     window.abrirDrawerAsignacion = function() {
         const drawer   = document.getElementById('asign-drawer');
         const backdrop = document.getElementById('asign-backdrop');
@@ -6333,22 +8423,22 @@ function renderSemanalView() {
                         <article class="weekly-kpi-card">
                             <span class="weekly-kpi-label"><i class="fa-solid fa-list-check"></i> Carga semanal</span>
                             <div class="weekly-kpi-value">${tareasSemanales.length}</div>
-                            <div class="weekly-kpi-meta">${otsSemanales} OT con numero asignado y ${supervisorPendiente} trabajo(s) esperando supervisor.</div>
+                            <div class="weekly-kpi-meta">${otsSemanales} OT</div>
                         </article>
                         <article class="weekly-kpi-card">
                             <span class="weekly-kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Vencimientos</span>
                             <div class="weekly-kpi-value">${tareasVencidas.length}</div>
-                            <div class="weekly-kpi-meta">${tareasPorVencer.length} por vencer en las proximas 48 horas.</div>
+                            <div class="weekly-kpi-meta">${tareasPorVencer.length} por vencer</div>
                         </article>
                         <article class="weekly-kpi-card">
-                            <span class="weekly-kpi-label"><i class="fa-solid ${focoSemanal.icon}"></i> Especialidad principal</span>
+                            <span class="weekly-kpi-label"><i class="fa-solid ${focoSemanal.icon}"></i> Foco</span>
                             <div class="weekly-kpi-value">${focoSemanal.label}</div>
-                            <div class="weekly-kpi-meta">${focoSemanal.count} trabajo(s) concentrados en esta linea de trabajo.</div>
+                            <div class="weekly-kpi-meta">${focoSemanal.count} trabajo(s)</div>
                         </article>
                         <article class="weekly-kpi-card">
                             <span class="weekly-kpi-label"><i class="fa-solid fa-map"></i> Cobertura</span>
                             <div class="weekly-kpi-value">${unidadesSemanales.length}</div>
-                            <div class="weekly-kpi-meta">${unidadesSemanales.slice(0, 3).join(' · ') || 'Sin unidades registradas'}${unidadesSemanales.length > 3 ? '...' : ''}</div>
+                            <div class="weekly-kpi-meta">${supervisorPendiente} sin supervisor</div>
                         </article>
                     </div>
 
@@ -6897,6 +8987,11 @@ const navConfig = {
     'nav-historial': 'historial',
     'nav-trabajadores': 'trabajadores',
     'nav-horas-extra-admin': 'horas_extra_admin',
+    'nav-insumos': 'insumos',
+    'nav-mobile-dashboard': 'dashboard',
+    'nav-mobile-semanal': 'semanal',
+    'nav-mobile-perfil': 'perfil',
+    'nav-mobile-insumos': 'insumos',
     'nav-perfil': 'perfil',
     'nav-checkin': 'checkin'
 };
@@ -6904,6 +8999,8 @@ const navConfig = {
 function renderizarVistaActual() {
     // Limpiar contenido
     mainContent.innerHTML = '';
+    document.body.dataset.view = vistaActual;
+    document.body.dataset.role = estado.usuarioActual || 'visita';
     
     // Actualizar clases activas en nav
     Object.keys(navConfig).forEach(id => {
@@ -6937,6 +9034,9 @@ function renderizarVistaActual() {
         case 'horas_extra_admin':
             renderHorasExtraAdminView();
             break;
+        case 'insumos':
+            renderInsumosView();
+            break;
         case 'perfil':
             renderPerfilView();
             break;
@@ -6946,6 +9046,10 @@ function renderizarVistaActual() {
     const sidebar = document.getElementById('sidebar');
     if (sidebar) {
         sidebar.classList.remove('open');
+    }
+    const menuButton = document.getElementById('btn-menu');
+    if (menuButton) {
+        menuButton.setAttribute('aria-expanded', 'false');
     }
 }
 
@@ -6962,10 +9066,39 @@ Object.keys(navConfig).forEach(id => {
 // Sidebar Móvil (Opcional según index.html)
 const btnMenu = document.getElementById('btn-menu');
 const sidebar = document.getElementById('sidebar');
+const btnMobileMenu = document.getElementById('nav-mobile-menu');
 
 if (btnMenu && sidebar) {
-    btnMenu.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
+    const closeMobileNav = () => {
+        sidebar.classList.remove('open');
+        btnMenu.setAttribute('aria-expanded', 'false');
+    };
+
+    btnMenu.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const nextState = !sidebar.classList.contains('open');
+        sidebar.classList.toggle('open', nextState);
+        btnMenu.setAttribute('aria-expanded', nextState ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', (event) => {
+        if (window.innerWidth > 768 || !sidebar.classList.contains('open')) return;
+        if (sidebar.contains(event.target) || btnMenu.contains(event.target)) return;
+        closeMobileNav();
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closeMobileNav();
+    });
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) closeMobileNav();
+    });
+}
+
+if (btnMobileMenu && btnMenu) {
+    btnMobileMenu.addEventListener('click', () => {
+        btnMenu.click();
     });
 }
 
@@ -8994,23 +11127,33 @@ function accederApp(rol, trabajadorObj = null) {
     // Visibilidad de nav según rol
     const navRoles = {
         'nav-mis-horas':          ['trabajador'],
-        'nav-semanal':            ['admin', 'trabajador'],
+        'nav-control':            ['admin'],
+        'nav-semanal':            ['admin'],
+        'nav-historial':          ['admin'],
         'nav-trabajadores':       ['admin'],
         'nav-checkin':            ['admin'],
         'nav-horas-extra-admin':  ['admin'],
+        'nav-insumos':            ['admin', 'trabajador'],
+        'nav-mobile-semanal':     ['admin'],
+        'nav-mobile-insumos':     ['admin', 'trabajador'],
         'nav-perfil':             ['admin', 'trabajador'],
         'btn-copy-link':          ['admin']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
         if (!el) return;
-        el.style.display = roles.includes(rol) ? 'inline-block' : 'none';
+        const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
+        el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
 
     // Badge de pendientes solo para planificador
     if (rol === 'admin') actualizarBadgeHE();
+    actualizarBadgeInsumos();
 
-    vistaActual = rol === 'admin' ? 'control' : 'dashboard';
+    const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
+    vistaActual = rol === 'admin'
+        ? (esPantallaMovil ? 'dashboard' : 'control')
+        : 'dashboard';
     renderizarVistaActual();
 }
 

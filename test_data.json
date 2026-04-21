@@ -1,0 +1,179 @@
+{
+  "fileName": "Planify_Control_2026-03-08_2026-04-06.xlsx",
+  "rango": {
+    "desde": "08-03-2026",
+    "hasta": "06-04-2026",
+    "diasAnalizados": 30
+  },
+  "periodoAnterior": {
+    "desde": "06-02-2026",
+    "hasta": "07-03-2026"
+  },
+  "generado": "06-04-2026 14:32",
+  "kpis": {
+    "trabajosCerrados": {
+      "actual": 34,
+      "anterior": 6,
+      "porDia": "1.1/dia",
+      "extra": "+28"
+    },
+    "mediciones": {
+      "actual": 74,
+      "anterior": 12,
+      "porDia": "2.5/dia"
+    },
+    "hhRegistradas": {
+      "actual": 52.5,
+      "anterior": 9.0,
+      "porTrabajo": "1.5 HH/trab"
+    },
+    "otCerradas": {
+      "actual": 26,
+      "anterior": 4,
+      "avisos": "26 avisos"
+    },
+    "equiposIntervenidos": {
+      "actual": 24,
+      "anterior": 6
+    },
+    "personalParticipante": {
+      "actual": 5,
+      "anterior": 2
+    },
+    "lecturasCriticas": {
+      "actual": 0,
+      "anterior": 0
+    },
+    "seguimientoActivo": {
+      "actual": 21,
+      "anterior": 0
+    }
+  },
+  "distribucion": {
+    "especialidad": [
+      { "nombre": "Vibraciones", "total": 22, "pct": 65 },
+      { "nombre": "Termografia", "total": 12, "pct": 35 }
+    ],
+    "unidad": [
+      { "nombre": "Unidad 3", "total": 24, "pct": 71 },
+      { "nombre": "Punta de Agua", "total": 2, "pct": 6 },
+      { "nombre": "Unidad 5", "total": 2, "pct": 6 },
+      { "nombre": "Unidad 4", "total": 2, "pct": 6 },
+      { "nombre": "Otros", "total": 4, "pct": 12 }
+    ],
+    "condicion": [
+      { "estado": "Controlado", "total": 53, "pct": 72 },
+      { "estado": "Seguimiento", "total": 21, "pct": 28 },
+      { "estado": "Critico", "total": 0, "pct": 0 }
+    ],
+    "mixMediciones": [
+      { "tipo": "Vibracion", "total": 52, "pct": 70 },
+      { "tipo": "Termografia", "total": 22, "pct": 30 }
+    ]
+  },
+  "alertas": [
+    { "categoria": "Seguimiento", "equipo": "VT-001", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "8.5 mm/s", "fecha": "01-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-002", "unidad": "Unidad 3", "punto": "Rodamiento Eje Ventilador", "valor": "7.2 mm/s", "fecha": "01-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-003", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "6.8 mm/s", "fecha": "02-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-004", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "7.5 mm/s", "fecha": "02-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-005", "unidad": "Unidad 3", "punto": "Cojinete Salida", "valor": "9.1 mm/s", "fecha": "03-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-006", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "6.3 mm/s", "fecha": "03-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-007", "unidad": "Unidad 3", "punto": "Rodamiento Eje Ventilador", "valor": "8.0 mm/s", "fecha": "03-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-008", "unidad": "Unidad 3", "punto": "Cojinete Entrada", "valor": "7.8 mm/s", "fecha": "04-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-009", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "8.3 mm/s", "fecha": "04-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-010", "unidad": "Unidad 3", "punto": "Cojinete Salida", "valor": "6.9 mm/s", "fecha": "04-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-011", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "7.4 mm/s", "fecha": "05-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-012", "unidad": "Unidad 3", "punto": "Rodamiento Eje Ventilador", "valor": "8.8 mm/s", "fecha": "05-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-013", "unidad": "Unidad 3", "punto": "Cojinete Entrada", "valor": "7.1 mm/s", "fecha": "05-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-014", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "6.5 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-015", "unidad": "Unidad 3", "punto": "Rodamiento Eje Ventilador", "valor": "9.3 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-016", "unidad": "Unidad 3", "punto": "Cojinete Salida", "valor": "7.7 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-017", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "8.2 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-018", "unidad": "Unidad 3", "punto": "Cojinete Entrada", "valor": "6.7 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-019", "unidad": "Unidad 3", "punto": "Rodamiento Eje Motor", "valor": "7.9 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-020", "unidad": "Unidad 3", "punto": "Rodamiento Eje Ventilador", "valor": "8.6 mm/s", "fecha": "06-04-2026" },
+    { "categoria": "Seguimiento", "equipo": "VT-021", "unidad": "Unidad 3", "punto": "Cojinete Salida", "valor": "7.3 mm/s", "fecha": "06-04-2026" }
+  ],
+  "trabajos": [
+    { "fecha": "08-03-2026", "unidad": "Unidad 3", "equipo": "VT-001", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2201", "hh": 1.5 },
+    { "fecha": "08-03-2026", "unidad": "Unidad 3", "equipo": "VT-002", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2202", "hh": 1.5 },
+    { "fecha": "09-03-2026", "unidad": "Unidad 3", "equipo": "VT-003", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2203", "hh": 2.0 },
+    { "fecha": "09-03-2026", "unidad": "Unidad 3", "equipo": "VT-004", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2204", "hh": 1.5 },
+    { "fecha": "10-03-2026", "unidad": "Unidad 3", "equipo": "VT-005", "especialidad": "Termografia", "lider": "Brandon Mancilla", "ot": "OT-2205", "hh": 1.0 },
+    { "fecha": "10-03-2026", "unidad": "Unidad 3", "equipo": "VT-006", "especialidad": "Termografia", "lider": "Brandon Mancilla", "ot": "OT-2206", "hh": 1.0 },
+    { "fecha": "11-03-2026", "unidad": "Punta de Agua", "equipo": "PA-001", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2207", "hh": 2.0 },
+    { "fecha": "11-03-2026", "unidad": "Unidad 3", "equipo": "VT-007", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2208", "hh": 1.5 },
+    { "fecha": "12-03-2026", "unidad": "Unidad 3", "equipo": "VT-008", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2209", "hh": 1.5 },
+    { "fecha": "12-03-2026", "unidad": "Unidad 3", "equipo": "VT-009", "especialidad": "Termografia", "lider": "Luis Escudero", "ot": "OT-2210", "hh": 1.0 },
+    { "fecha": "14-03-2026", "unidad": "Unidad 3", "equipo": "VT-010", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2211", "hh": 2.0 },
+    { "fecha": "15-03-2026", "unidad": "Unidad 3", "equipo": "VT-011", "especialidad": "Vibraciones", "lider": "Brandon Mancilla", "ot": "OT-2212", "hh": 1.5 },
+    { "fecha": "15-03-2026", "unidad": "Unidad 4", "equipo": "U4-001", "especialidad": "Termografia", "lider": "Brandon Mancilla", "ot": "OT-2213", "hh": 1.0 },
+    { "fecha": "16-03-2026", "unidad": "Unidad 3", "equipo": "VT-012", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2214", "hh": 1.5 },
+    { "fecha": "17-03-2026", "unidad": "Unidad 3", "equipo": "VT-013", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2215", "hh": 2.0 },
+    { "fecha": "18-03-2026", "unidad": "Unidad 3", "equipo": "VT-014", "especialidad": "Termografia", "lider": "Vicente Navarrete", "ot": "OT-2216", "hh": 1.0 },
+    { "fecha": "19-03-2026", "unidad": "Unidad 5", "equipo": "U5-001", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2217", "hh": 2.0 },
+    { "fecha": "20-03-2026", "unidad": "Unidad 3", "equipo": "VT-015", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2218", "hh": 1.5 },
+    { "fecha": "21-03-2026", "unidad": "Unidad 3", "equipo": "VT-016", "especialidad": "Termografia", "lider": "Brandon Mancilla", "ot": "OT-2219", "hh": 1.0 },
+    { "fecha": "22-03-2026", "unidad": "Unidad 3", "equipo": "VT-017", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2220", "hh": 2.0 },
+    { "fecha": "24-03-2026", "unidad": "Unidad 3", "equipo": "VT-018", "especialidad": "Vibraciones", "lider": "Luis Escudero", "ot": "OT-2221", "hh": 1.5 },
+    { "fecha": "25-03-2026", "unidad": "Unidad 3", "equipo": "VT-019", "especialidad": "Termografia", "lider": "Brandon Mancilla", "ot": "OT-2222", "hh": 1.0 },
+    { "fecha": "26-03-2026", "unidad": "Punta de Agua", "equipo": "PA-002", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2223", "hh": 2.0 },
+    { "fecha": "27-03-2026", "unidad": "Unidad 3", "equipo": "VT-020", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2224", "hh": 1.5 },
+    { "fecha": "28-03-2026", "unidad": "Unidad 3", "equipo": "VT-021", "especialidad": "Termografia", "lider": "Luis Escudero", "ot": "OT-2225", "hh": 1.0 },
+    { "fecha": "29-03-2026", "unidad": "Unidad 4", "equipo": "U4-002", "especialidad": "Vibraciones", "lider": "Brandon Mancilla", "ot": "OT-2226", "hh": 2.0 },
+    { "fecha": "01-04-2026", "unidad": "Unidad 3", "equipo": "VT-001", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2227", "hh": 1.5 },
+    { "fecha": "02-04-2026", "unidad": "Unidad 3", "equipo": "VT-002", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2228", "hh": 1.5 },
+    { "fecha": "03-04-2026", "unidad": "Unidad 5", "equipo": "U5-002", "especialidad": "Termografia", "lider": "Luis Escudero", "ot": "OT-2229", "hh": 1.0 },
+    { "fecha": "04-04-2026", "unidad": "Unidad 3", "equipo": "VT-003", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2230", "hh": 2.0 },
+    { "fecha": "05-04-2026", "unidad": "Unidad 3", "equipo": "VT-004", "especialidad": "Vibraciones", "lider": "Brandon Mancilla", "ot": "OT-2231", "hh": 1.5 },
+    { "fecha": "05-04-2026", "unidad": "Unidad 3", "equipo": "VT-005", "especialidad": "Termografia", "lider": "Luis Escudero", "ot": "OT-2232", "hh": 1.0 },
+    { "fecha": "06-04-2026", "unidad": "Unidad 3", "equipo": "VT-006", "especialidad": "Vibraciones", "lider": "Vicente Navarrete", "ot": "OT-2233", "hh": 1.5 },
+    { "fecha": "06-04-2026", "unidad": "Unidad 3", "equipo": "VT-007", "especialidad": "Vibraciones", "lider": "Diego Flores", "ot": "OT-2234", "hh": 1.0 }
+  ],
+  "lideres": [
+    { "nombre": "Vicente Navarrete", "trabajos": 15, "unidades": 3 },
+    { "nombre": "Luis Escudero",     "trabajos": 9,  "unidades": 3 },
+    { "nombre": "Brandon Mancilla",  "trabajos": 9,  "unidades": 3 },
+    { "nombre": "Diego Flores",      "trabajos": 1,  "unidades": 1 }
+  ],
+  "topEquipos": [
+    { "nombre": "VT-001", "trabajos": 3, "unidad": "Unidad 3" },
+    { "nombre": "VT-002", "trabajos": 3, "unidad": "Unidad 3" },
+    { "nombre": "VT-003", "trabajos": 2, "unidad": "Unidad 3" },
+    { "nombre": "VT-004", "trabajos": 2, "unidad": "Unidad 3" },
+    { "nombre": "VT-005", "trabajos": 2, "unidad": "Unidad 3" },
+    { "nombre": "VT-006", "trabajos": 2, "unidad": "Unidad 3" },
+    { "nombre": "PA-001", "trabajos": 1, "unidad": "Punta de Agua" },
+    { "nombre": "U4-001", "trabajos": 1, "unidad": "Unidad 4" }
+  ],
+  "mensajes": {
+    "lecturaEjecutiva": {
+      "titulo": "Lectura Ejecutiva del Periodo",
+      "body": "Se registraron 34 trabajos de mantenimiento en el periodo 08-03 al 06-04-2026, con un incremento del 467% respecto al periodo anterior (6 trabajos). La unidad con mayor actividad fue Unidad 3 con 24 intervenciones (71%). No se detectaron lecturas criticas. Se mantienen 21 puntos en seguimiento activo sobre ventiladores de Unidad 3."
+    },
+    "riesgoTecnico": {
+      "titulo": "Riesgo Tecnico Identificado",
+      "body": "Se identificaron 21 puntos de seguimiento activo en ventiladores de Unidad 3 con valores entre 6.3 y 9.3 mm/s. Aunque ninguno supera el umbral critico, la tendencia al alza requiere monitoreo frecuente. Se recomienda aumentar la frecuencia de medicion en VT-005, VT-012 y VT-015 que presentan los valores mas elevados del periodo."
+    },
+    "movimientoSugerido": {
+      "titulo": "Movimiento Sugerido",
+      "body": "Priorizar la planificacion de mantenimiento preventivo en Unidad 3 para el proximo periodo. Coordinar con operaciones para ventana de acceso a VT-005 y VT-015. Revisar lubricacion de rodamientos en equipos con seguimiento activo. Programar termografia complementaria en los puntos con mayor temperatura registrada."
+    },
+    "siguienteAccion": {
+      "titulo": "Siguiente Accion Clave",
+      "body": "Coordinar con Vicente Navarrete la planificacion de trabajos para semana del 13 al 17 de abril. Generar OT de seguimiento para los 21 puntos en alerta activa. Enviar informe de condicion a supervision tecnica. Actualizar base de datos de frecuencias de medicion para equipos de Unidad 3."
+    }
+  },
+  "accionesSugeridas": [
+    "Revisar 21 alertas activas en ventiladores Unidad 3 y generar OT de seguimiento",
+    "Programar seguimiento intensivo en Unidad 3 para proxima semana",
+    "Actualizar historial de mediciones y frecuencias en base de datos",
+    "Generar reporte de condicion para supervision tecnica y operaciones"
+  ],
+  "tendenciaAlertas": [
+    { "semana": "S1", "cantidad": 3 },
+    { "semana": "S2", "cantidad": 7 },
+    { "semana": "S3", "cantidad": 6 },
+    { "semana": "S4", "cantidad": 5 }
+  ]
+}

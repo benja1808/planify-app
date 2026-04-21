@@ -13,7 +13,7 @@
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css?v=14">
+    <link rel="stylesheet" href="styles.css?v=17">
     
     <!-- PWA / Mobile Capabilites -->
     <link rel="manifest" href="manifest.json">
@@ -157,11 +157,17 @@
     <div id="app" style="display: none;">
         <!-- Navegación -->
         <nav class="navbar">
-            <div class="logo">
-                <i class="fa-solid fa-calendar-check"></i>
-                <span>Planify</span>
+            <div class="navbar-top">
+                <div class="logo">
+                    <i class="fa-solid fa-calendar-check"></i>
+                    <span>Planify</span>
+                </div>
+                <button id="btn-menu" class="nav-mobile-toggle" type="button" aria-label="Abrir menu de navegacion" aria-controls="sidebar" aria-expanded="false">
+                    <i class="fa-solid fa-bars"></i>
+                    <span>Menu</span>
+                </button>
             </div>
-            <div class="nav-links">
+            <div class="nav-links" id="sidebar">
                 <button id="nav-mis-horas" style="display:none;">Mis Horas</button>
                 <button id="nav-control">Control</button>
                 <button id="nav-dashboard" class="active">Diario</button>
@@ -171,6 +177,10 @@
                 <button id="nav-horas-extra-admin" style="display:none; position:relative;">
                     Horas Extra
                     <span id="badge-he-pendientes" style="display:none; position:absolute; top:-5px; right:-6px; background:#ef4444; color:white; border-radius:999px; font-size:0.62rem; padding:0.05rem 0.38rem; font-weight:700; min-width:16px; text-align:center; pointer-events:none;"></span>
+                </button>
+                <button id="nav-insumos" style="display:none; position:relative;">
+                    Insumos
+                    <span id="badge-insumos-pendientes" style="display:none; position:absolute; top:-5px; right:-6px; background:#ef4444; color:white; border-radius:999px; font-size:0.62rem; padding:0.05rem 0.38rem; font-weight:700; min-width:16px; text-align:center; pointer-events:none;"></span>
                 </button>
                 <button id="nav-perfil">Mi Perfil</button>
                 <button id="nav-checkin">Check-in Personal</button>
@@ -196,7 +206,7 @@
         </section>
 
         <!-- Buscador Global OTs -->
-        <div id="search-container" style="background: rgba(255, 255, 255, 0.95); padding: 1rem 2rem; border-bottom: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; gap: 1rem;">
+        <div id="search-container" class="search-toolbar">
             <div class="search-shell" style="position: relative; width: 100%; max-width: 600px;">
                 <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
                 <input type="text" id="input-buscar-ot" class="form-control" placeholder="Buscar por número de OT o Equipo... (Ej. OT-1052 o Bomba)" style="padding-left: 2.8rem; border-radius: 50px; text-transform: uppercase;">
@@ -208,7 +218,7 @@
         </div>
 
         <!-- Contenedor de Resultados Búsqueda (Oculto por defecto) -->
-        <div id="search-results-overlay" style="display: none; padding: 2rem; max-width: 1200px; margin: 0 auto; width: 100%;">
+        <div id="search-results-overlay" class="search-overlay" style="display: none;">
             <div style="display:flex; justify-content: space-between; align-items:center; margin-bottom: 1.5rem;">
                 <h2 style="margin:0;"><i class="fa-solid fa-magnifying-glass"></i> Resultados de Búsqueda</h2>
                 <button id="btn-cerrar-busqueda" class="btn" style="background: transparent; color: var(--text-muted);"><i class="fa-solid fa-xmark fa-lg"></i></button>
@@ -222,6 +232,28 @@
         <main id="main-content">
             <!-- Las vistas se inyectan aquí por JS -->
         </main>
+        <div class="mobile-dock" id="mobile-dock" aria-label="Navegacion movil principal">
+            <button id="nav-mobile-dashboard" class="mobile-dock-btn active" type="button">
+                <i class="fa-solid fa-house"></i>
+                <span>Inicio</span>
+            </button>
+            <button id="nav-mobile-semanal" class="mobile-dock-btn" type="button">
+                <i class="fa-solid fa-calendar-week"></i>
+                <span>Semana</span>
+            </button>
+            <button id="nav-mobile-perfil" class="mobile-dock-btn" type="button">
+                <i class="fa-solid fa-id-badge"></i>
+                <span>Perfil</span>
+            </button>
+            <button id="nav-mobile-insumos" class="mobile-dock-btn" type="button">
+                <i class="fa-solid fa-box-open"></i>
+                <span>Insumos</span>
+            </button>
+            <button id="nav-mobile-menu" class="mobile-dock-btn mobile-dock-btn--menu" type="button">
+                <i class="fa-solid fa-bars-staggered"></i>
+                <span>Menu</span>
+            </button>
+        </div>
     </div>
 
     <!-- MODAL INICIAR TRABAJO PROGRAMADO -->
@@ -451,12 +483,59 @@
     </div>
 
     <!-- Offline: IndexedDB local + cola de sync (cargan antes que app.js) -->
-    <script src="localDB.js?v=2"></script>
+    <script src="localDB.js?v=4"></script>
     <script src="syncQueue.js?v=2"></script>
 
     <!-- Scripts locales modulares -->
-    <script src="app.js?v=169" defer></script>
+    <script src="app.js?v=172" defer></script>
+    <script src="dailyNews.js?v=1" defer></script>
     <script src="dashboardAnalytics.js?v=34" defer></script>
+
+    <!-- Modal: Rechazo de Solicitud de Insumos -->
+<div id="modal-insumos-rechazo" class="modal-overlay-base" style="z-index:10000;">
+    <div class="modal-shell modal-shell--compact">
+        <div class="modal-head">
+            <div class="modal-title-wrap">
+                <span class="modal-eyebrow"><i class="fa-solid fa-boxes-stacked"></i> Revision de inventario</span>
+                <h2 class="modal-title"><i class="fa-solid fa-ban"></i> Rechazar solicitud</h2>
+            </div>
+            <button onclick="document.getElementById('modal-insumos-rechazo').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+        <p style="color:var(--text-muted); font-size:0.83rem; margin-bottom:1.2rem;">Explica brevemente por que se rechaza la solicitud. El trabajador vera esta observacion en su historial.</p>
+        <label style="display:block; font-size:0.85rem; font-weight:600; margin-bottom:0.3rem; color:var(--text-muted);">Observaciones <span style="color:var(--danger-color)">*</span></label>
+        <textarea id="insumos-rechazo-observaciones" class="form-control" rows="3" placeholder="Ej: Item sin disponibilidad inmediata, revisar stock de bodega central..." style="resize:vertical;"></textarea>
+        <p id="insumos-rechazo-error" style="display:none; color:var(--danger-color); font-size:0.82rem; margin-top:0.4rem;">La observacion es obligatoria.</p>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button id="btn-insumos-rechazo-confirmar" class="btn" style="flex:1; border-radius:10px; background:#fee2e2; color:#dc2626; border:1px solid #fecaca; font-weight:600;">Guardar rechazo</button>
+            <button id="btn-insumos-rechazo-cancelar" class="btn" style="border-radius:10px; border:1px solid var(--border-color); background:transparent; color:var(--text-muted); padding:0 1.2rem;">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+    <!-- Modal: Editar / Ajustar Insumo -->
+<div id="modal-insumo-editar" class="modal-overlay-base" style="z-index:10000;">
+    <div class="modal-shell modal-shell--compact">
+        <div class="modal-head">
+            <div class="modal-title-wrap">
+                <span class="modal-eyebrow"><i class="fa-solid fa-boxes-stacked"></i> <span id="insumo-editar-eyebrow">Configurar insumo</span></span>
+                <h2 class="modal-title" id="insumo-editar-titulo">Editar insumo</h2>
+            </div>
+            <button onclick="document.getElementById('modal-insumo-editar').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="insumo-editar-body"></div>
+            <p id="insumo-editar-error" style="display:none; color:var(--danger-color, #dc2626); font-size:0.82rem; margin-top:0.6rem;"></p>
+        </div>
+        <div class="modal-actions">
+            <button id="btn-insumo-editar-confirmar" class="btn btn-primary" style="flex:1; border-radius:10px; font-weight:600;">Guardar</button>
+            <button id="btn-insumo-editar-cancelar" class="btn" style="border-radius:10px; border:1px solid var(--border-color); background:transparent; color:var(--text-muted); padding:0 1.2rem;">Cancelar</button>
+        </div>
+    </div>
+</div>
 
     <!-- Modal: Rechazo de Horas Extra (Planificador) -->
 <div id="modal-he-rechazo" class="modal-overlay-base" style="z-index:10000;">

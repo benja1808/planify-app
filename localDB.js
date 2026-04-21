@@ -5,7 +5,7 @@
   'use strict';
 
   const DB_NAME    = 'planify_local';
-  const DB_VERSION = 2;
+  const DB_VERSION = 4;
 
   // ── Stores y sus índices ────────────────────────────────────────────────────
   const STORES = {
@@ -16,6 +16,23 @@
     mediciones:   { keyPath: 'id', indexes: [{ name: 'equipoId', key: 'equipo_id' }, { name: 'synced', key: 'synced' }] },
     cola_sync:    { keyPath: 'id', autoIncrement: true, indexes: [{ name: 'synced', key: 'synced' }, { name: 'timestamp', key: 'timestamp' }] },
     horas_extra:  { keyPath: 'id', indexes: [{ name: 'trabajador_id', key: 'trabajador_id' }, { name: 'fecha', key: 'fecha' }, { name: 'synced', key: 'synced' }] },
+    informes_diarios: { keyPath: 'id', indexes: [{ name: 'fecha', key: 'fecha' }, { name: 'updated_at', key: 'updated_at' }] },
+    insumos:      { keyPath: 'id', indexes: [{ name: 'codigo', key: 'codigo' }, { name: 'activo', key: 'activo' }] },
+    solicitudes_insumos: {
+      keyPath: 'id',
+      indexes: [
+        { name: 'trabajador_id', key: 'trabajador_id' },
+        { name: 'estado', key: 'estado' },
+        { name: 'fecha_solicitud', key: 'fecha_solicitud' }
+      ]
+    },
+    movimientos_inventario: {
+      keyPath: 'id',
+      indexes: [
+        { name: 'insumo_id', key: 'insumo_id' },
+        { name: 'fecha', key: 'fecha' }
+      ]
+    },
   };
 
   let _db = null;
@@ -178,7 +195,48 @@
       getByTrabajador:  (wId)        => getByIndex('horas_extra', 'trabajador_id', wId),
       getPendientes:    ()           => getByIndex('horas_extra', 'synced', false),
     },
+    // Informes diarios
+    informes_diarios: {
+      getAll:           ()           => getAll('informes_diarios'),
+      get:              (id)         => getById('informes_diarios', id),
+      upsert:           (item)       => upsert('informes_diarios', item),
+      bulk:             (items)      => upsertMany('informes_diarios', items),
+      delete:           (id)         => eliminar('informes_diarios', id),
+      clear:            ()           => limpiar('informes_diarios'),
+      getByFecha:       (fecha)      => getByIndex('informes_diarios', 'fecha', fecha),
+    },
     // Cola de sincronización
+    // Catalogo de insumos
+    insumos: {
+      getAll:           ()           => getAll('insumos'),
+      get:              (id)         => getById('insumos', id),
+      upsert:           (item)       => upsert('insumos', item),
+      bulk:             (items)      => upsertMany('insumos', items),
+      delete:           (id)         => eliminar('insumos', id),
+      clear:            ()           => limpiar('insumos'),
+      getActivos:       ()           => getByIndex('insumos', 'activo', true),
+    },
+    // Solicitudes de insumos
+    solicitudes_insumos: {
+      getAll:           ()           => getAll('solicitudes_insumos'),
+      get:              (id)         => getById('solicitudes_insumos', id),
+      upsert:           (item)       => upsert('solicitudes_insumos', item),
+      bulk:             (items)      => upsertMany('solicitudes_insumos', items),
+      delete:           (id)         => eliminar('solicitudes_insumos', id),
+      clear:            ()           => limpiar('solicitudes_insumos'),
+      getByTrabajador:  (id)         => getByIndex('solicitudes_insumos', 'trabajador_id', id),
+      getByEstado:      (estado)     => getByIndex('solicitudes_insumos', 'estado', estado),
+    },
+    // Movimientos de inventario
+    movimientos_inventario: {
+      getAll:           ()           => getAll('movimientos_inventario'),
+      get:              (id)         => getById('movimientos_inventario', id),
+      upsert:           (item)       => upsert('movimientos_inventario', item),
+      bulk:             (items)      => upsertMany('movimientos_inventario', items),
+      delete:           (id)         => eliminar('movimientos_inventario', id),
+      clear:            ()           => limpiar('movimientos_inventario'),
+      getByInsumo:      (id)         => getByIndex('movimientos_inventario', 'insumo_id', id),
+    },
     cola: {
       getAll:       ()      => getAll('cola_sync'),
       add:          (item)  => upsert('cola_sync', { ...item, timestamp: Date.now(), synced: false, intentos: 0 }),
