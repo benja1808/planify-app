@@ -11197,10 +11197,13 @@ document.getElementById('btn-copy-link')?.addEventListener('click', async () => 
     const url = window.location.origin + window.location.pathname;
     let qrDataUrl = '';
     try {
-        if (window.QRCode) {
+        if (window.QRCode && typeof window.QRCode.toDataURL === 'function') {
             qrDataUrl = await window.QRCode.toDataURL(url, { width: 260, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } });
         }
-    } catch (e) { console.warn('QR error:', e); }
+    } catch (e) { console.warn('QR lib error:', e); }
+    if (!qrDataUrl) {
+        qrDataUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=10&data=' + encodeURIComponent(url);
+    }
 
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
