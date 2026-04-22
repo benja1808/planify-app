@@ -11,3 +11,7 @@ error*.txt
 temp/
 importar_insumos_excel.mjs
 setup_insumos.sql
+
+# Edge profile and logs
+.edge-profile/
+server.out.log

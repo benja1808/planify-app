@@ -2740,40 +2740,60 @@ h3 {
         position: fixed;
         top: 0;
         right: 0;
-        width: 86%;
-        max-width: 340px;
+        width: min(88vw, 360px);
         height: 100vh;
         height: 100dvh;
         display: flex;
         flex-direction: column;
         align-items: stretch;
         gap: 0.55rem;
-        padding: 5rem 1.1rem 6.5rem 1.1rem;
+        padding: 4.5rem 1rem 6.5rem 1rem;
         background: #ffffff;
         box-shadow: -18px 0 40px rgba(15, 23, 42, 0.18);
-        transform: translateX(100%);
+        transform: translateX(105%);
         transition: transform 260ms cubic-bezier(.22,.9,.35,1);
         z-index: 9500;
         overflow-y: auto;
-        pointer-events: none;
         opacity: 1;
         max-height: none;
+        visibility: hidden;
     }
 
     .nav-links.open {
         transform: translateX(0);
-        pointer-events: auto;
+        visibility: visible;
+    }
+
+    .nav-links button {
+        width: 100% !important;
+        text-align: left;
+        justify-content: flex-start !important;
+    }
+
+    .nav-drawer-close {
+        position: absolute !important;
+        top: 0.6rem;
+        right: 0.8rem;
+        width: auto !important;
+        min-height: 0 !important;
+        padding: 0.2rem 0.4rem !important;
+        background: transparent !important;
+        color: #0f172a !important;
+        font-size: 1.4rem;
+        font-weight: 700;
+        border: none !important;
+        box-shadow: none !important;
+        cursor: pointer;
+        z-index: 1;
+        line-height: 1;
+    }
+    .nav-drawer-close:hover {
+        color: var(--danger-color, #dc2626) !important;
+        background: transparent !important;
     }
 
     .nav-backdrop {
         display: none;
-        position: fixed;
-        inset: 0;
-        background: rgba(15, 23, 42, 0.45);
-        z-index: 9400;
-    }
-    .nav-backdrop.show {
-        display: block;
     }
 
     .nav-links button {
@@ -3640,6 +3660,10 @@ h3 {
         display: none;
     }
 
+    body[data-role="trabajador"][data-view="dashboard"] .worker-home-secondary {
+        display: none;
+    }
+
     .dashboard-mobile-shell {
         display: grid;
         gap: 1rem;
@@ -3954,7 +3978,7 @@ h3 {
         bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
         z-index: 120;
         display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0.45rem;
         padding: 0.55rem;
         border-radius: 24px;

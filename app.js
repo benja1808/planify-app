@@ -68,6 +68,16 @@ const _db = {
 };
 
 // Estado de la aplicación
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
 let estado = {
     trabajadores: [],
     tareas: [],
@@ -728,6 +738,10 @@ function configurarRealtime() {
     let pendingInsumos = false;
     let pendingSolicitudesInsumos = false;
     let pendingMovimientosInventario = false;
+    let pendingHistorial = false;
+    let pendingMediciones = false;
+    let pendingHorasExtra = false;
+    let pendingEquipos = false;
 
     async function flushRealtime() {
         const fetches = [];
@@ -773,11 +787,38 @@ function configurarRealtime() {
                 if (data?.length) window.localDB?.movimientos_inventario.bulk(estado.movimientosInventario).catch(() => {});
             })
         );
+        if (pendingHistorial && tablasDb.historial) fetches.push(
+            supabaseClient.from(tablasDb.historial).select('*').order('created_at', { ascending: false }).limit(200).then(({ data }) => {
+                estado.historialTareas = data || [];
+                if (data?.length) window.localDB?.historial.bulk(data).catch(() => {});
+            })
+        );
+        if (pendingMediciones && tablasDb.mediciones) fetches.push(
+            supabaseClient.from(tablasDb.mediciones).select('*').order('fecha', { ascending: false }).limit(200).then(({ data }) => {
+                estado.historialMediciones = data || [];
+                if (data?.length) window.localDB?.mediciones.bulk(data).catch(() => {});
+            })
+        );
+        if (pendingHorasExtra) fetches.push(
+            supabaseClient.from('horas_extra').select('*').then(({ data }) => {
+                if (Array.isArray(data)) {
+                    estado.horasExtra = data;
+                    window.localDB?.horas_extra.bulk(data).catch(() => {});
+                }
+            }).catch(() => {})
+        );
+        if (pendingEquipos) fetches.push(
+            fetchAllEquipos().then((equipos) => { estado.equipos = equipos || []; })
+        );
         pendingTareas = false;
         pendingTrabajadores = false;
         pendingInsumos = false;
         pendingSolicitudesInsumos = false;
         pendingMovimientosInventario = false;
+        pendingHistorial = false;
+        pendingMediciones = false;
+        pendingHorasExtra = false;
+        pendingEquipos = false;
         await Promise.all(fetches);
         renderizarVistaActual();
     }
@@ -811,9 +852,29 @@ function configurarRealtime() {
             pendingMovimientosInventario = true;
             scheduleFlush();
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'equipos' }, async () => {
-            const equipos = await fetchAllEquipos();
-            estado.equipos = equipos || [];
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'equipos' }, () => {
+            pendingEquipos = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'historial_tareas' }, () => {
+            pendingHistorial = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tareas_historial' }, () => {
+            pendingHistorial = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'mediciones' }, () => {
+            pendingMediciones = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'historial_mediciones' }, () => {
+            pendingMediciones = true;
+            scheduleFlush();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'horas_extra' }, () => {
+            pendingHorasExtra = true;
+            scheduleFlush();
         })
         .subscribe();
 }
@@ -7475,7 +7536,7 @@ function renderDashboardView() {
             { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
         ]
         : [
-            { view: 'perfil', icon: 'fa-id-badge', label: 'Perfil' },
+            { view: 'perfil', icon: 'fa-id-badge', label: 'Jornada' },
             { view: 'semanal', icon: 'fa-calendar-week', label: 'Semana' },
             { view: 'mis_horas', icon: 'fa-clock', label: 'Horas' },
             { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
@@ -7511,9 +7572,39 @@ function renderDashboardView() {
             }
         ];
     const tareasPreviewMobile = (isAdmin ? _tareasConPos : tareasPersonales).slice(0, 3);
+    const tareasSemanaFuturas = !isAdmin
+        ? tareasPersonalesSemana.filter((tarea) => !tareasPersonales.some((actual) => actual.id === tarea.id)).slice(0, 3)
+        : [];
     const mobilePreviewAction = isAdmin
         ? { view: 'control', label: 'Abrir control' }
-        : { view: 'perfil', label: 'Ver mi perfil' };
+        : { view: 'perfil', label: 'Abrir jornada' };
+    const workerWeekPanelHtml = !isAdmin
+        ? `
+            <div class="dashboard-mobile-panel">
+                <div class="dashboard-mobile-panel-head">
+                    <div>
+                        <span class="dashboard-mobile-panel-label">Semana en vista</span>
+                        <h3>Lo que viene despues de hoy</h3>
+                    </div>
+                    <button type="button" class="dashboard-mobile-inline-link" onclick="window.dashboardMobileNavigate('semanal')">Abrir semana</button>
+                </div>
+                ${tareasSemanaFuturas.length
+                    ? `<div class="dashboard-mobile-task-list">
+                        ${tareasSemanaFuturas.map((tarea) => `
+                            <article class="dashboard-mobile-task-item">
+                                <div class="dashboard-mobile-task-copy">
+                                    <strong>${escapeHtml(tituloTareaDashboard(tarea))}</strong>
+                                    <span>${escapeHtml(subtituloTareaDashboard(tarea))}</span>
+                                </div>
+                                <span class="dashboard-mobile-task-state is-queue">Programado</span>
+                            </article>
+                        `).join('')}
+                    </div>`
+                    : `<div class="empty-state empty-state--compact"><div><strong>Sin proxima carga semanal</strong><p>Cuando te asignen trabajos futuros los veras aqui antes de que bajen a tu jornada.</p></div></div>`
+                }
+            </div>
+        `
+        : '';
     const mobileHomeHtml = `
         <section class="dashboard-mobile-shell">
             <div class="dashboard-mobile-hero">
@@ -7603,8 +7694,24 @@ function renderDashboardView() {
                     : `<div class="empty-state empty-state--compact"><div><strong>${isAdmin ? 'Sin movimiento aun' : 'Sin trabajos asignados'}</strong><p>${isAdmin ? 'Cuando entren OTs o mediciones veras el resumen del turno aqui.' : 'Cuando te asignen trabajo o una OT entre en cola aparecera aqui.'}</p></div></div>`
                 }
             </div>
+            ${workerWeekPanelHtml}
         </section>
     `;
+    const esWorkerHomeMovil = !isAdmin && window.matchMedia('(max-width: 768px)').matches;
+    if (esWorkerHomeMovil) {
+        mainContent.innerHTML = `
+            <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; max-width:800px; margin:0 auto;">
+                <div class="dashboard-lists">
+                    ${mobileHomeHtml}
+                </div>
+            </div>
+        `;
+        window.dashboardMobileNavigate = function(view) {
+            vistaActual = view;
+            renderizarVistaActual();
+        };
+        return;
+    }
     const mapaUnidadHtml = resumenUnidades.length > 0
         ? `<div class="daily-unit-map-grid">
             ${resumenUnidades.map(unidad => {
@@ -7761,6 +7868,7 @@ function renderDashboardView() {
             <!-- Lista de trabajos (ocupa todo el ancho) -->
             <div class="dashboard-lists">
                 ${mobileHomeHtml}
+                <div class="worker-home-secondary">
 
                 <section class="panel daily-news-entry-panel">
                     <div class="daily-news-entry-copy">
@@ -7842,6 +7950,7 @@ function renderDashboardView() {
                             <div class="items-list daily-squad-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>
                         </div>` : ''}`;
                     })()}
+                </div>
                 </div>
 
             </div>
@@ -9093,14 +9202,7 @@ function renderizarVistaActual() {
             break;
     }
 
-    // Al renderizar, cerramos sidebar y backdrop si existen
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar) sidebar.classList.remove('open');
-    const menuButton = document.getElementById('btn-menu');
-    if (menuButton) menuButton.setAttribute('aria-expanded', 'false');
-    const navBackdrop = document.querySelector('.nav-backdrop');
-    if (navBackdrop) navBackdrop.classList.remove('show');
-    document.body.style.overflow = '';
+    // (El menú móvil no se cierra automáticamente al navegar)
 }
 
 Object.keys(navConfig).forEach(id => {
@@ -9144,10 +9246,8 @@ if (btnMenu && sidebar) {
     });
 
     navBackdrop.addEventListener('click', closeMobileNav);
-
-    document.addEventListener('click', (event) => {
-        if (window.innerWidth > 768 || !sidebar.classList.contains('open')) return;
-        if (sidebar.contains(event.target) || btnMenu.contains(event.target)) return;
+    document.getElementById('btn-menu-close')?.addEventListener('click', (e) => {
+        e.stopPropagation();
         closeMobileNav();
     });
 
