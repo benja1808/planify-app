@@ -1737,7 +1737,7 @@ async function renderInsumosView() {
             <nav class="inv-tabs" role="tablist">
                 <button class="inv-tab" data-tab="catalogo" role="tab"><i class="fa-solid fa-warehouse"></i> Catalogo <span class="inv-tab-count">${catalogoActivo.length}</span></button>
                 <button class="inv-tab" data-tab="solicitudes" role="tab"><i class="fa-solid fa-list-check"></i> Solicitudes <span class="inv-tab-count">${solicitudesBase.length}</span></button>
-                <button class="inv-tab" data-tab="movimientos" role="tab"><i class="fa-solid fa-arrow-right-arrow-left"></i> Movimientos <span class="inv-tab-count">${estado.movimientosInventario.length}</span></button>
+                ${(esAdmin || puedeAprobar) ? `<button class="inv-tab" data-tab="movimientos" role="tab"><i class="fa-solid fa-arrow-right-arrow-left"></i> Movimientos <span class="inv-tab-count">${estado.movimientosInventario.length}</span></button>` : ''}
                 ${esAdmin ? '<button class="inv-tab" data-tab="aprobadores" role="tab"><i class="fa-solid fa-user-shield"></i> Aprobadores</button>' : ''}
             </nav>
 
@@ -1819,6 +1819,7 @@ async function renderInsumosView() {
                 <div id="inv-solicitudes-list"></div>
             </section>
 
+            ${(esAdmin || puedeAprobar) ? `
             <section class="inv-panel" data-tab-panel="movimientos" hidden>
                 <div class="inv-toolbar">
                     <div class="inv-toolbar-row">
@@ -1833,6 +1834,7 @@ async function renderInsumosView() {
                 </div>
                 <div id="inv-movimientos-list"></div>
             </section>
+            ` : ''}
 
             ${esAdmin ? `
                 <section class="inv-panel" data-tab-panel="aprobadores" hidden>
@@ -1976,6 +1978,15 @@ async function renderInsumosView() {
                     const color = esIngreso ? '#16a34a' : esAjuste ? '#b45309' : '#dc2626';
                     const icon = esIngreso ? 'fa-arrow-down' : esAjuste ? 'fa-wrench' : 'fa-arrow-up';
                     const sign = esIngreso ? '+' : esAjuste ? '±' : '-';
+                    // Para salidas, resolver el solicitante vía referencia_id → solicitudes_insumos → trabajador
+                    let solicitanteNombre = '';
+                    if (mov.tipo === 'salida' && mov.referencia_id) {
+                        const sol = estado.solicitudesInsumos?.find((s) => String(s.id) === String(mov.referencia_id));
+                        if (sol) {
+                            const tr = estado.trabajadores?.find((t) => String(t.id) === String(sol.trabajador_id));
+                            solicitanteNombre = tr?.nombre || sol.trabajador_nombre || '';
+                        }
+                    }
                     return `
                         <div class="inv-mov-row">
                             <div class="inv-mov-icon" style="background:${color}1a; color:${color};"><i class="fa-solid ${icon}"></i></div>
@@ -1983,7 +1994,8 @@ async function renderInsumosView() {
                                 <strong>${ins?.nombre || 'Insumo eliminado'}</strong>
                                 <div class="inv-mov-meta">
                                     <span>${formatearFechaCorta(mov.fecha)}</span>
-                                    ${mov.creado_por ? `<span>· ${mov.creado_por}</span>` : ''}
+                                    ${solicitanteNombre ? `<span>· Solicitó: <strong>${solicitanteNombre}</strong></span>` : ''}
+                                    ${mov.creado_por ? `<span>· Aprobó: ${mov.creado_por}</span>` : ''}
                                     ${mov.motivo ? `<span>· ${mov.motivo}</span>` : ''}
                                 </div>
                             </div>
