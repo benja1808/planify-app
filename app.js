@@ -99,6 +99,7 @@ let semanalExcelImportState = {
     message: '',
     tone: 'info'
 };
+let tareasEliminandose = new Set();
 
 let vistaActual = 'checkin'; // 'checkin', 'dashboard', 'trabajadores', 'historial', 'semanal', 'perfil'
 
@@ -917,7 +918,7 @@ function configurarRealtime() {
         pendingHorasExtra = false;
         pendingEquipos = false;
         await Promise.all(fetches);
-        renderizarVistaActual();
+        solicitarRenderRealtimeNoIntrusivo();
     }
 
     function scheduleFlush() {
@@ -1071,22 +1072,40 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
 async function eliminarTarea(id) {
     if (!confirm('¿Eliminar este trabajo?')) return;
     const tarea = estado.tareas.find(t => t.id === id);
-
-    // Optimistic: quitar del estado y liberar trabajadores inmediatamente
-    estado.tareas = estado.tareas.filter(t => t.id !== id);
-    if (tarea) {
-        const idsALiberar = [tarea.liderId, ...(tarea.ayudantesIds || [])].filter(Boolean);
-        estado.trabajadores = estado.trabajadores.map(w =>
-            idsALiberar.includes(w.id) ? { ...w, ocupado: false } : w
-        );
+    if (!tarea) {
+        renderizarVistaActual();
+        return;
     }
-    renderizarVistaActual();
+    if (tareasEliminandose.has(id)) return;
+    tareasEliminandose.add(id);
+    const tareasPrevias = [...estado.tareas];
+    const trabajadoresPrevios = [...estado.trabajadores];
 
-    // Persistir (offline-safe)
-    await _db.delete('tareas', id);
-    if (tarea) {
-        const idsALiberar = [tarea.liderId, ...(tarea.ayudantesIds || [])].filter(Boolean);
-        await Promise.all(idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false })));
+    try {
+        // Optimistic: quitar del estado y liberar trabajadores inmediatamente
+        estado.tareas = estado.tareas.filter(t => t.id !== id);
+        if (tarea) {
+            const idsALiberar = [tarea.liderId, ...(tarea.ayudantesIds || [])].filter(Boolean);
+            estado.trabajadores = estado.trabajadores.map(w =>
+                idsALiberar.includes(w.id) ? { ...w, ocupado: false } : w
+            );
+        }
+        renderizarVistaActual();
+
+        // Persistir (offline-safe)
+        await _db.delete('tareas', id);
+        if (tarea) {
+            const idsALiberar = [tarea.liderId, ...(tarea.ayudantesIds || [])].filter(Boolean);
+            await Promise.all(idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false })));
+        }
+        renderizarVistaActual();
+    } catch (error) {
+        estado.tareas = tareasPrevias;
+        estado.trabajadores = trabajadoresPrevios;
+        renderizarVistaActual();
+        alert(error?.message || 'No se pudo eliminar el trabajo.');
+    } finally {
+        tareasEliminandose.delete(id);
     }
 }
 
@@ -1751,6 +1770,90 @@ function renderDashboardInsumosOverviewHtml() {
 // --- COMPONENTES Y VISTAS ---
 
 const mainContent = document.getElementById('main-content');
+let pendingRealtimeRender = false;
+let realtimeResumeTimer = null;
+
+function esElementoVisibleUI(elemento) {
+    if (!elemento) return false;
+    const estilo = window.getComputedStyle(elemento);
+    return estilo.display !== 'none' && estilo.visibility !== 'hidden' && estilo.opacity !== '0';
+}
+
+function hayUIBloqueandoRealtime() {
+    const activeElement = document.activeElement;
+    const tag = (activeElement?.tagName || '').toLowerCase();
+    if (document.hidden) return true;
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || activeElement?.isContentEditable) {
+        return true;
+    }
+
+    const overlays = [
+        ...document.querySelectorAll('.modal-overlay-base'),
+        document.getElementById('asign-backdrop')
+    ].filter(Boolean);
+
+    return overlays.some(esElementoVisibleUI);
+}
+
+function renderizarVistaActualPreservandoViewport() {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    renderizarVistaActual();
+    window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+}
+
+function intentarAplicarRealtimePendiente() {
+    if (!pendingRealtimeRender) return;
+    if (document.hidden) {
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = null;
+        return;
+    }
+    if (hayUIBloqueandoRealtime()) {
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
+        return;
+    }
+
+    pendingRealtimeRender = false;
+    clearTimeout(realtimeResumeTimer);
+    realtimeResumeTimer = null;
+    renderizarVistaActualPreservandoViewport();
+}
+
+function solicitarRenderRealtimeNoIntrusivo() {
+    if (document.hidden) {
+        pendingRealtimeRender = true;
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = null;
+        return;
+    }
+    if (hayUIBloqueandoRealtime()) {
+        pendingRealtimeRender = true;
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
+        return;
+    }
+
+    pendingRealtimeRender = false;
+    clearTimeout(realtimeResumeTimer);
+    realtimeResumeTimer = null;
+    renderizarVistaActualPreservandoViewport();
+}
+
+['focusout', 'pointerup', 'keyup', 'visibilitychange'].forEach((eventName) => {
+    document.addEventListener(eventName, () => {
+        if (!pendingRealtimeRender) return;
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 120);
+    }, true);
+});
+
+window.addEventListener('focus', () => {
+    if (!pendingRealtimeRender) return;
+    clearTimeout(realtimeResumeTimer);
+    realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 120);
+});
 
 async function renderInsumosView() {
     mainContent.innerHTML = '<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando inventario...</p></div></div>';
@@ -1767,6 +1870,7 @@ async function renderInsumosView() {
         ? [...estado.solicitudesInsumos]
         : estado.solicitudesInsumos.filter((item) => String(item.trabajador_id) === String(trabajador?.id));
     const pendientes = solicitudesBase.filter((item) => item.estado === 'pendiente').length;
+    const movimientosTotales = estado.movimientosInventario.length;
     const aprobadasMes = solicitudesBase.filter((item) => item.estado === 'aprobada' && String(item.fecha_aprobacion || '').slice(0, 7) === new Date().toISOString().slice(0, 7)).length;
     const mensajeModo = (insumosFeatureState.tablasRemotas.insumos && insumosFeatureState.tablasRemotas.solicitudes)
         ? 'Supabase listo para sincronizar inventario y solicitudes.'
@@ -1833,8 +1937,8 @@ async function renderInsumosView() {
 
             <nav class="inv-tabs" role="tablist">
                 <button class="inv-tab" data-tab="catalogo" role="tab"><i class="fa-solid fa-warehouse"></i> Catalogo <span class="inv-tab-count">${catalogoActivo.length}</span></button>
-                <button class="inv-tab" data-tab="solicitudes" role="tab"><i class="fa-solid fa-list-check"></i> Solicitudes <span class="inv-tab-count">${solicitudesBase.length}</span></button>
-                ${(esAdmin || puedeAprobar) ? `<button class="inv-tab" data-tab="movimientos" role="tab"><i class="fa-solid fa-arrow-right-arrow-left"></i> Movimientos <span class="inv-tab-count">${estado.movimientosInventario.length}</span></button>` : ''}
+                <button class="inv-tab" data-tab="solicitudes" role="tab"><i class="fa-solid fa-list-check"></i> Solicitudes <span class="inv-tab-count">${pendientes}</span></button>
+                ${(esAdmin || puedeAprobar) ? `<button class="inv-tab" data-tab="movimientos" role="tab"><i class="fa-solid fa-arrow-right-arrow-left"></i> Movimientos <span class="inv-tab-count">${movimientosTotales}</span></button>` : ''}
                 ${esAdmin ? '<button class="inv-tab" data-tab="aprobadores" role="tab"><i class="fa-solid fa-user-shield"></i> Aprobadores</button>' : ''}
             </nav>
 
@@ -8062,8 +8166,6 @@ function renderDashboardView() {
                     </div>
                 </section>
 
-                ${isAdmin || usuarioPuedeAprobarInsumos() ? renderDashboardInsumosOverviewHtml() : ''}
-
                 <div class="panel">
                     <div class="panel-header" style="justify-content: space-between;">
                         <h2><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Trabajos Efectivos (${tareasDiarias.length})</h2>
@@ -9432,6 +9534,9 @@ const navConfig = {
 };
 
 function renderizarVistaActual() {
+    pendingRealtimeRender = false;
+    clearTimeout(realtimeResumeTimer);
+    realtimeResumeTimer = null;
     // Limpiar contenido
     mainContent.innerHTML = '';
     document.body.dataset.view = vistaActual;
