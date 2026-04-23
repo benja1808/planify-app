@@ -5560,7 +5560,7 @@ function renderTrabajadoresView() {
         }));
     };
 
-    document.getElementById('btn-nuevo-trabajador')?.addEventListener('click', abrirModalNuevoTrabajador);
+    document.getElementById('btn-nuevo-trabajador')?.addEventListener('click', () => abrirModalNuevoTrabajador());
     document.getElementById('btn-nuevo-trabajador-cerrar')?.addEventListener('click', cerrarModalNuevoTrabajador);
     document.getElementById('btn-nuevo-trabajador-cancelar')?.addEventListener('click', cerrarModalNuevoTrabajador);
     modalNuevoTrabajador?.addEventListener('click', (event) => {
