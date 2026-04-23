@@ -2173,6 +2173,76 @@ h3 {
     padding: 0;
 }
 
+.weekly-import-status {
+    margin-top: 0.65rem;
+    font-size: 0.85rem;
+    text-align: center;
+    font-weight: 700;
+}
+
+.weekly-import-queue {
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.weekly-import-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.weekly-import-head strong,
+.weekly-import-title {
+    color: #0f172a;
+}
+
+.weekly-import-head span {
+    display: block;
+    margin-top: 0.18rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.weekly-import-list {
+    display: grid;
+    gap: 0.6rem;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.weekly-import-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.weekly-import-copy {
+    flex: 1;
+    min-width: 0;
+    display: grid;
+    gap: 0.4rem;
+}
+
+.weekly-import-title {
+    font-size: 0.84rem;
+    line-height: 1.45;
+    font-weight: 700;
+}
+
+.weekly-import-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
 .crew-view,
 .overtime-view {
     display: grid;

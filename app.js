@@ -92,6 +92,14 @@ let estado = {
     trabajadorLogueado: null  // objeto trabajador cuando rol === 'trabajador'
 };
 
+let semanalExcelImportState = {
+    fileName: '',
+    total: 0,
+    items: [],
+    message: '',
+    tone: 'info'
+};
+
 let vistaActual = 'checkin'; // 'checkin', 'dashboard', 'trabajadores', 'historial', 'semanal', 'perfil'
 
 // Habilidades / tipos de trabajo (deben coincidir exactamente con las habilidades en la BD)
@@ -207,6 +215,81 @@ function normalizarTextoPlano(valor) {
         .replace(/[\u0300-\u036f]/g, '')
         .trim()
         .toUpperCase();
+}
+
+function normalizarClaveExcel(valor) {
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+}
+
+function obtenerValorFilaExcel(row, aliases = []) {
+    if (!row || typeof row !== 'object') return '';
+    const entries = Object.entries(row);
+    for (const alias of aliases) {
+        const exacto = row[alias];
+        if (exacto !== undefined && exacto !== null && String(exacto).trim()) {
+            return String(exacto).trim();
+        }
+        const aliasNormalizado = normalizarClaveExcel(alias);
+        const encontrado = entries.find(([key, value]) =>
+            normalizarClaveExcel(key) === aliasNormalizado &&
+            value !== undefined &&
+            value !== null &&
+            String(value).trim()
+        );
+        if (encontrado) return String(encontrado[1]).trim();
+    }
+    return '';
+}
+
+function resolverUbicacionFilaSemanal(row, equipoTexto = '') {
+    const ubicacionDirecta = obtenerValorFilaExcel(row, [
+        'Ubicación',
+        'Ubicacion',
+        'Unidad',
+        'Área',
+        'Area',
+        'Centro',
+        'Ubicación trabajo',
+        'Ubicacion trabajo'
+    ]);
+    if (ubicacionDirecta) return ubicacionDirecta;
+
+    const ubicacionTecnica = obtenerValorFilaExcel(row, [
+        'Ubicación Técnica',
+        'Ubicacion Tecnica',
+        'Ubicación tecnica',
+        'Ubicacion tecnica'
+    ]);
+
+    const candidatos = [equipoTexto, ubicacionTecnica]
+        .map(valor => normalizarTextoPlano(valor))
+        .filter(Boolean);
+
+    if (!candidatos.length) return '';
+
+    const matchEquipo = estado.equipos.find((equipo) => {
+        const referencias = [
+            equipo.activo,
+            equipo.componente,
+            `${equipo.activo || ''} ${equipo.componente || ''}`.trim(),
+            `${equipo.activo || ''} - ${equipo.componente || ''}`.trim()
+        ]
+            .map(valor => normalizarTextoPlano(valor))
+            .filter(Boolean);
+
+        return candidatos.some(candidato => referencias.some(referencia =>
+            referencia === candidato ||
+            referencia.includes(candidato) ||
+            candidato.includes(referencia)
+        ));
+    });
+
+    return matchEquipo?.ubicacion || '';
 }
 
 function normalizarUnidadInsumo(valor) {
@@ -398,6 +481,20 @@ function formatearFechaCorta(valor) {
     const fecha = new Date(valor);
     if (Number.isNaN(fecha.getTime())) return '--';
     return fecha.toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function formatearFechaHora(valor) {
+    if (!valor) return '--';
+    const fecha = new Date(valor);
+    if (Number.isNaN(fecha.getTime())) return '--';
+    return fecha.toLocaleString('es-CL', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+    });
 }
 
 function formatearCantidadInsumo(cantidad, unidad) {
@@ -1993,7 +2090,7 @@ async function renderInsumosView() {
                             <div class="inv-mov-body">
                                 <strong>${ins?.nombre || 'Insumo eliminado'}</strong>
                                 <div class="inv-mov-meta">
-                                    <span>${formatearFechaCorta(mov.fecha)}</span>
+                                    <span>${formatearFechaHora(mov.fecha)}</span>
                                     ${solicitanteNombre ? `<span>· Solicitó: <strong>${solicitanteNombre}</strong></span>` : ''}
                                     ${mov.creado_por ? `<span>· Aprobó: ${mov.creado_por}</span>` : ''}
                                     ${mov.motivo ? `<span>· ${mov.motivo}</span>` : ''}
@@ -2761,7 +2858,7 @@ function renderPerfilView() {
                     <div style="display:flex; flex-wrap:wrap; gap:0.5rem; font-size:0.76rem; color:var(--text-muted); align-items:center;">
                         ${t.horaAsignacion ? `<span><i class="fa-regular fa-clock"></i> ${t.horaAsignacion}</span>` : ''}
                         ${t.otNumero ? `<span># ${t.otNumero}</span>` : ''}
-                        <span class="badge" style="background:${esLider?'var(--primary-color)':'#64748b'}; color:white; font-size:0.68rem;">${esLider?'Líder':'Apoyo'}</span>
+                        <span class="badge" style="background:${esLider?'var(--primary-color)':'#64748b'}; color:white; font-size:0.68rem;">${esLider?'Líder':'Técnico'}</span>
                     </div>
                 </div>`;
             }
@@ -2851,7 +2948,7 @@ function renderPerfilView() {
                 ${t.horaAsignacion ? `<span><i class="fa-regular fa-clock"></i> ${t.horaAsignacion}</span>` : ''}
                 ${t.otNumero ? `<span class="badge" style="background:rgba(255,255,255,0.1); color:var(--text-muted); font-size:0.72rem;"># ${t.otNumero}</span>` : ''}
                 <span class="badge" style="background:${esLider ? 'var(--primary-color)' : '#64748b'}; color:white; font-size:0.7rem;">
-                    ${esLider ? 'Líder' : 'Apoyo'}
+                        ${esLider ? 'Líder' : 'Técnico'}
                 </span>
             </div>
         </div>`;
@@ -4142,7 +4239,7 @@ function renderHistorialView() {
             unidad: unidad || 'Sin unidad',
             nombre: nombreActivo || 'Registro historial',
             componente: componente || '',
-            lider: item.lider_nombre || 'Sin tecnico',
+        lider: item.lider_nombre || 'Sin técnico',
             ayudantes,
             hh,
             otNumero: String(item.ot_numero || '').trim(),
@@ -4266,7 +4363,7 @@ function renderHistorialView() {
     const getTopLider = (registros) => {
         const contador = new Map();
         registros.forEach((registro) => {
-            const clave = registro.lider || 'Sin tecnico';
+            const clave = registro.lider || 'Sin técnico';
             contador.set(clave, (contador.get(clave) || 0) + 1);
         });
         const top = [...contador.entries()].sort((a, b) => b[1] - a[1])[0];
@@ -4371,7 +4468,7 @@ function renderHistorialView() {
         if (registro.aviso) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-bell"></i> Aviso ${escapeHtml(registro.aviso)}</span>`);
         stats.push(`<span class="history-stat-chip"><i class="fa-regular fa-clock"></i> ${formatearHora(registro.fecha)}</span>`);
         if (registro.hh > 0) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-user-clock"></i> ${formatearNumero(registro.hh)} HH</span>`);
-        if (registro.ayudantes.length) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-users"></i> ${registro.ayudantes.length} apoyo</span>`);
+        if (registro.ayudantes.length) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-users"></i> ${registro.ayudantes.length} técnico(s)</span>`);
 
         const resumenLineas = [
             registro.acciones ? `<p><strong>Acciones:</strong> ${escapeHtml(registro.acciones)}</p>` : '',
@@ -4411,7 +4508,7 @@ function renderHistorialView() {
                             ${botonesTipo}
                         </div>
                         <div class="history-record-summary">
-                            ${resumenLineas || '<p>Sin detalle tecnico adicional para este cierre.</p>'}
+                ${resumenLineas || '<p>Sin detalle técnico adicional para este cierre.</p>'}
                         </div>
                     </div>
                     <div class="history-record-side">
@@ -4553,7 +4650,7 @@ function renderHistorialView() {
                     <div>
                         <div class="history-eyebrow">Bitacora tecnica</div>
                         <h1 style="margin:0 0 0.4rem 0;">Historial</h1>
-                        <p class="history-subtitle">Seguimiento consolidado de trabajos cerrados, analisis tecnicos y actividad por fecha.</p>
+        <p class="history-subtitle">Seguimiento consolidado de trabajos cerrados, analisis técnicos y actividad por fecha.</p>
                     </div>
                     <button id="btn-limpiar-historial" type="button" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
                         <i class="fa-solid fa-trash-can"></i> Limpiar visibles
@@ -5100,6 +5197,8 @@ function renderTrabajadoresView() {
         .split(/[\n,;]+/)
         .map((item) => item.trim())
         .filter(Boolean);
+    const obtenerHabilidadesExtrasExistentes = (habilidades = []) =>
+        (habilidades || []).filter((habilidad) => !opcionesHabilidad.includes(habilidad));
     const skillOptionHtml = opcionesHabilidad.map((habilidad) => `
         <label style="display:flex; gap:0.55rem; align-items:flex-start; padding:0.7rem 0.8rem; border:1px solid var(--border-color); border-radius:14px; background:#fff;">
             <input type="checkbox" name="nuevo-trabajador-habilidades" value="${habilidad}" style="margin-top:0.18rem;">
@@ -5122,7 +5221,7 @@ function renderTrabajadoresView() {
         const tareas = getTareasTrabajador(trabajador.id);
         const principal = tareas[0] || null;
         const rolPrincipal = principal
-            ? (principal.liderId === trabajador.id ? 'Lider de frente' : 'Apoyo en terreno')
+                            ? (principal.liderId === trabajador.id ? 'Lider de frente' : 'Técnico en terreno')
             : (estadoTipo === 'disponible' ? 'Listo para ser asignado' : 'Sin jornada activa');
         const resumen = principal
             ? `${principal.tipo || 'Trabajo activo'}${principal.otNumero || principal.ot_numero ? ` · OT ${(principal.otNumero || principal.ot_numero)}` : ''}`
@@ -5165,6 +5264,14 @@ function renderTrabajadoresView() {
                     ${(trabajador.habilidades || []).length
                         ? (trabajador.habilidades || []).map(habilidad => `<span class="crew-skill">${habilidad}</span>`).join('')
                         : `<span class="crew-chip">Sin habilidades cargadas</span>`}
+                </div>
+                <div class="crew-card-actions" style="margin-top:0.9rem; justify-content:flex-end;">
+                    <button type="button" class="btn btn-outline btn-icon" title="Editar trabajador" data-worker-edit="${trabajador.id}">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline btn-icon" title="Eliminar trabajador" data-worker-delete="${trabajador.id}" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
                 </div>
             </article>
         `;
@@ -5246,8 +5353,8 @@ function renderTrabajadoresView() {
                     <div class="modal-head">
                         <div class="modal-title-wrap">
                             <span class="modal-eyebrow"><i class="fa-solid fa-id-badge"></i> Maestro de personal</span>
-                            <h2 class="modal-title"><i class="fa-solid fa-user-plus"></i> Agregar trabajador</h2>
-                            <p class="modal-subtitle">Crea un perfil operativo con nombre, RUT, cargo y especializaciones para dejarlo disponible en la planificacion.</p>
+                            <h2 id="trabajador-modal-title" class="modal-title"><i class="fa-solid fa-user-plus"></i> Agregar trabajador</h2>
+                            <p id="trabajador-modal-subtitle" class="modal-subtitle">Crea un perfil operativo con nombre, RUT, cargo y especializaciones para dejarlo disponible en la planificacion.</p>
                         </div>
                         <button id="btn-nuevo-trabajador-cerrar" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
                     </div>
@@ -5344,6 +5451,9 @@ function renderTrabajadoresView() {
     const formNuevoTrabajador = document.getElementById('form-nuevo-trabajador');
     const errorNuevoTrabajador = document.getElementById('nuevo-trabajador-error');
     const btnGuardarNuevoTrabajador = document.getElementById('btn-nuevo-trabajador-guardar');
+    const tituloModalTrabajador = document.getElementById('trabajador-modal-title');
+    const subtituloModalTrabajador = document.getElementById('trabajador-modal-subtitle');
+    let trabajadorEnEdicion = null;
     const mostrarToastTrabajadores = (mensaje, tone = 'success') => {
         const colors = tone === 'danger'
             ? { bg: '#991b1b', shadow: 'rgba(153, 27, 27, 0.28)' }
@@ -5372,17 +5482,48 @@ function renderTrabajadoresView() {
         errorNuevoTrabajador.style.display = 'none';
         errorNuevoTrabajador.textContent = '';
     };
-    const abrirModalNuevoTrabajador = () => {
+    const setSeleccionHabilidades = (habilidades = []) => {
+        const seleccionadas = new Set(habilidades || []);
+        document.querySelectorAll('input[name="nuevo-trabajador-habilidades"]').forEach((input) => {
+            input.checked = seleccionadas.has(input.value);
+        });
+        const inputExtras = document.getElementById('nuevo-trabajador-habilidades-extra');
+        if (inputExtras) inputExtras.value = obtenerHabilidadesExtrasExistentes(habilidades).join(', ');
+    };
+    const abrirModalNuevoTrabajador = (trabajadorEditar = null) => {
         if (!modalNuevoTrabajador || !formNuevoTrabajador) return;
+        trabajadorEnEdicion = trabajadorEditar;
         formNuevoTrabajador.reset();
         limpiarErrorNuevoTrabajador();
+        setSeleccionHabilidades(trabajadorEditar?.habilidades || []);
+        if (trabajadorEditar) {
+            document.getElementById('nuevo-trabajador-nombre').value = trabajadorEditar.nombre || '';
+            document.getElementById('nuevo-trabajador-rut').value = trabajadorEditar.rut || '';
+            document.getElementById('nuevo-trabajador-puesto').value = trabajadorEditar.puesto || '';
+            const fechaNacimiento = String(trabajadorEditar.fecha_nacimiento || '');
+            const pinActual = /^\d{4}-\d{2}-\d{2}$/.test(fechaNacimiento)
+                ? `${fechaNacimiento.slice(8, 10)}${fechaNacimiento.slice(5, 7)}`
+                : '';
+            document.getElementById('nuevo-trabajador-pin').value = pinActual;
+            if (tituloModalTrabajador) tituloModalTrabajador.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Editar trabajador';
+            if (subtituloModalTrabajador) subtituloModalTrabajador.textContent = 'Actualiza nombre, RUT, cargo, clave y especializaciones del trabajador seleccionado.';
+            btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios';
+        } else {
+            if (tituloModalTrabajador) tituloModalTrabajador.innerHTML = '<i class="fa-solid fa-user-plus"></i> Agregar trabajador';
+            if (subtituloModalTrabajador) subtituloModalTrabajador.textContent = 'Crea un perfil operativo con nombre, RUT, cargo y especializaciones para dejarlo disponible en la planificacion.';
+            btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar trabajador';
+        }
         modalNuevoTrabajador.style.display = 'flex';
         setTimeout(() => document.getElementById('nuevo-trabajador-nombre')?.focus(), 60);
     };
     const cerrarModalNuevoTrabajador = () => {
         if (!modalNuevoTrabajador || !formNuevoTrabajador) return;
+        trabajadorEnEdicion = null;
         formNuevoTrabajador.reset();
         limpiarErrorNuevoTrabajador();
+        setSeleccionHabilidades([]);
+        if (tituloModalTrabajador) tituloModalTrabajador.innerHTML = '<i class="fa-solid fa-user-plus"></i> Agregar trabajador';
+        if (subtituloModalTrabajador) subtituloModalTrabajador.textContent = 'Crea un perfil operativo con nombre, RUT, cargo y especializaciones para dejarlo disponible en la planificacion.';
         btnGuardarNuevoTrabajador.disabled = false;
         btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar trabajador';
         modalNuevoTrabajador.style.display = 'none';
@@ -5393,6 +5534,30 @@ function renderTrabajadoresView() {
             .filter(Boolean);
         const extras = dividirEspecialidades(document.getElementById('nuevo-trabajador-habilidades-extra')?.value || '');
         return [...new Set([...seleccionadas, ...extras])];
+    };
+    const sincronizarAsignacionesTrabajador = async (trabajadorId, nombreActualizado) => {
+        const mapaNombres = new Map(estado.trabajadores.map((item) => [item.id, item.nombre]));
+        const tareasAfectadas = estado.tareas.filter((tarea) =>
+            tarea.liderId === trabajadorId || (tarea.ayudantesIds || []).includes(trabajadorId)
+        );
+        if (!tareasAfectadas.length) return;
+
+        estado.tareas = estado.tareas.map((tarea) => {
+            if (tarea.liderId !== trabajadorId && !(tarea.ayudantesIds || []).includes(trabajadorId)) return tarea;
+            const liderNombre = tarea.liderId
+                ? (mapaNombres.get(tarea.liderId) || (tarea.liderId === trabajadorId ? nombreActualizado : tarea.liderNombre || ''))
+                : '';
+            const ayudantesNombres = (tarea.ayudantesIds || []).map((id) => mapaNombres.get(id) || '').filter(Boolean);
+            return { ...tarea, liderNombre, ayudantesNombres };
+        });
+
+        await Promise.all(tareasAfectadas.map((tarea) => {
+            const actualizada = estado.tareas.find((item) => item.id === tarea.id);
+            return _db.update('tareas', tarea.id, {
+                lider_nombre: actualizada?.liderNombre || '',
+                ayudantes_nombres: actualizada?.ayudantesNombres || []
+            });
+        }));
     };
 
     document.getElementById('btn-nuevo-trabajador')?.addEventListener('click', abrirModalNuevoTrabajador);
@@ -5448,30 +5613,51 @@ function renderTrabajadoresView() {
             return;
         }
         const fechaNacimiento = `2000-${pinInput.slice(2, 4)}-${pinInput.slice(0, 2)}`;
-        const rutDuplicado = estado.trabajadores.some((trabajador) => normalizarRut(trabajador.rut) === rut);
+        const rutDuplicado = estado.trabajadores.some((trabajador) =>
+            trabajador.id !== trabajadorEnEdicion?.id &&
+            normalizarRut(trabajador.rut) === rut
+        );
         if (rutDuplicado) {
             errorNuevoTrabajador.textContent = 'Ya existe un trabajador registrado con ese RUT.';
             errorNuevoTrabajador.style.display = 'block';
             return;
         }
 
-        const nuevoTrabajador = {
-            id: crypto.randomUUID(),
+        const payloadTrabajador = {
             nombre,
             rut,
             puesto,
             habilidades,
-            fecha_nacimiento: fechaNacimiento,
-            disponible: false,
-            ocupado: false,
-            puede_aprobar_insumos: false
+            fecha_nacimiento: fechaNacimiento
         };
 
         const textoOriginal = btnGuardarNuevoTrabajador.innerHTML;
         btnGuardarNuevoTrabajador.disabled = true;
-        btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+        btnGuardarNuevoTrabajador.innerHTML = trabajadorEnEdicion
+            ? '<i class="fa-solid fa-spinner fa-spin"></i> Guardando cambios...'
+            : '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
 
         try {
+            if (trabajadorEnEdicion) {
+                await _db.update('trabajadores', trabajadorEnEdicion.id, payloadTrabajador);
+                const guardado = { ...trabajadorEnEdicion, ...payloadTrabajador };
+                estado.trabajadores = estado.trabajadores.map((trabajador) =>
+                    trabajador.id === trabajadorEnEdicion.id ? guardado : trabajador
+                );
+                await sincronizarAsignacionesTrabajador(trabajadorEnEdicion.id, guardado.nombre);
+                cerrarModalNuevoTrabajador();
+                renderizarVistaActual();
+                mostrarToastTrabajadores(`${guardado.nombre} fue actualizado correctamente.`);
+                return;
+            }
+
+            const nuevoTrabajador = {
+                id: crypto.randomUUID(),
+                ...payloadTrabajador,
+                disponible: false,
+                ocupado: false,
+                puede_aprobar_insumos: false
+            };
             const { data, error } = await _db.insert('trabajadores', nuevoTrabajador);
             if (error) throw error;
 
@@ -5496,6 +5682,38 @@ function renderTrabajadoresView() {
             btnGuardarNuevoTrabajador.disabled = false;
             btnGuardarNuevoTrabajador.innerHTML = textoOriginal;
         }
+    });
+
+    const eliminarTrabajador = async (trabajadorId) => {
+        const trabajador = estado.trabajadores.find((item) => item.id === trabajadorId);
+        if (!trabajador) return;
+        const tareasAsignadas = estado.tareas.filter((tarea) =>
+            tarea.liderId === trabajadorId || (tarea.ayudantesIds || []).includes(trabajadorId)
+        );
+        if (tareasAsignadas.length > 0) {
+            mostrarToastTrabajadores(`No puedes eliminar a ${trabajador.nombre} mientras tenga tareas activas o semanales asignadas.`, 'danger');
+            return;
+        }
+        if (!confirm(`Eliminar a ${trabajador.nombre} del maestro de personal?`)) return;
+        try {
+            await _db.delete('trabajadores', trabajadorId);
+            estado.trabajadores = estado.trabajadores.filter((item) => item.id !== trabajadorId);
+            if (trabajadorEnEdicion?.id === trabajadorId) cerrarModalNuevoTrabajador();
+            renderizarVistaActual();
+            mostrarToastTrabajadores(`${trabajador.nombre} fue eliminado del equipo.`);
+        } catch (error) {
+            mostrarToastTrabajadores(error?.message || 'No se pudo eliminar el trabajador.', 'danger');
+        }
+    };
+
+    document.querySelectorAll('[data-worker-edit]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const trabajador = estado.trabajadores.find((item) => item.id === button.dataset.workerEdit);
+            if (trabajador) abrirModalNuevoTrabajador(trabajador);
+        });
+    });
+    document.querySelectorAll('[data-worker-delete]').forEach((button) => {
+        button.addEventListener('click', () => eliminarTrabajador(button.dataset.workerDelete));
     });
 }
 
@@ -5642,32 +5860,10 @@ async function renderMisHorasView() {
 function renderPerfilView() {
     const trabajador = estado.trabajadorLogueado;
 
-    const renderTaskBlock = (tarea, accentClass = '', ownerId = trabajador?.id) => {
-        const esLider = ownerId && tarea.liderId === ownerId;
-        return `
-            <article class="profile-task-item ${accentClass}">
-                <div class="profile-task-title">${tarea.tipo}</div>
-                <div class="profile-task-meta">
-                    ${tarea.horaAsignacion ? `<span><i class="fa-regular fa-clock"></i> ${tarea.horaAsignacion}</span>` : ''}
-                    ${(tarea.otNumero || tarea.ot_numero) ? `<span><i class="fa-solid fa-hashtag"></i> ${tarea.otNumero || tarea.ot_numero}</span>` : ''}
-                    <span><i class="fa-solid fa-user-tag"></i> ${esLider ? 'Lider' : 'Apoyo'}</span>
-                </div>
-            </article>
-        `;
-    };
-
     if (!trabajador) {
         const todos = estado.trabajadores || [];
         const renderAdminPerfil = (wId) => {
             const seleccionado = wId ? todos.find(t => t.id === wId) : null;
-            const tareasHoy = seleccionado ? estado.tareas.filter(t =>
-                t.estadoTarea === 'en_curso' &&
-                (t.liderId === seleccionado.id || (t.ayudantesIds && t.ayudantesIds.includes(seleccionado.id)))
-            ) : [];
-            const tareasSemana = seleccionado ? estado.tareas.filter(t =>
-                t.estadoTarea === 'programada_semana' &&
-                (t.liderId === seleccionado.id || (t.ayudantesIds && t.ayudantesIds.includes(seleccionado.id)))
-            ) : [];
 
             mainContent.innerHTML = `
                 <div class="fade-in profile-layout" style="max-width:980px; margin:0 auto;">
@@ -5713,20 +5909,12 @@ function renderPerfilView() {
                             </div>
                         </section>
 
-                        <section class="profile-task-grid">
-                            <div class="panel">
-                                <div class="panel-header" style="justify-content:space-between;">
-                                    <h3 style="margin:0;"><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Para ejecutar hoy</h3>
-                                    <span class="crew-status-badge" style="background:var(--warning-color);">${tareasHoy.length}</span>
+                        <section class="panel">
+                            <div class="empty-state empty-state--compact">
+                                <div>
+                                    <strong>Carga operativa visible en Inicio</strong>
+                                    <p>Los bloques de trabajos de hoy y de la semana se muestran en la pantalla principal para no repetir informacion dentro del perfil.</p>
                                 </div>
-                                ${tareasHoy.length ? tareasHoy.map(t => renderTaskBlock(t, 'is-today', seleccionado.id)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos hoy</strong><p>Cuando tenga carga activa aparecera aqui.</p></div></div>`}
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header" style="justify-content:space-between;">
-                                    <h3 style="margin:0;"><i class="fa-solid fa-calendar-week" style="color:var(--primary-color)"></i> Proximos de la semana</h3>
-                                    <span class="crew-status-badge" style="background:var(--primary-color);">${tareasSemana.length}</span>
-                                </div>
-                                ${tareasSemana.length ? tareasSemana.map(t => renderTaskBlock(t, '', seleccionado.id)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos esta semana</strong><p>No hay planificacion semanal asociada por ahora.</p></div></div>`}
                             </div>
                         </section>
                     ` : `
@@ -5759,15 +5947,6 @@ function renderPerfilView() {
         return;
     }
 
-    const tareasDiarias = estado.tareas.filter(t =>
-        (t.estadoTarea === 'en_curso' || (t.estadoTarea === 'programada_semana' && t.liderId)) &&
-        (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
-    );
-    const tareasSemanales = estado.tareas.filter(t =>
-        t.estadoTarea === 'programada_semana' &&
-        (t.liderId === trabajador.id || (t.ayudantesIds && t.ayudantesIds.includes(trabajador.id)))
-    );
-
     mainContent.innerHTML = `
         <div class="fade-in profile-layout" style="max-width:980px; margin:0 auto;">
             <section class="panel crew-hero">
@@ -5776,10 +5955,6 @@ function renderPerfilView() {
                         <div class="crew-eyebrow">Perfil operativo</div>
                         <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-id-badge"></i> Mi Perfil</h1>
                         <p class="crew-subtitle">Tu resumen de jornada, habilidades y carga actual de trabajo dentro de Planify.</p>
-                    </div>
-                    <div class="dashboard-hero-badges">
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-person-digging"></i> ${tareasDiarias.length} hoy</span>
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-calendar-week"></i> ${tareasSemanales.length} semana</span>
                     </div>
                 </div>
 
@@ -5814,20 +5989,12 @@ function renderPerfilView() {
                 </div>
             </section>
 
-            <section class="profile-task-grid">
-                <div class="panel">
-                    <div class="panel-header" style="justify-content:space-between;">
-                        <h3 style="margin:0;"><i class="fa-solid fa-person-digging" style="color:var(--warning-color)"></i> Para ejecutar hoy</h3>
-                        <span class="crew-status-badge" style="background:var(--warning-color);">${tareasDiarias.length}</span>
+            <section class="panel">
+                <div class="empty-state empty-state--compact">
+                    <div>
+                        <strong>La carga operativa se revisa desde Inicio</strong>
+                        <p>Quitamos de tu perfil los paneles de trabajos de hoy y de la semana para evitar duplicar la misma informacion.</p>
                     </div>
-                    ${tareasDiarias.length ? tareasDiarias.map(t => renderTaskBlock(t, 'is-today')).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos para hoy</strong><p>Cuando recibas una tarea activa aparecera aqui.</p></div></div>`}
-                </div>
-                <div class="panel">
-                    <div class="panel-header" style="justify-content:space-between;">
-                        <h3 style="margin:0;"><i class="fa-solid fa-calendar-week" style="color:var(--primary-color)"></i> Proximos de la semana</h3>
-                        <span class="crew-status-badge" style="background:var(--primary-color);">${tareasSemanales.length}</span>
-                    </div>
-                    ${tareasSemanales.length ? tareasSemanales.map(t => renderTaskBlock(t)).join('') : `<div class="empty-state empty-state--compact"><div><strong>Sin trabajos esta semana</strong><p>No hay planificacion futura cargada para ti por ahora.</p></div></div>`}
                 </div>
             </section>
         </div>
@@ -5860,7 +6027,7 @@ async function generarInformeConIA(tareasParam) {
     tareasDeHoy.forEach((t, i) => {
         datosCrudos += `TRABAJO ${i + 1}: ${t.tipo}${t.ot_numero ? ' | OT: ' + t.ot_numero : ''}\n`;
         datosCrudos += `  Supervisor: ${t.lider_nombre}\n`;
-        if (t.ayudantes_nombres?.length) datosCrudos += `  Apoyo: ${t.ayudantes_nombres.join(', ')}\n`;
+        if (t.ayudantes_nombres?.length) datosCrudos += `  Técnicos: ${t.ayudantes_nombres.join(', ')}\n`;
         datosCrudos += `  Horario: ${t.hora_asignacion || '-'} a ${t.hora_termino || '-'}\n`;
         if (t.numero_aviso) datosCrudos += `  Aviso SAP: ${t.numero_aviso}\n`;
         if (t.hh_trabajo)   datosCrudos += `  HH: ${t.hh_trabajo}\n`;
@@ -5885,7 +6052,7 @@ REGLA CRÍTICA DE CONTENIDO:
 - Sección 4: SOLO recomendaciones de intervención concretas y accionables.
 
 1. RESUMEN DE ACTIVIDADES
-Lista cada trabajo con horario, supervisor, personal de apoyo y HH consumidas. Luego resumen consolidado: total de trabajos, total HH, avisos SAP, personal participante.
+Lista cada trabajo con horario, supervisor, técnicos asignados y HH consumidas. Luego resumen consolidado: total de trabajos, total HH, avisos SAP, personal participante.
 
 2. DETALLE DE TRABAJOS REALIZADOS
 Por cada trabajo describe: (a) descripción de la tarea, (b) metodología e instrumentos usados (normas ISO, equipos de medición), (c) acciones realizadas paso a paso, (d) estado del equipo al finalizar. SIN análisis ni causas raíz.
@@ -6202,7 +6369,7 @@ window.exportarAWordConPlantilla = async function(trigger) {
             tareasDeHoy.forEach((t, i) => {
                 xml += p(`Trabajo ${i + 1}: ${t.tipo}${t.ot_numero ? ' | OT: ' + t.ot_numero : ''}`, { bold: true });
                 xml += p(`Supervisor: ${t.lider_nombre || '-'}`, { indent: true });
-                if (t.ayudantes_nombres?.length) xml += p(`Apoyo: ${t.ayudantes_nombres.join(', ')}`, { indent: true });
+                if (t.ayudantes_nombres?.length) xml += p(`Técnicos: ${t.ayudantes_nombres.join(', ')}`, { indent: true });
                 xml += p(`Horario: ${t.hora_asignacion || '-'} a ${t.hora_termino || '-'}`, { indent: true });
                 if (t.numero_aviso) xml += p(`Aviso SAP: ${t.numero_aviso}`, { indent: true });
                 if (t.hh_trabajo)   xml += p(`HH consumidas: ${t.hh_trabajo}`, { indent: true });
@@ -6932,7 +7099,7 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
                 ${tarea.ayudantesNombres && tarea.ayudantesNombres.length > 0 ? `
                 <div class="daily-task-support-row" style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#64748b; margin-top:0.35rem;">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>Apoyo: ${tarea.ayudantesNombres.join(', ')}</span>
+                    <span>Técnicos: ${tarea.ayudantesNombres.join(', ')}</span>
                 </div>` : ''}
             </div>
             ${isAdmin && !tarea.liderId ? `
@@ -7020,7 +7187,7 @@ function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
     const puedeGestionar = isAdmin || esParticipante;
     const posActual = colaTareas.findIndex(t => t.id === tarea.id);
     const ayudantes = Array.isArray(tarea.ayudantesNombres) ? tarea.ayudantesNombres : [];
-    const apoyoTexto = ayudantes.length > 0 ? ayudantes.join(', ') : 'Sin apoyo asignado';
+    const apoyoTexto = ayudantes.length > 0 ? ayudantes.join(', ') : 'Sin técnicos asignados';
     const dotacion = (tarea.liderNombre ? 1 : 0) + ayudantes.length;
 
     let tipos = Array.isArray(tarea.tiposSeleccionados) && tarea.tiposSeleccionados.length > 0 ? tarea.tiposSeleccionados : [];
@@ -7078,7 +7245,7 @@ function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
                 <strong class="daily-task-info-value">${tarea.liderNombre || 'Sin asignar'}</strong>
             </div>
             <div class="daily-task-info-card">
-                <span class="daily-task-info-label">Apoyo</span>
+                        <span class="daily-task-info-label">Técnicos</span>
                 <span class="daily-task-info-value is-muted">${apoyoTexto}</span>
             </div>
             <div class="daily-task-info-card">
@@ -7846,7 +8013,7 @@ function renderDashboardView() {
                 </div>
 
                 <div id="ayudantes-container" style="display:none; ${_div}">
-                    <label style="${_lbl}"><i class="fa-solid fa-users" style="color:var(--primary-color);"></i> Personal de Apoyo <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
+        <label style="${_lbl}"><i class="fa-solid fa-users" style="color:var(--primary-color);"></i> Técnicos asignados <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
                     <p style="font-size:13px; color:#64748b; margin:0 0 0.5rem 0;">Personal disponible hoy con la especialidad requerida.</p>
                     <div id="lista-ayudantes" style="background:#f8fafc; border-radius:8px; padding:0.5rem; border:1.5px solid #e2e8f0;">
                         <!-- checkboxes via JS -->
@@ -8440,7 +8607,7 @@ function renderSemanalView() {
                     </div>
                     ${tipos.length ? `<div class="weekly-task-types">${tipos.map(tipo => renderTipoSemanal(tipo, tarea.id)).join('')}</div>` : ''}
                     <div class="weekly-task-summary">
-                        <strong>${ayudantes.length ? 'Apoyo:' : 'Estado:'}</strong>
+                        <strong>${ayudantes.length ? 'Técnicos:' : 'Estado:'}</strong>
                         ${ayudantes.length ? ayudantes.join(', ') : 'Trabajo en espera de asignacion operativa.'}
                     </div>
                     <div class="weekly-task-actions">
@@ -8475,6 +8642,47 @@ function renderSemanalView() {
     // Panel de Asignación Semanal (Solo para Admin)
     let panelAsignacionHtml = '';
     if (isAdmin) {
+        const excelToneStyles = {
+            info: 'color:var(--primary-color);',
+            warning: 'color:var(--warning-color);',
+            danger: 'color:var(--danger-color);',
+            success: 'color:var(--success-color);'
+        };
+        const excelItemsPendientes = semanalExcelImportState.items || [];
+        const excelStatusHtml = semanalExcelImportState.message
+            ? `<div id="excel-status" class="weekly-import-status" style="${excelToneStyles[semanalExcelImportState.tone] || excelToneStyles.info}">${escapeHtml(semanalExcelImportState.message)}</div>`
+            : `<div id="excel-status" class="weekly-import-status"></div>`;
+        const excelPendientesHtml = excelItemsPendientes.length
+            ? `
+                <div class="weekly-import-queue">
+                    <div class="weekly-import-head">
+                        <div>
+                            <strong>${excelItemsPendientes.length} pendiente(s)</strong>
+                            <span>${escapeHtml(semanalExcelImportState.fileName || 'Archivo cargado')}</span>
+                        </div>
+                        <button id="btn-limpiar-excel-semanal" class="btn btn-outline" type="button">
+                            <i class="fa-solid fa-broom"></i> Limpiar lista
+                        </button>
+                    </div>
+                    <div class="weekly-import-list">
+                        ${excelItemsPendientes.map((t) => `
+                            <article class="weekly-import-item" data-weekly-import-item="${t.id}">
+                                <div class="weekly-import-copy">
+                                    <div class="weekly-import-title">${escapeHtml(t.titulo)}</div>
+                                    <div class="weekly-import-meta">
+                                        ${t.ot ? `<span class="weekly-task-chip"><i class="fa-solid fa-hashtag"></i> ${escapeHtml(t.ot)}</span>` : ''}
+                                        ${t.ubicacion ? `<span class="weekly-task-chip"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(t.ubicacion)}</span>` : ''}
+                                    </div>
+                                </div>
+                                <button data-weekly-import-id="${t.id}" class="btn btn-primary" type="button">
+                                    <i class="fa-solid fa-plus"></i> Agregar
+                                </button>
+                            </article>
+                        `).join('')}
+                    </div>
+                </div>
+            `
+            : '';
         panelAsignacionHtml = `
             <!-- COLUMNA IZQUIERDA: Asignación Semanal -->
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
@@ -8491,7 +8699,8 @@ function renderSemanalView() {
                     <button id="btn-trigger-excel" class="btn btn-success" style="width:100%;" onclick="document.getElementById('input-excel-semanal').click()">
                         <i class="fa-solid fa-cloud-arrow-up"></i> Cargar Archivo (.xlsx / .csv)
                     </button>
-                    <div id="excel-status" style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); text-align:center;"></div>
+                    ${excelStatusHtml}
+                    ${excelPendientesHtml}
                 </div>
 
                 <!-- Formulario Manual Normal -->
@@ -8775,49 +8984,103 @@ function renderSemanalView() {
                     const tareasAppus = json.filter((_, i) => filasValidas.has(i));
 
                     if(tareasAppus.length === 0) {
-                        status.innerHTML = '<span style="color:var(--warning-color)">No se encontraron tareas para APPLUS+ en este archivo.</span>';
+                        semanalExcelImportState = {
+                            fileName: file.name,
+                            total: 0,
+                            items: [],
+                            message: 'No se encontraron tareas para APPLUS+ en este archivo.',
+                            tone: 'warning'
+                        };
+                        renderizarVistaActual();
                         return;
                     }
 
                     // Construir lista de tareas encontradas para que el usuario las agregue manualmente
                     const tareasExtraidas = tareasAppus.map(row => {
-                        const ot  = row['OT'] || row['Orden'] || row['Nro OT'] || '';
+                        const ot = obtenerValorFilaExcel(row, ['OT', 'Orden', 'Nro OT']);
                         const desc = row['Descripción'] || row['Texto breve'] || row['Tarea'] || '';
                         const eq  = row['Equipo'] || row['Activo'] || row['Ubicación Técnica'] || '';
                         const tit = `${ot ? '['+ot+'] ' : ''}${eq ? eq + ' - ' : ''}${desc}`;
-                        return { ot: String(ot), titulo: tit.trim() };
+                        const ubicacion = resolverUbicacionFilaSemanal(row, eq);
+                        const tituloNormalizado = `${ubicacion ? `[${ubicacion}] ` : ''}${eq ? `${eq}${desc ? ' - ' : ''}` : ''}${desc}`.trim();
+                        return {
+                            id: crypto.randomUUID(),
+                            ot: String(ot || '').trim(),
+                            titulo: tituloNormalizado,
+                            ubicacion: String(ubicacion || '').trim()
+                        };
                     }).filter(t => t.titulo);
 
                     status.innerHTML = `<span style="color:var(--primary-color);font-weight:600;">${tareasExtraidas.length} tarea(s) encontradas. Agrégalas al plan:</span>`;
 
-                    const lista = document.createElement('div');
-                    lista.style.cssText = 'margin-top:1rem; display:flex; flex-direction:column; gap:0.6rem; max-height:300px; overflow-y:auto;';
-
-                    tareasExtraidas.forEach((t, idx) => {
-                        const item = document.createElement('div');
-                        item.style.cssText = 'display:flex; align-items:flex-start; gap:0.6rem; background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:0.6rem 0.8rem;';
-                        item.innerHTML = `
-                            <div style="flex:1; font-size:0.82rem; color:#374151; line-height:1.4;">${t.titulo}</div>
-                            <button data-idx="${idx}" style="flex-shrink:0; background:#FF6900; color:white; border:none; border-radius:6px; padding:0.35rem 0.75rem; font-size:0.78rem; font-weight:600; cursor:pointer; white-space:nowrap;">
-                                <i class="fa-solid fa-plus"></i> Agregar
-                            </button>`;
-                        item.querySelector('button').addEventListener('click', async function() {
-                            this.disabled = true;
-                            this.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
-                            await asignarTarea(t.titulo, null, [], 'programada_semana', t.ot);
-                            this.closest('div').style.opacity = '0.4';
-                            this.innerHTML = '<i class="fa-solid fa-check"></i> Agregado';
-                        });
-                        lista.appendChild(item);
-                    });
-
-                    status.parentNode.appendChild(lista);
+                    semanalExcelImportState = {
+                        fileName: file.name,
+                        total: tareasExtraidas.length,
+                        items: tareasExtraidas,
+                        message: `${tareasExtraidas.length} tarea(s) encontradas. AgrÃ©galas al plan sin volver a subir el archivo.`,
+                        tone: 'info'
+                    };
+                    renderizarVistaActual();
+                    return;
                 } catch (err) {
                     console.error("Error leyendo Excel:", err);
-                    status.innerHTML = '<span style="color:var(--danger-color)">Error al procesar el archivo.</span>';
+                    semanalExcelImportState = {
+                        fileName: file.name,
+                        total: 0,
+                        items: [],
+                        message: 'Error al procesar el archivo.',
+                        tone: 'danger'
+                    };
+                    renderizarVistaActual();
                 }
             };
             reader.readAsArrayBuffer(file);
+            inputExcel.value = '';
+        });
+
+        document.getElementById('btn-limpiar-excel-semanal')?.addEventListener('click', () => {
+            semanalExcelImportState = {
+                fileName: '',
+                total: 0,
+                items: [],
+                message: '',
+                tone: 'info'
+            };
+            renderizarVistaActual();
+        });
+
+        document.querySelectorAll('[data-weekly-import-id]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const itemId = button.dataset.weeklyImportId;
+                const tareaImportada = semanalExcelImportState.items.find(item => item.id === itemId);
+                if (!tareaImportada) return;
+
+                button.disabled = true;
+                button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+                semanalExcelImportState.items = semanalExcelImportState.items.filter(item => item.id !== itemId);
+                if (semanalExcelImportState.items.length > 0) {
+                    semanalExcelImportState.message = `${semanalExcelImportState.items.length} tarea(s) pendientes de ${semanalExcelImportState.total}.`;
+                    semanalExcelImportState.tone = 'info';
+                } else {
+                    semanalExcelImportState.message = `Todas las tareas de ${semanalExcelImportState.fileName || 'este archivo'} fueron agregadas al plan.`;
+                    semanalExcelImportState.tone = 'success';
+                }
+
+                await asignarTarea(
+                    tareaImportada.titulo,
+                    null,
+                    [],
+                    'programada_semana',
+                    tareaImportada.ot || null,
+                    'activo',
+                    null,
+                    null,
+                    [],
+                    [],
+                    tareaImportada.ubicacion || null
+                );
+            });
         });
     }
 
@@ -9173,6 +9436,13 @@ function renderizarVistaActual() {
     mainContent.innerHTML = '';
     document.body.dataset.view = vistaActual;
     document.body.dataset.role = estado.usuarioActual || 'visita';
+    const syncStrip = document.getElementById('sync-status-strip');
+    const searchToolbar = document.getElementById('search-container');
+    const searchOverlay = document.getElementById('search-results-overlay');
+    const ocultarChromeGlobal = vistaActual === 'perfil';
+    if (syncStrip) syncStrip.style.display = ocultarChromeGlobal ? 'none' : '';
+    if (searchToolbar) searchToolbar.style.display = ocultarChromeGlobal ? 'none' : '';
+    if (ocultarChromeGlobal && searchOverlay) searchOverlay.style.display = 'none';
     
     // Actualizar clases activas en nav
     Object.keys(navConfig).forEach(id => {
@@ -10135,7 +10405,7 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
 
     document.getElementById('lista-mediciones-vibracion').innerHTML = vibs.length ? vibs.slice(0, 6).map(item => renderLecturaFicha(item, 'vibracion')).join('') : emptyFichaState('Sin vibraciones recientes', 'No hay lecturas de vibracion para este equipo en el rango disponible.');
     document.getElementById('lista-mediciones-termografia').innerHTML = termos.length ? termos.slice(0, 6).map(item => renderLecturaFicha(item, 'termografia')).join('') : emptyFichaState('Sin inspecciones termicas', 'Aun no se registran inspecciones termicas para este equipo.');
-    document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin tecnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
+document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin técnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
     document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas / ultima ${String(vibSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(vibSummary.max, 2)} mm/s.` : 'No hay tendencia suficiente para este componente.';
@@ -11316,8 +11586,9 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-horas-extra-admin':  ['admin'],
         'nav-insumos':            ['admin', 'trabajador'],
         'nav-mobile-semanal':     ['admin'],
+        'nav-mobile-perfil':      ['trabajador'],
         'nav-mobile-insumos':     ['admin', 'trabajador'],
-        'nav-perfil':             ['admin', 'trabajador'],
+        'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
