@@ -674,6 +674,10 @@ async function inicializarDatos() {
             equipoId: t.equipo_id || null,
             tiposSeleccionados: t.tipos_trabajo || [],
             componentesSeleccionados: t.componentes_trabajo || [],
+            ubicacion: t.ubicacion || null,
+            espacioConfinado: !!t.espacio_confinado,
+            vigiaId: t.vigia_id || null,
+            vigiaNombre: t.vigia_nombre || null,
             orden: t.orden || 0
         }));
         estado.equipos = equipos || [];
@@ -776,7 +780,11 @@ async function inicializarDatos() {
                     fechaExpiracion: t.fecha_expiracion || t.fechaExpiracion || null,
                     equipoId: t.equipo_id || t.equipoId || null,
                     tiposSeleccionados: t.tipos_trabajo || t.tiposSeleccionados || [],
-                    componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || []
+                    componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || [],
+                    ubicacion: t.ubicacion || null,
+                    espacioConfinado: !!(t.espacio_confinado ?? t.espacioConfinado),
+                    vigiaId: t.vigia_id || t.vigiaId || null,
+                    vigiaNombre: t.vigia_nombre || t.vigiaNombre || null
                 }));
                 estado.equipos            = equipos    || [];
                 estado.historialTareas    = historial  || [];
@@ -855,7 +863,11 @@ function configurarRealtime() {
                     estadoEjecucion: t.estado_ejecucion || 'activo',
                     equipoId: t.equipo_id || null,
                     tiposSeleccionados: t.tipos_trabajo || [],
-                    componentesSeleccionados: t.componentes_trabajo || []
+                    componentesSeleccionados: t.componentes_trabajo || [],
+                    ubicacion: t.ubicacion || null,
+                    espacioConfinado: !!t.espacio_confinado,
+                    vigiaId: t.vigia_id || null,
+                    vigiaNombre: t.vigia_nombre || null
                 }));
             })
         );
@@ -983,7 +995,7 @@ async function updateTrabajadorDisponibilidad(id, disponible) {
     await _db.update('trabajadores', id, payload);
 }
 
-async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null) {
+async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null, espacioConfinado = false, vigiaId = null) {
     const lider = estado.trabajadores.find(t => t.id === liderId);
     const ayudantesNombres = ayudantesIds.map(id => {
         const t = estado.trabajadores.find(x => x.id === id);
@@ -1037,6 +1049,14 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
     if (tiposSeleccionados.length) nuevaTarea.tipos_trabajo = tiposSeleccionados;
     if (componentesSeleccionados.length) nuevaTarea.componentes_trabajo = componentesSeleccionados;
     if (ubicacion) nuevaTarea.ubicacion = ubicacion;
+    const vigia = vigiaId ? estado.trabajadores.find(t => t.id === vigiaId) : null;
+    if (espacioConfinado) {
+        nuevaTarea.espacio_confinado = true;
+        if (vigiaId) {
+            nuevaTarea.vigia_id = vigiaId;
+            nuevaTarea.vigia_nombre = vigia?.nombre || null;
+        }
+    }
 
     // Optimistic update: actualizar UI inmediatamente
     const tareaLocal = {
@@ -1051,6 +1071,9 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         tiposSeleccionados,
         componentesSeleccionados,
         ubicacion: ubicacion || null,
+        espacioConfinado: !!espacioConfinado,
+        vigiaId: espacioConfinado ? (vigiaId || null) : null,
+        vigiaNombre: espacioConfinado ? (vigia?.nombre || null) : null,
         orden: 0
     };
     estado.tareas.push(tareaLocal);
@@ -1872,9 +1895,6 @@ async function renderInsumosView() {
     const pendientes = solicitudesBase.filter((item) => item.estado === 'pendiente').length;
     const movimientosTotales = estado.movimientosInventario.length;
     const aprobadasMes = solicitudesBase.filter((item) => item.estado === 'aprobada' && String(item.fecha_aprobacion || '').slice(0, 7) === new Date().toISOString().slice(0, 7)).length;
-    const mensajeModo = (insumosFeatureState.tablasRemotas.insumos && insumosFeatureState.tablasRemotas.solicitudes)
-        ? 'Supabase listo para sincronizar inventario y solicitudes.'
-        : 'Modo local activo. Ejecuta el SQL de insumos en Supabase para sincronizacion multiusuario.';
 
     const opcionesTrabajadores = [
         '<option value="">Todos los solicitantes</option>',
@@ -1908,30 +1928,26 @@ async function renderInsumosView() {
                     </div>
                 </div>
                 <div class="inv-kpi-grid">
-                    <article class="inv-kpi-card">
+                    <article class="inv-kpi-card" data-kpi="catalogo" role="button" tabindex="0" title="Ver catalogo completo" style="cursor:pointer;">
                         <span class="inv-kpi-label"><i class="fa-solid fa-box"></i> Catalogo activo</span>
                         <div class="inv-kpi-value">${catalogoActivo.length}</div>
                         <div class="inv-kpi-meta">${categoriasDisponibles.length} categoria(s) · ${marcasDisponibles.length} marca(s)</div>
                     </article>
-                    <article class="inv-kpi-card inv-kpi-card--danger">
+                    <article class="inv-kpi-card inv-kpi-card--danger" data-kpi="stock_bajo" role="button" tabindex="0" title="Ver items con stock bajo" style="cursor:pointer;">
                         <span class="inv-kpi-label"><i class="fa-solid fa-triangle-exclamation"></i> Stock bajo</span>
                         <div class="inv-kpi-value" style="color:#dc2626;">${stockBajo.length}</div>
                         <div class="inv-kpi-meta">Items en o bajo su minimo</div>
                     </article>
-                    <article class="inv-kpi-card">
+                    <article class="inv-kpi-card" data-kpi="pendientes" role="button" tabindex="0" title="Ver solicitudes pendientes" style="cursor:pointer;">
                         <span class="inv-kpi-label"><i class="fa-solid fa-hourglass-half"></i> Pendientes</span>
                         <div class="inv-kpi-value">${pendientes}</div>
                         <div class="inv-kpi-meta">${esAdmin || puedeAprobar ? 'Esperando revision' : 'Tus solicitudes'}</div>
                     </article>
-                    <article class="inv-kpi-card">
+                    <article class="inv-kpi-card" data-kpi="aprobadas_mes" role="button" tabindex="0" title="Ver solicitudes aprobadas este mes" style="cursor:pointer;">
                         <span class="inv-kpi-label"><i class="fa-solid fa-circle-check"></i> Aprobadas mes</span>
                         <div class="inv-kpi-value">${aprobadasMes}</div>
                         <div class="inv-kpi-meta">Solicitudes cerradas</div>
                     </article>
-                </div>
-                <div class="inv-hero-note">
-                    <i class="fa-solid ${insumosFeatureState.tablasRemotas.insumos && insumosFeatureState.tablasRemotas.solicitudes ? 'fa-circle-check' : 'fa-floppy-disk'}"></i>
-                    <span>${mensajeModo}</span>
                 </div>
             </section>
 
@@ -2017,6 +2033,7 @@ async function renderInsumosView() {
                         ${esAdmin ? `<button id="btn-insumos-limpiar-resueltas" type="button" class="btn btn-outline btn-small"><i class="fa-solid fa-broom"></i> Limpiar resueltas</button>` : ''}
                     </div>
                 </div>
+                <div id="inv-solicitudes-contexto" style="display:none;"></div>
                 <div id="inv-solicitudes-list"></div>
             </section>
 
@@ -2061,6 +2078,7 @@ async function renderInsumosView() {
     let filtroMarca = '';
     let filtroBusqueda = '';
     let soloBajo = false;
+    let filtroSolicitudesMes = '';
     let filtroMovTipo = '';
     let filtroMovTexto = '';
     let tabActiva = defaultTab;
@@ -2077,10 +2095,129 @@ async function renderInsumosView() {
         mainContent.querySelectorAll('[data-tab-panel]').forEach((panel) => {
             panel.hidden = panel.dataset.tabPanel !== tab;
         });
-        if (tab === 'catalogo') renderCatalogoCards();
-        if (tab === 'solicitudes') renderTablaSolicitudes();
+        if (tab === 'catalogo') {
+            sincronizarFiltrosCatalogoUI();
+            renderCatalogoCards();
+        }
+        if (tab === 'solicitudes') {
+            sincronizarFiltrosSolicitudesUI();
+            renderTablaSolicitudes();
+        }
         if (tab === 'movimientos') renderMovimientos();
         if (tab === 'aprobadores') renderAprobadores();
+    }
+
+    function sincronizarFiltrosCatalogoUI() {
+        const searchEl = document.getElementById('inv-search');
+        const marcaEl = document.getElementById('inv-marca');
+        const soloBajoEl = document.getElementById('inv-solo-bajo');
+        if (searchEl) searchEl.value = filtroBusqueda;
+        if (marcaEl) marcaEl.value = filtroMarca;
+        if (soloBajoEl) soloBajoEl.checked = soloBajo;
+        mainContent.querySelectorAll('#inv-chips-cat .inv-chip').forEach((chip) => {
+            chip.classList.toggle('is-active', (chip.dataset.cat || '') === filtroCat);
+        });
+    }
+
+    function descripcionMesFiltroSolicitudes() {
+        if (!filtroSolicitudesMes) return '';
+        const fecha = new Date(`${filtroSolicitudesMes}-01T12:00:00`);
+        if (Number.isNaN(fecha.getTime())) return filtroSolicitudesMes;
+        return fecha.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+    }
+
+    function sincronizarFiltrosSolicitudesUI() {
+        const estadoEl = document.getElementById('insumos-filtro-estado');
+        const trabajadorEl = document.getElementById('insumos-filtro-trabajador');
+        const textoEl = document.getElementById('insumos-filtro-texto');
+        const contextoEl = document.getElementById('inv-solicitudes-contexto');
+        if (estadoEl) estadoEl.value = filtroEstado;
+        if (trabajadorEl) trabajadorEl.value = filtroTrabajador;
+        if (textoEl) textoEl.value = filtroTexto;
+        if (!contextoEl) return;
+
+        if (!filtroSolicitudesMes) {
+            contextoEl.style.display = 'none';
+            contextoEl.innerHTML = '';
+            return;
+        }
+
+        const descripcionMes = descripcionMesFiltroSolicitudes();
+        contextoEl.style.display = 'block';
+        contextoEl.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; margin-bottom:0.85rem; padding:0.75rem 0.9rem; border:1px solid rgba(59,130,246,0.18); border-radius:14px; background:rgba(59,130,246,0.06); color:#1d4ed8;">
+                <span style="font-size:0.82rem; font-weight:600;"><i class="fa-solid fa-filter"></i> Mostrando solicitudes aprobadas de ${descripcionMes}.</span>
+                <button id="btn-limpiar-filtro-mes-insumos" type="button" class="btn btn-outline btn-small" style="white-space:nowrap;"><i class="fa-solid fa-xmark"></i> Quitar filtro</button>
+            </div>
+        `;
+        document.getElementById('btn-limpiar-filtro-mes-insumos')?.addEventListener('click', () => {
+            filtroSolicitudesMes = '';
+            sincronizarFiltrosSolicitudesUI();
+            renderTablaSolicitudes();
+        });
+    }
+
+    function enfocarDetalleTab(tab) {
+        const tabBtn = mainContent.querySelector(`.inv-tab[data-tab="${tab}"]`);
+        const panel = mainContent.querySelector(`[data-tab-panel="${tab}"]`);
+        if (tabBtn) {
+            tabBtn.focus({ preventScroll: true });
+            tabBtn.style.boxShadow = '0 0 0 4px rgba(249,115,22,0.18)';
+            setTimeout(() => { tabBtn.style.boxShadow = ''; }, 900);
+        }
+        if (panel) {
+            panel.style.scrollMarginTop = '112px';
+            panel.style.outline = '2px solid rgba(249,115,22,0.22)';
+            panel.style.outlineOffset = '6px';
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => {
+                panel.style.outline = '';
+                panel.style.outlineOffset = '';
+            }, 1100);
+        } else if (tabBtn) {
+            tabBtn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        }
+    }
+
+    function abrirDetalleKpiInventario(tipo) {
+        if (tipo === 'catalogo') {
+            filtroBusqueda = '';
+            filtroMarca = '';
+            filtroCat = '';
+            soloBajo = false;
+            activarTab('catalogo');
+            enfocarDetalleTab('catalogo');
+            return;
+        }
+
+        if (tipo === 'stock_bajo') {
+            filtroBusqueda = '';
+            filtroMarca = '';
+            filtroCat = '';
+            soloBajo = true;
+            activarTab('catalogo');
+            enfocarDetalleTab('catalogo');
+            return;
+        }
+
+        if (tipo === 'pendientes') {
+            filtroEstado = 'pendiente';
+            filtroTrabajador = '';
+            filtroTexto = '';
+            filtroSolicitudesMes = '';
+            activarTab('solicitudes');
+            enfocarDetalleTab('solicitudes');
+            return;
+        }
+
+        if (tipo === 'aprobadas_mes') {
+            filtroEstado = 'aprobada';
+            filtroTrabajador = '';
+            filtroTexto = '';
+            filtroSolicitudesMes = new Date().toISOString().slice(0, 7);
+            activarTab('solicitudes');
+            enfocarDetalleTab('solicitudes');
+        }
     }
 
     function renderCatalogoCards() {
@@ -2275,6 +2412,10 @@ async function renderInsumosView() {
 
         const filas = solicitudesBase.filter((item) => {
             if (filtroEstado !== 'todos' && item.estado !== filtroEstado) return false;
+            if (filtroSolicitudesMes) {
+                const fechaBase = String(item.fecha_aprobacion || item.fecha_solicitud || item.created_at || '');
+                if (!fechaBase.startsWith(filtroSolicitudesMes)) return false;
+            }
             if (filtroTrabajador && String(item.trabajador_id) !== String(filtroTrabajador)) return false;
             if (!filtroTexto) return true;
             const insumo = obtenerInsumoPorId(item.insumo_id);
@@ -2376,6 +2517,8 @@ async function renderInsumosView() {
 
     document.getElementById('insumos-filtro-estado')?.addEventListener('change', (event) => {
         filtroEstado = event.target.value;
+        if (filtroEstado !== 'aprobada') filtroSolicitudesMes = '';
+        sincronizarFiltrosSolicitudesUI();
         renderTablaSolicitudes();
     });
     document.getElementById('insumos-filtro-trabajador')?.addEventListener('change', (event) => {
@@ -2700,6 +2843,16 @@ async function renderInsumosView() {
     // Tabs
     mainContent.querySelectorAll('.inv-tab').forEach((btn) => {
         btn.addEventListener('click', () => activarTab(btn.dataset.tab));
+    });
+    mainContent.querySelectorAll('.inv-kpi-card[data-kpi]').forEach((card) => {
+        const abrir = () => abrirDetalleKpiInventario(card.dataset.kpi || '');
+        card.addEventListener('click', abrir);
+        card.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                abrir();
+            }
+        });
     });
 
     // Catalogo filters
@@ -3797,6 +3950,117 @@ window.mostrarCalendarioHorasExtra = function(trabajadorId, registros) {
 };
 
 // COMPONENTE: Vista Trabajadores (2 tabs: Equipo Disponible | Equipo Trabajando)
+function renderEquiposView() {
+    const normalizar = (valor) => String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const criticidadColor = { A: '#ef4444', B: '#f59e0b', C: '#22c55e' };
+    const equipos = [...(estado.equipos || [])].sort((a, b) => {
+        const nombreA = String(a.activo || '').localeCompare(String(b.activo || ''), 'es');
+        if (nombreA !== 0) return nombreA;
+        return String(a.ubicacion || '').localeCompare(String(b.ubicacion || ''), 'es');
+    });
+
+    const renderTarjetaEquipo = (eq) => {
+        const crit = String(eq.criticidad || '').toUpperCase();
+        const critColor = criticidadColor[crit] || '#64748b';
+        const searchText = normalizar([
+            eq.activo,
+            eq.componente,
+            eq.kks,
+            eq.ubicacion,
+            eq.ubicacion_original,
+            eq.frecuencia_nueva
+        ].join(' '));
+
+        return `
+            <article class="equipment-card" data-equipo-card data-search="${searchText}" onclick="window.abrirFichaTecnica('${eq.id}')">
+                <div class="equipment-card-head">
+                    <div>
+                        <div class="equipment-card-title">${eq.activo || 'Equipo sin nombre'}</div>
+                        <div class="equipment-card-subtitle">${eq.componente || 'Sin componente definido'}</div>
+                    </div>
+                    ${crit ? `<span class="equipment-card-badge" style="background:${critColor}18;color:${critColor};border-color:${critColor}55;">Crit. ${crit}</span>` : ''}
+                </div>
+                <div class="equipment-card-meta">
+                    <span><i class="fa-solid fa-location-dot"></i> ${eq.ubicacion || 'Sin ubicación'}</span>
+                    <span><i class="fa-solid fa-hashtag"></i> ${eq.kks || 'KKS no informado'}</span>
+                    ${eq.frecuencia_nueva ? `<span><i class="fa-solid fa-rotate"></i> ${eq.frecuencia_nueva}</span>` : ''}
+                </div>
+                <div class="equipment-card-footer">
+                    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir ficha técnica</span>
+                </div>
+            </article>
+        `;
+    };
+
+    const ubicaciones = [...new Set(equipos.map(eq => eq.ubicacion).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+
+    mainContent.innerHTML = `
+        <div class="fade-in equipment-view">
+            <section class="panel equipment-hero">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div class="crew-eyebrow">Consulta tecnica</div>
+                        <h1 style="margin:0 0 0.4rem 0;"><i class="fa-solid fa-gears"></i> Equipos</h1>
+                        <p class="crew-subtitle">Busca activos por nombre, componente, KKS o ubicación y entra directo a su ficha técnica.</p>
+                    </div>
+                    <div class="dashboard-hero-badges">
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-microchip"></i> ${equipos.length} equipos</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-location-dot"></i> ${ubicaciones.length} ubicaciones</span>
+                    </div>
+                </div>
+                <div class="equipment-toolbar">
+                    <div class="equipment-search-shell">
+                        <i class="fa-solid fa-magnifying-glass equipment-search-icon"></i>
+                        <input id="equipos-search" type="text" class="form-control equipment-search-input" placeholder="Buscar equipo, componente, KKS o ubicación...">
+                        <button id="equipos-search-clear" class="search-clear-btn" type="button" aria-label="Limpiar búsqueda">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-header" style="justify-content:space-between; gap:1rem; flex-wrap:wrap;">
+                    <h2 style="margin:0;"><i class="fa-solid fa-layer-group"></i> Inventario de equipos</h2>
+                    <div id="equipos-search-status" style="color:var(--text-muted); font-size:0.88rem;">${equipos.length} resultado(s)</div>
+                </div>
+                <div id="equipos-grid" class="equipment-grid">
+                    ${equipos.length ? equipos.map(renderTarjetaEquipo).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin equipos cargados</strong><p>Cuando existan equipos en la base, aparecerán aquí para búsqueda y consulta.</p></div></div>`}
+                </div>
+            </section>
+        </div>
+    `;
+
+    const input = document.getElementById('equipos-search');
+    const clearBtn = document.getElementById('equipos-search-clear');
+    const cards = Array.from(document.querySelectorAll('[data-equipo-card]'));
+    const status = document.getElementById('equipos-search-status');
+
+    const aplicarFiltro = () => {
+        const query = normalizar(input?.value || '');
+        let visibles = 0;
+        cards.forEach((card) => {
+            const match = !query || (card.dataset.search || '').includes(query);
+            card.style.display = match ? '' : 'none';
+            if (match) visibles += 1;
+        });
+        if (status) status.textContent = `${visibles} resultado(s)`;
+        if (clearBtn) clearBtn.style.display = query ? 'inline-flex' : 'none';
+    };
+
+    input?.addEventListener('input', aplicarFiltro);
+    clearBtn?.addEventListener('click', () => {
+        input.value = '';
+        aplicarFiltro();
+        input.focus();
+    });
+}
+
 function renderTrabajadoresView() {
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
 
@@ -7205,6 +7469,11 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     <span>Técnicos: ${tarea.ayudantesNombres.join(', ')}</span>
                 </div>` : ''}
+                ${tarea.espacioConfinado ? `
+                <div class="daily-task-vigia-row" style="display:flex; align-items:center; gap:0.4rem; font-size:0.85rem; color:#92400e; margin-top:0.35rem; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; padding:0.3rem 0.6rem;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:#b45309;"></i>
+                    <span><strong>Espacio confinado</strong>${tarea.vigiaNombre ? ` — Vigía: <strong>${tarea.vigiaNombre}</strong>` : ' — Vigía: <em>sin asignar</em>'}</span>
+                </div>` : ''}
             </div>
             ${isAdmin && !tarea.liderId ? `
             <button class="daily-task-assign-inline" onclick="asignarPersonalATarea('${tarea.id}')" style="background:#FF6900; color:#fff; border:none; border-radius:8px; padding:0.4rem 0.9rem; font-size:0.82rem; font-weight:600; cursor:pointer; white-space:nowrap; flex-shrink:0;">
@@ -8077,7 +8346,7 @@ function renderDashboardView() {
                     <label style="${_lbl}"><i class="fa-solid fa-map-marker-alt" style="color:var(--primary-color);"></i> Ubicación</label>
                     <select id="select-ubicacion" class="form-control" style="${_inp}">
                         <option value="">-- Seleccione una ubicación --</option>
-                        ${[...new Set(estado.equipos.map(e => e.ubicacion).filter(Boolean))].sort((a,b) => a.localeCompare(b)).map(u => `<option value="${u}">${u}</option>`).join('')}
+                        ${[...new Set([...ubicacionesDisponibles, ...estado.equipos.map(e => e.ubicacion).filter(Boolean)])].sort((a,b) => a.localeCompare(b,'es')).map(u => `<option value="${u}">${u}</option>`).join('')}
                     </select>
                 </div>
 
@@ -8121,6 +8390,27 @@ function renderDashboardView() {
                     <p style="font-size:13px; color:#64748b; margin:0 0 0.5rem 0;">Personal disponible hoy con la especialidad requerida.</p>
                     <div id="lista-ayudantes" style="background:#f8fafc; border-radius:8px; padding:0.5rem; border:1.5px solid #e2e8f0;">
                         <!-- checkboxes via JS -->
+                    </div>
+                </div>
+
+                <div style="${_div}">
+                    <label style="${_lbl}"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning-color);"></i> ¿Espacio confinado?</label>
+                    <div style="display:flex; gap:1.2rem; padding:0.35rem 0;">
+                        <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:14px; color:#1e293b;">
+                            <input type="radio" name="confinado-asign" value="no" checked style="accent-color:#FF6900;"> No
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.4rem; cursor:pointer; font-size:14px; color:#1e293b;">
+                            <input type="radio" name="confinado-asign" value="si" style="accent-color:#FF6900;"> Sí
+                        </label>
+                    </div>
+                    <div id="asign-vigia-wrap" style="display:none; margin-top:0.7rem;">
+                        <div style="background:#fef3c7; color:#92400e; border:1px solid #fcd34d; border-radius:8px; padding:0.55rem 0.8rem; font-size:13px; margin-bottom:0.6rem;">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Se requiere vigía para espacios confinados.
+                        </div>
+                        <label style="${_lbl}">Vigía asignado</label>
+                        <select id="asign-vigia" class="form-control" style="${_inp}">
+                            <option value="">— Seleccionar —</option>
+                        </select>
                     </div>
                 </div>
 
@@ -8278,6 +8568,21 @@ function renderDashboardView() {
         const btnAsignar = document.getElementById('btn-asignar');
         const btnAgregarEquipo = document.getElementById('btn-agregar-equipo');
         const inputOt = document.getElementById('input-ot-trabajo');
+
+        // ── Espacio confinado + vigía ────────────────────────────────────────
+        const vigiaWrap = document.getElementById('asign-vigia-wrap');
+        const vigiaSel  = document.getElementById('asign-vigia');
+        if (vigiaSel) {
+            vigiaSel.innerHTML = '<option value="">— Seleccionar —</option>' +
+                estado.trabajadores.map(t =>
+                    `<option value="${t.id}">${t.nombre}${t.cargo ? ` — ${t.cargo}` : ''}</option>`
+                ).join('');
+        }
+        document.querySelectorAll('input[name="confinado-asign"]').forEach(r => {
+            r.addEventListener('change', () => {
+                if (vigiaWrap) vigiaWrap.style.display = (r.value === 'si' && r.checked) ? 'block' : 'none';
+            });
+        });
 
         // Estado local de tipos seleccionados
         let tiposSeleccionados = [];
@@ -8586,7 +8891,14 @@ function renderDashboardView() {
                 const enCola = document.getElementById('check-poner-en-cola').checked;
                 const estadoEjecucion = enCola ? 'en_cola' : 'activo';
 
-                asignarTarea(tituloFinal, liderId, ayudantesIds, 'en_curso', otNumero, estadoEjecucion, null, equipoId, tiposSeleccionados, componentesSeleccionados);
+                const confinadoSel = document.querySelector('input[name="confinado-asign"]:checked')?.value === 'si';
+                const vigiaId = confinadoSel ? (document.getElementById('asign-vigia')?.value || null) : null;
+                if (confinadoSel && !vigiaId) {
+                    alert('Selecciona un vigía — es obligatorio en espacio confinado.');
+                    return;
+                }
+
+                asignarTarea(tituloFinal, liderId, ayudantesIds, 'en_curso', otNumero, estadoEjecucion, null, equipoId, tiposSeleccionados, componentesSeleccionados, null, confinadoSel, vigiaId);
                 window.cerrarDrawerAsignacion?.();
             } else {
                 if (tiposSeleccionados.length === 0) alert('Selecciona al menos un tipo de trabajo.');
@@ -8820,7 +9132,7 @@ function renderSemanalView() {
                     <label><i class="fa-solid fa-map-marker-alt"></i> Ubicación</label>
                     <select id="semanal-ubicacion" class="form-control">
                         <option value="">-- Seleccione una ubicación --</option>
-                        ${[...new Set(estado.equipos.map(e => e.ubicacion).filter(Boolean))].sort((a,b) => a.localeCompare(b)).map(u => `<option value="${u}">${u}</option>`).join('')}
+                        ${[...new Set([...ubicacionesDisponibles, ...estado.equipos.map(e => e.ubicacion).filter(Boolean)])].sort((a,b) => a.localeCompare(b,'es')).map(u => `<option value="${u}">${u}</option>`).join('')}
                     </select>
                 </div>
 
@@ -9119,7 +9431,7 @@ function renderSemanalView() {
                         fileName: file.name,
                         total: tareasExtraidas.length,
                         items: tareasExtraidas,
-                        message: `${tareasExtraidas.length} tarea(s) encontradas. AgrÃ©galas al plan sin volver a subir el archivo.`,
+                        message: `${tareasExtraidas.length} tarea(s) encontradas. Agrégalas al plan sin volver a subir el archivo.`,
                         tone: 'info'
                     };
                     renderizarVistaActual();
@@ -9324,7 +9636,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
     // ── UBICACIÓN ─────────────────────────────────────────────────────────────
     const ubicSel = document.getElementById('modal-iniciar-ubicacion');
-    const ubicaciones = [...new Set(estado.equipos.map(e => e.ubicacion).filter(Boolean))].sort((a,b) => a.localeCompare(b));
+    const ubicaciones = [...new Set([...ubicacionesDisponibles, ...estado.equipos.map(e => e.ubicacion).filter(Boolean)])].sort((a,b) => a.localeCompare(b,'es'));
     const ubicActual = tarea.ubicacion || equipo?.ubicacion || (tarea.tipo.match(/^\[([^\]]+)\]/) || [])[1] || '';
     ubicSel.innerHTML = `<option value="">— Seleccionar —</option>` +
         ubicaciones.map(u => `<option value="${u}" ${u === ubicActual ? 'selected' : ''}>${u}</option>`).join('');
@@ -9522,6 +9834,7 @@ const navConfig = {
     'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
     'nav-historial': 'historial',
+    'nav-equipos': 'equipos',
     'nav-trabajadores': 'trabajadores',
     'nav-horas-extra-admin': 'horas_extra_admin',
     'nav-insumos': 'insumos',
@@ -9544,7 +9857,7 @@ function renderizarVistaActual() {
     const syncStrip = document.getElementById('sync-status-strip');
     const searchToolbar = document.getElementById('search-container');
     const searchOverlay = document.getElementById('search-results-overlay');
-    const ocultarChromeGlobal = vistaActual === 'perfil';
+    const ocultarChromeGlobal = true;
     if (syncStrip) syncStrip.style.display = ocultarChromeGlobal ? 'none' : '';
     if (searchToolbar) searchToolbar.style.display = ocultarChromeGlobal ? 'none' : '';
     if (ocultarChromeGlobal && searchOverlay) searchOverlay.style.display = 'none';
@@ -9571,6 +9884,9 @@ function renderizarVistaActual() {
             break;
         case 'historial':
             renderHistorialView(true);
+            break;
+        case 'equipos':
+            renderEquiposView();
             break;
         case 'semanal':
             renderSemanalView();
