@@ -239,10 +239,37 @@ async function enviarPushAFiltro(subscriptions, predicate, payload) {
 const pushState = {
     initialized: false,
     inFlight: false,
+    realtimeStarted: false,
+    sentKeys: new Set(),
     tareas: new Map(),
     horasExtra: new Map(),
     solicitudesInsumos: new Map()
 };
+
+function recordarPushKey(key) {
+    if (!key) return false;
+    if (pushState.sentKeys.has(key)) return false;
+    pushState.sentKeys.add(key);
+    if (pushState.sentKeys.size > 1000) {
+        const first = pushState.sentKeys.values().next().value;
+        pushState.sentKeys.delete(first);
+    }
+    return true;
+}
+
+async function enviarPushUnico(eventKey, subscriptions, predicate, payload) {
+    if (!recordarPushKey(eventKey)) return 0;
+    return enviarPushAFiltro(subscriptions, predicate, payload);
+}
+
+function firmaAsignacionTarea(tarea) {
+    return [
+        tarea.estadoTarea || '',
+        tarea.estadoEjecucion || '',
+        tarea.liderId || '',
+        ...(tarea.ayudantesIds || []).map(String).sort()
+    ].join('|');
+}
 
 async function obtenerPushSnapshot() {
     const [tareasRes, heRes, insumosRes] = await Promise.all([
@@ -287,8 +314,10 @@ async function revisarCambiosPush() {
 
         for (const tarea of snapshot.tareas) {
             const anterior = pushState.tareas.get(String(tarea.id));
-            if (!anterior && tareaActivaPush(tarea)) {
-                await enviarPushAFiltro(
+            const cambioAsignacion = anterior && firmaAsignacionTarea(anterior) !== firmaAsignacionTarea(tarea);
+            if ((!anterior || cambioAsignacion) && tareaActivaPush(tarea)) {
+                await enviarPushUnico(
+                    `tarea:${tarea.id}:${firmaAsignacionTarea(tarea)}`,
                     subscriptions,
                     (subscription) => subscriptionParaTarea(subscription, tarea),
                     {
@@ -306,7 +335,8 @@ async function revisarCambiosPush() {
             const anterior = pushState.horasExtra.get(id);
             const actual = String(registro.estado || 'pendiente');
             if (anterior === 'pendiente' && actual !== 'pendiente') {
-                await enviarPushAFiltro(
+                await enviarPushUnico(
+                    `he:${id}:${actual}`,
                     subscriptions,
                     (subscription) => subscriptionParaTrabajador(subscription, registro.trabajador_id),
                     {
@@ -324,7 +354,8 @@ async function revisarCambiosPush() {
             const anterior = pushState.solicitudesInsumos.get(id);
             const actual = String(solicitud.estado || 'pendiente');
             if (anterior === 'pendiente' && actual !== 'pendiente') {
-                await enviarPushAFiltro(
+                await enviarPushUnico(
+                    `insumo:${id}:${actual}`,
                     subscriptions,
                     (subscription) => subscriptionParaTrabajador(subscription, solicitud.trabajador_id),
                     {
@@ -343,6 +374,108 @@ async function revisarCambiosPush() {
     } finally {
         pushState.inFlight = false;
     }
+}
+
+async function manejarCambioTareaPush(payload) {
+    if (!pushReady || !pushState.initialized) return;
+    const tarea = normalizarTareaPush(payload.new || {});
+    if (!tarea.id) return;
+    const anterior = pushState.tareas.get(String(tarea.id));
+    pushState.tareas.set(String(tarea.id), tarea);
+
+    const cambioAsignacion = anterior && firmaAsignacionTarea(anterior) !== firmaAsignacionTarea(tarea);
+    if (payload.eventType !== 'INSERT' && !cambioAsignacion) return;
+    if (!tareaActivaPush(tarea)) return;
+
+    try {
+        const subscriptions = await listarPushSubscriptions();
+        await enviarPushUnico(
+            `tarea:${tarea.id}:${firmaAsignacionTarea(tarea)}`,
+            subscriptions,
+            (subscription) => subscriptionParaTarea(subscription, tarea),
+            {
+                title: 'Nuevo trabajo asignado',
+                body: describirTareaPush(tarea),
+                tag: `planify-task-${tarea.id}`,
+                url: './index.html'
+            }
+        );
+    } catch (error) {
+        console.warn('[push] Realtime tarea fallo:', error.message);
+    }
+}
+
+async function manejarCambioHorasExtraPush(payload) {
+    if (!pushReady || !pushState.initialized) return;
+    const registro = payload.new || {};
+    const id = String(registro.id || '');
+    if (!id) return;
+    const anterior = pushState.horasExtra.get(id);
+    const actual = String(registro.estado || 'pendiente');
+    pushState.horasExtra.set(id, actual);
+
+    if (anterior !== 'pendiente' || actual === 'pendiente') return;
+
+    try {
+        const subscriptions = await listarPushSubscriptions();
+        await enviarPushUnico(
+            `he:${id}:${actual}`,
+            subscriptions,
+            (subscription) => subscriptionParaTrabajador(subscription, registro.trabajador_id),
+            {
+                title: actual === 'aprobado' ? 'Horas extra aprobadas' : 'Horas extra rechazadas',
+                body: `${registro.fecha || ''} - ${registro.horas || 0} hora(s).`,
+                tag: `planify-he-${id}`,
+                url: './index.html'
+            }
+        );
+    } catch (error) {
+        console.warn('[push] Realtime horas_extra fallo:', error.message);
+    }
+}
+
+async function manejarCambioSolicitudInsumoPush(payload) {
+    if (!pushReady || !pushState.initialized) return;
+    const solicitud = payload.new || {};
+    const id = String(solicitud.id || '');
+    if (!id) return;
+    const anterior = pushState.solicitudesInsumos.get(id);
+    const actual = String(solicitud.estado || 'pendiente');
+    pushState.solicitudesInsumos.set(id, actual);
+
+    if (anterior !== 'pendiente' || actual === 'pendiente') return;
+
+    try {
+        const subscriptions = await listarPushSubscriptions();
+        await enviarPushUnico(
+            `insumo:${id}:${actual}`,
+            subscriptions,
+            (subscription) => subscriptionParaTrabajador(subscription, solicitud.trabajador_id),
+            {
+                title: actual === 'aprobada' ? 'Solicitud de insumo aprobada' : 'Solicitud de insumo rechazada',
+                body: solicitud.insumo_nombre || 'Solicitud de insumo actualizada.',
+                tag: `planify-insumo-${id}`,
+                url: './index.html'
+            }
+        );
+    } catch (error) {
+        console.warn('[push] Realtime solicitud insumo fallo:', error.message);
+    }
+}
+
+function iniciarRealtimePush() {
+    if (!pushReady || pushState.realtimeStarted) return;
+    pushState.realtimeStarted = true;
+    supabaseServer
+        .channel('planify-push-server')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tareas' }, manejarCambioTareaPush)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'horas_extra' }, manejarCambioHorasExtraPush)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'solicitudes_insumos' }, manejarCambioSolicitudInsumoPush)
+        .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('[push] Realtime activo para notificaciones inmediatas.');
+            }
+        });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -374,6 +507,7 @@ const server = http.createServer(async (req, res) => {
         writeJson(res, 200, {
             enabled: pushReady,
             initialized: pushState.initialized,
+            realtime: pushState.realtimeStarted,
             pollMs: PUSH_POLL_MS
         });
         return;
@@ -530,9 +664,9 @@ function listenWithFallback(port, attemptsRemaining = 10) {
             console.log(`[server] Puerto solicitado ${requestedPort} ocupado; usando ${activePort}.`);
         }
         if (pushReady) {
-            revisarCambiosPush();
+            revisarCambiosPush().then(iniciarRealtimePush);
             setInterval(revisarCambiosPush, PUSH_POLL_MS);
-            console.log(`[push] Push remoto activo. Revisando cambios cada ${PUSH_POLL_MS} ms.`);
+            console.log(`[push] Push remoto activo. Realtime + respaldo cada ${PUSH_POLL_MS} ms.`);
         }
     });
 }
