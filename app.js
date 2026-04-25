@@ -2465,6 +2465,171 @@ const mainContent = document.getElementById('main-content');
 let pendingRealtimeRender = false;
 let realtimeResumeTimer = null;
 
+// ── Force refresh: re-baja todo y re-renderiza ──────────────────────────────
+window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
+    if (window._planifyRefreshing) return;
+    window._planifyRefreshing = true;
+    try {
+        if (!navigator.onLine || !window.supabaseClient) {
+            mostrarToastNotificacion('Sin conexión', 'No se pueden actualizar los datos ahora.', { type: 'warning', duration: 3000 });
+            return;
+        }
+        const sb = window.supabaseClient;
+        const [tareasRes, trabajadoresRes, insumosRes, equiposRes] = await Promise.allSettled([
+            sb.from('tareas').select('*'),
+            sb.from('trabajadores').select('*'),
+            sb.from('insumos').select('*'),
+            fetchAllEquipos()
+        ]);
+        if (tareasRes.status === 'fulfilled' && tareasRes.value?.data) {
+            estado.tareas = (tareasRes.value.data || []).map(t => ({
+                id: t.id, tipo: t.tipo,
+                liderId: t.lider_id, liderNombre: t.lider_nombre,
+                ayudantesIds: t.ayudantes_ids || [], ayudantesNombres: t.ayudantes_nombres || [],
+                estadoTarea: t.estado_tarea, otNumero: t.ot_numero,
+                horaAsignacion: t.hora_asignacion,
+                fechaAsignacion: t.created_at || null,
+                estadoEjecucion: t.estado_ejecucion || 'activo',
+                fechaExpiracion: t.fecha_expiracion || null,
+                equipoId: t.equipo_id || null,
+                tiposSeleccionados: t.tipos_trabajo || [],
+                componentesSeleccionados: t.componentes_trabajo || [],
+                ubicacion: t.ubicacion || null,
+                espacioConfinado: !!t.espacio_confinado,
+                vigiaId: t.vigia_id || null,
+                vigiaNombre: t.vigia_nombre || null,
+                orden: t.orden || 0
+            }));
+        }
+        if (trabajadoresRes.status === 'fulfilled' && trabajadoresRes.value?.data) {
+            estado.trabajadores = (trabajadoresRes.value.data || []).map(t => ({ ...t, disponible: _checkinVigente(t) }));
+        }
+        if (insumosRes.status === 'fulfilled' && insumosRes.value?.data) {
+            estado.insumos = insumosRes.value.data || [];
+        }
+        if (equiposRes.status === 'fulfilled') {
+            estado.equipos = equiposRes.value || [];
+        }
+        try { evaluarNotificacionesPlanify?.(); } catch {}
+        renderizarVistaActual();
+        mostrarToastNotificacion('Actualizado', 'Datos sincronizados.', { type: 'success', duration: 1500 });
+    } catch (err) {
+        console.error('[refresh]', err);
+        mostrarToastNotificacion('Error al actualizar', err?.message || 'Reintenta en unos segundos.', { type: 'danger', duration: 3500 });
+    } finally {
+        window._planifyRefreshing = false;
+    }
+};
+
+// ── Pull-to-refresh (gesto vertical desde el tope) ──────────────────────────
+(function instalarPullToRefresh() {
+    let startY = 0;
+    let pulling = false;
+    let pulled = 0;
+    const UMBRAL = 75;            // px que hay que arrastrar para gatillar
+    const MAX_PULL = 130;
+    let indicator = null;
+
+    function getIndicator() {
+        if (indicator) return indicator;
+        indicator = document.createElement('div');
+        indicator.id = 'planify-ptr-indicator';
+        Object.assign(indicator.style, {
+            position: 'fixed',
+            top: '0',
+            left: '50%',
+            transform: 'translate(-50%, -60px)',
+            zIndex: '9997',
+            background: '#FF6900',
+            color: '#fff',
+            borderRadius: '999px',
+            padding: '0.45rem 0.95rem',
+            fontSize: '0.82rem',
+            fontWeight: '700',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            boxShadow: '0 8px 22px rgba(255,105,0,0.35)',
+            transition: 'transform 0ms',
+            pointerEvents: 'none',
+            opacity: '0'
+        });
+        document.body.appendChild(indicator);
+        return indicator;
+    }
+    function setIndicator(progress, ready) {
+        const el = getIndicator();
+        const offsetY = Math.min(progress * 0.6, 30);
+        el.style.transform = `translate(-50%, ${offsetY}px)`;
+        el.style.opacity = String(Math.min(progress / UMBRAL, 1));
+        el.innerHTML = ready
+            ? '<i class="fa-solid fa-arrows-rotate"></i> Suelta para actualizar'
+            : '<i class="fa-solid fa-arrow-down"></i> Desliza para actualizar';
+    }
+    function hideIndicator() {
+        const el = document.getElementById('planify-ptr-indicator');
+        if (!el) return;
+        el.style.transition = 'transform 220ms, opacity 220ms';
+        el.style.transform = 'translate(-50%, -60px)';
+        el.style.opacity = '0';
+        setTimeout(() => { el.style.transition = 'transform 0ms'; }, 240);
+    }
+    function showLoading() {
+        const el = getIndicator();
+        el.style.transition = 'transform 220ms';
+        el.style.transform = 'translate(-50%, 14px)';
+        el.style.opacity = '1';
+        el.innerHTML = '<i class="fa-solid fa-arrows-rotate fa-spin"></i> Actualizando...';
+    }
+
+    document.addEventListener('touchstart', (e) => {
+        if (window.scrollY > 2) return;
+        if (e.touches.length !== 1) return;
+        // No activar si el touch empieza dentro de un overlay/modal
+        const target = e.target;
+        if (target?.closest?.('.modal-overlay-base, #asign-drawer, #asign-backdrop, #planify-toast-stack')) return;
+        startY = e.touches[0].clientY;
+        pulling = true;
+        pulled = 0;
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        if (window.scrollY > 2) { pulling = false; hideIndicator(); return; }
+        const dy = e.touches[0].clientY - startY;
+        if (dy <= 0) { pulled = 0; return; }
+        pulled = Math.min(dy, MAX_PULL);
+        setIndicator(pulled, pulled >= UMBRAL);
+    }, { passive: true });
+
+    document.addEventListener('touchend', async () => {
+        if (!pulling) return;
+        const wasReady = pulled >= UMBRAL;
+        pulling = false;
+        if (wasReady) {
+            showLoading();
+            try {
+                await window.forzarRefrescoPlanify();
+            } finally {
+                setTimeout(hideIndicator, 350);
+            }
+        } else {
+            hideIndicator();
+        }
+        pulled = 0;
+    });
+})();
+
+// Atajo de teclado: F5 o Ctrl/Cmd+R intercepta para usar nuestro refresh suave
+document.addEventListener('keydown', (e) => {
+    if ((e.key === 'F5') || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')) {
+        // Si hay shift, dejar que el navegador haga reload duro
+        if (e.shiftKey) return;
+        e.preventDefault();
+        window.forzarRefrescoPlanify();
+    }
+});
+
 function esElementoVisibleUI(elemento) {
     if (!elemento) return false;
     const estilo = window.getComputedStyle(elemento);
