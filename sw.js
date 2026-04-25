@@ -1,5 +1,5 @@
 // Service Worker — Planify Offline v5
-const CACHE_NAME = 'planify-offline-v15';
+const CACHE_NAME = 'planify-offline-v16';
 
 // En localhost no cacheamos nada — siempre red directa
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -135,15 +135,41 @@ self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
+self.addEventListener('push', event => {
+  let payload = {
+    title: 'Planify',
+    body: 'Tienes una actualizacion pendiente.',
+    tag: 'planify-push',
+    url: './index.html'
+  };
+
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch (_) {
+    payload.body = event.data ? event.data.text() : payload.body;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title || 'Planify', {
+      body: payload.body || '',
+      tag: payload.tag || 'planify-push',
+      icon: './icon-512.png',
+      badge: './icon-512.png',
+      data: { url: payload.url || './index.html' }
+    })
+  );
+});
+
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  const targetUrl = event.notification?.data?.url || './index.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(clientList => {
         for (const client of clientList) {
           if ('focus' in client) return client.focus();
         }
-        if (clients.openWindow) return clients.openWindow('./index.html');
+        if (clients.openWindow) return clients.openWindow(targetUrl);
         return undefined;
       })
   );

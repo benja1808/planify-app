@@ -5,6 +5,7 @@ error*.txt
 
 # Local Netlify folder
 .netlify
+supabase/.temp/
 
 # Claude worktrees and local temp
 .claude/
@@ -15,3 +16,4 @@ setup_insumos.sql
 # Edge profile and logs
 .edge-profile/
 server.out.log
+push-config.json

@@ -533,6 +533,7 @@ function obtenerInsumosStockBajo() {
 
 const PLANIFY_NOTIFICATIONS_ENABLED_KEY = 'planify_notificaciones_activas';
 const PLANIFY_NOTIFICATIONS_SENT_KEY = 'planify_notificaciones_enviadas_v1';
+const PLANIFY_PUSH_REMOTE_KEY = 'planify_push_remoto_activo';
 const PLANIFY_NOTIFICATION_LEAD_MS = 2 * 60 * 60 * 1000;
 
 const planifyNotifications = {
@@ -556,6 +557,17 @@ function notificacionesActivadas() {
     return navegadorSoportaNotificaciones() &&
         Notification.permission === 'granted' &&
         localStorage.getItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY) === 'true';
+}
+
+function pushRemotoActivo() {
+    return localStorage.getItem(PLANIFY_PUSH_REMOTE_KEY) === 'true';
+}
+
+function urlBase64AUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
 function obtenerAudienciaNotificaciones() {
@@ -644,6 +656,65 @@ async function enviarNotificacionPlanify({ key = '', title, body, tag = 'planify
     } catch (error) {
         console.warn('[notificaciones] No se pudo mostrar notificacion:', error);
         return false;
+    }
+}
+
+async function registrarPushRemotoPlanify() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        localStorage.setItem(PLANIFY_PUSH_REMOTE_KEY, 'false');
+        return false;
+    }
+    try {
+        const keyResponse = await fetch('./push/vapid-public-key', { cache: 'no-store' });
+        if (!keyResponse.ok) throw new Error('Servidor push no configurado');
+        const keyData = await keyResponse.json();
+        if (!keyData?.enabled || !keyData.publicKey) throw new Error(keyData?.message || 'Servidor push no configurado');
+
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+            subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64AUint8Array(keyData.publicKey)
+            });
+        }
+        const trabajador = obtenerTrabajadorActual();
+        const saveResponse = await fetch('./push/subscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                subscription,
+                role: estado.usuarioActual || 'visita',
+                trabajadorId: estado.usuarioActual === 'trabajador' ? trabajador?.id || null : null,
+                trabajadorNombre: estado.usuarioActual === 'trabajador' ? trabajador?.nombre || null : null,
+                userAgent: navigator.userAgent
+            })
+        });
+        if (!saveResponse.ok) throw new Error('No se pudo guardar la suscripcion push');
+        localStorage.setItem(PLANIFY_PUSH_REMOTE_KEY, 'true');
+        return true;
+    } catch (error) {
+        console.warn('[push] Push remoto no disponible:', error.message);
+        localStorage.setItem(PLANIFY_PUSH_REMOTE_KEY, 'false');
+        return false;
+    }
+}
+
+async function desregistrarPushRemotoPlanify() {
+    localStorage.setItem(PLANIFY_PUSH_REMOTE_KEY, 'false');
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        if (!subscription) return;
+        await fetch('./push/unsubscribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: subscription.endpoint })
+        }).catch(() => {});
+        await subscription.unsubscribe();
+    } catch (error) {
+        console.warn('[push] No se pudo desregistrar push remoto:', error.message);
     }
 }
 
@@ -948,19 +1019,23 @@ async function activarNotificacionesPlanify() {
     }
     localStorage.setItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY, 'true');
     iniciarMonitorNotificaciones({ resetBaseline: true });
+    const pushRemoto = await registrarPushRemotoPlanify();
     await enviarNotificacionPlanify({
         title: 'Notificaciones activadas',
-        body: 'Planify te avisara sobre trabajos, vencimientos y pendientes importantes.',
+        body: pushRemoto
+            ? 'Planify tambien podra avisarte cuando no estes dentro de la app.'
+            : 'Planify te avisara mientras la app este abierta o en segundo plano.',
         tag: 'planify-notificaciones-activadas'
     });
     renderizarVistaActual();
 }
 
-function desactivarNotificacionesPlanify() {
+async function desactivarNotificacionesPlanify() {
     localStorage.setItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY, 'false');
     if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
     planifyNotifications.intervalId = null;
     planifyNotifications.initialized = false;
+    await desregistrarPushRemotoPlanify();
     renderizarVistaActual();
 }
 
@@ -979,10 +1054,12 @@ function renderNotificacionesPerfilHtml() {
     const detalle = !soportadas
         ? 'Este navegador no permite notificaciones.'
         : activas
-            ? 'Recibiras avisos de trabajos nuevos, vencimientos, pendientes y stock bajo segun tu rol.'
+            ? (pushRemotoActivo()
+                ? 'Push remoto activo: recibiras avisos aunque no estes dentro de la app.'
+                : 'Recibiras avisos mientras Planify este abierta o en segundo plano. Falta servidor push para app cerrada.')
             : bloqueadas
                 ? 'El permiso esta bloqueado desde el navegador. Revisa la configuracion del sitio para habilitarlo.'
-                : 'Activalas para recibir avisos aunque Planify este en segundo plano.';
+                : 'Activalas para recibir avisos; si el servidor push esta disponible tambien llegaran con la app cerrada.';
     const icono = activas ? 'fa-bell' : bloqueadas ? 'fa-bell-slash' : 'fa-bell';
     const boton = activas
         ? `<button id="btn-notificaciones-toggle" type="button" class="btn btn-outline"><i class="fa-solid fa-bell-slash"></i> Desactivar</button>`
@@ -9289,7 +9366,7 @@ function renderDashboardView() {
                         const estadoLabel = t.ocupado ? 'Trabajando' : (!t.disponible ? 'Sin check-in' : 'Disponible');
                         const estadoClass = t.ocupado ? 'is-busy' : (!t.disponible ? 'is-away' : 'is-ready');
                         return `<button type="button" class="assignment-recommended-card" data-tech-id="${t.id}">
-                            <span>
+                            <span class="assignment-recommended-copy">
                                 <span class="assignment-recommended-name">${t.nombre}</span>
                                 <span class="assignment-recommended-meta">${t.puesto || 'Técnico'}</span>
                             </span>
@@ -9317,13 +9394,18 @@ function renderDashboardView() {
                     const checkbox = document.querySelector(`.ayudante-checkbox[value="${btn.dataset.techId}"]`);
                     if (!checkbox) return;
                     checkbox.checked = !checkbox.checked;
+                    btn.classList.toggle('is-selected', checkbox.checked);
                     checkbox.dispatchEvent(new Event('change', { bubbles: true }));
                 });
             });
 
             // Agregar listeners
             document.querySelectorAll('.ayudante-checkbox').forEach(cb => {
-                cb.addEventListener('change', verificarNecesidadCola);
+                cb.addEventListener('change', () => {
+                    const recommended = document.querySelector(`.assignment-recommended-card[data-tech-id="${cb.value}"]`);
+                    if (recommended) recommended.classList.toggle('is-selected', cb.checked);
+                    verificarNecesidadCola();
+                });
             });
             verificarNecesidadCola();
         }
@@ -12661,7 +12743,10 @@ function accederApp(rol, trabajadorObj = null) {
     // Badge de pendientes solo para planificador
     if (rol === 'admin') actualizarBadgeHE();
     actualizarBadgeInsumos();
-    if (notificacionesActivadas()) iniciarMonitorNotificaciones({ resetBaseline: true });
+    if (notificacionesActivadas()) {
+        iniciarMonitorNotificaciones({ resetBaseline: true });
+        registrarPushRemotoPlanify();
+    }
 
     const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
     vistaActual = rol === 'admin'
