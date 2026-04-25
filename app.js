@@ -87,6 +87,7 @@ let estado = {
     insumos: [],
     solicitudesInsumos: [],
     movimientosInventario: [],
+    horasExtra: [],
     informeNovedadesDiarias: null,
     usuarioActual: 'visita', // 'visita', 'admin', 'trabajador'
     trabajadorLogueado: null  // objeto trabajador cuando rol === 'trabajador'
@@ -530,6 +531,351 @@ function obtenerInsumosStockBajo() {
         });
 }
 
+const PLANIFY_NOTIFICATIONS_ENABLED_KEY = 'planify_notificaciones_activas';
+const PLANIFY_NOTIFICATIONS_SENT_KEY = 'planify_notificaciones_enviadas_v1';
+const PLANIFY_NOTIFICATION_LEAD_MS = 2 * 60 * 60 * 1000;
+
+const planifyNotifications = {
+    initialized: false,
+    intervalId: null,
+    taskIds: new Set(),
+    hePendientes: 0,
+    solicitudesPendientes: 0,
+    stockBajo: 0
+};
+
+function navegadorSoportaNotificaciones() {
+    return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+function notificacionesActivadas() {
+    return navegadorSoportaNotificaciones() &&
+        Notification.permission === 'granted' &&
+        localStorage.getItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY) === 'true';
+}
+
+function obtenerAudienciaNotificaciones() {
+    if (estado.usuarioActual === 'trabajador') {
+        return `trabajador:${obtenerTrabajadorActual()?.id || 'sin-id'}`;
+    }
+    return estado.usuarioActual || 'visita';
+}
+
+function cargarNotificacionesEnviadas() {
+    try {
+        const raw = localStorage.getItem(PLANIFY_NOTIFICATIONS_SENT_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(parsed) ? parsed : []);
+    } catch {
+        return new Set();
+    }
+}
+
+function guardarNotificacionesEnviadas(items) {
+    const list = Array.from(items).slice(-250);
+    localStorage.setItem(PLANIFY_NOTIFICATIONS_SENT_KEY, JSON.stringify(list));
+}
+
+function notificacionFueEnviada(key) {
+    return cargarNotificacionesEnviadas().has(key);
+}
+
+function marcarNotificacionEnviada(key) {
+    if (!key) return;
+    const sent = cargarNotificacionesEnviadas();
+    sent.add(key);
+    guardarNotificacionesEnviadas(sent);
+}
+
+function mostrarToastNotificacion(titulo, cuerpo) {
+    const toast = document.createElement('div');
+    toast.innerHTML = `
+        <div style="font-weight:800;margin-bottom:0.15rem;">${escapeHtml(titulo)}</div>
+        <div style="font-size:0.86rem;opacity:0.92;">${escapeHtml(cuerpo)}</div>
+    `;
+    Object.assign(toast.style, {
+        position: 'fixed',
+        right: '1rem',
+        bottom: '1rem',
+        width: 'min(360px, calc(100vw - 2rem))',
+        background: '#111827',
+        color: '#ffffff',
+        padding: '0.85rem 1rem',
+        borderRadius: '10px',
+        zIndex: '10000',
+        boxShadow: '0 16px 36px rgba(15,23,42,0.28)'
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5200);
+}
+
+async function enviarNotificacionPlanify({ key = '', title, body, tag = 'planify-alert' }) {
+    if (!notificacionesActivadas()) return false;
+    if (key && notificacionFueEnviada(key)) return false;
+    if (key) marcarNotificacionEnviada(key);
+
+    mostrarToastNotificacion(title, body);
+
+    const options = {
+        body,
+        tag,
+        icon: './icon-512.png',
+        badge: './icon-512.png',
+        renotify: false
+    };
+
+    try {
+        const registration = await navigator.serviceWorker?.ready;
+        if (registration?.showNotification) {
+            await registration.showNotification(title, options);
+            return true;
+        }
+    } catch (error) {
+        console.warn('[notificaciones] Service worker no disponible:', error);
+    }
+
+    try {
+        new Notification(title, options);
+        return true;
+    } catch (error) {
+        console.warn('[notificaciones] No se pudo mostrar notificacion:', error);
+        return false;
+    }
+}
+
+function tareaNotificableParaUsuario(tarea) {
+    if (!tarea || estado.usuarioActual === 'visita') return false;
+    if (estado.usuarioActual === 'admin') return true;
+    const trabajadorId = obtenerTrabajadorActual()?.id;
+    if (!trabajadorId) return false;
+    return String(tarea.liderId) === String(trabajadorId) ||
+        (tarea.ayudantesIds || []).some((id) => String(id) === String(trabajadorId)) ||
+        String(tarea.vigiaId || '') === String(trabajadorId);
+}
+
+function tareaEstaActivaParaNotificar(tarea) {
+    const estadoTarea = String(tarea?.estadoTarea || '').toLowerCase();
+    const estadoEjecucion = String(tarea?.estadoEjecucion || 'activo').toLowerCase();
+    if (estadoEjecucion === 'finalizado' || estadoEjecucion === 'cerrado') return false;
+    return ['en_curso', 'programada_semana', 'pendiente', 'programada'].includes(estadoTarea);
+}
+
+function tareasRelevantesParaNotificar() {
+    return (estado.tareas || [])
+        .filter(tareaEstaActivaParaNotificar)
+        .filter(tareaNotificableParaUsuario);
+}
+
+function describirTareaParaNotificacion(tarea) {
+    const partes = [
+        tarea.otNumero ? `OT ${tarea.otNumero}` : '',
+        tarea.tipo || 'Trabajo',
+        tarea.ubicacion || ''
+    ].filter(Boolean);
+    return partes.join(' - ');
+}
+
+function obtenerConteosNotificables() {
+    const hePendientes = estado.usuarioActual === 'admin'
+        ? (estado.horasExtra || []).filter((item) => item.estado === 'pendiente').length
+        : 0;
+    const solicitudesPendientes = usuarioPuedeAprobarInsumos()
+        ? (estado.solicitudesInsumos || []).filter((item) => item.estado === 'pendiente').length
+        : 0;
+    const stockBajo = estado.usuarioActual === 'admin'
+        ? obtenerInsumosStockBajo().length
+        : 0;
+    return { hePendientes, solicitudesPendientes, stockBajo };
+}
+
+function prepararLineaBaseNotificaciones() {
+    planifyNotifications.taskIds = new Set(tareasRelevantesParaNotificar().map((tarea) => String(tarea.id)));
+    const conteos = obtenerConteosNotificables();
+    planifyNotifications.hePendientes = conteos.hePendientes;
+    planifyNotifications.solicitudesPendientes = conteos.solicitudesPendientes;
+    planifyNotifications.stockBajo = conteos.stockBajo;
+    planifyNotifications.initialized = true;
+}
+
+async function evaluarNotificacionesPlanify() {
+    if (!notificacionesActivadas() || estado.usuarioActual === 'visita') return;
+    if (!planifyNotifications.initialized) prepararLineaBaseNotificaciones();
+
+    const audiencia = obtenerAudienciaNotificaciones();
+    const tareas = tareasRelevantesParaNotificar();
+    const idsActuales = new Set(tareas.map((tarea) => String(tarea.id)));
+
+    for (const tarea of tareas) {
+        const tareaId = String(tarea.id);
+        if (!planifyNotifications.taskIds.has(tareaId)) {
+            const esTrabajador = estado.usuarioActual === 'trabajador';
+            await enviarNotificacionPlanify({
+                key: `${audiencia}:tarea-nueva:${tareaId}`,
+                title: esTrabajador ? 'Nuevo trabajo asignado' : 'Nuevo trabajo en Planify',
+                body: describirTareaParaNotificacion(tarea),
+                tag: `planify-task-${tareaId}`
+            });
+        }
+
+        if (tarea.fechaExpiracion) {
+            const vence = new Date(tarea.fechaExpiracion);
+            const restante = vence.getTime() - Date.now();
+            if (!Number.isNaN(vence.getTime()) && restante > 0 && restante <= PLANIFY_NOTIFICATION_LEAD_MS) {
+                await enviarNotificacionPlanify({
+                    key: `${audiencia}:tarea-vence:${tareaId}:${tarea.fechaExpiracion}`,
+                    title: 'Trabajo por vencer',
+                    body: `${describirTareaParaNotificacion(tarea)} vence ${formatearFechaHora(tarea.fechaExpiracion)}.`,
+                    tag: `planify-due-${tareaId}`
+                });
+            } else if (!Number.isNaN(vence.getTime()) && restante <= 0) {
+                await enviarNotificacionPlanify({
+                    key: `${audiencia}:tarea-vencida:${tareaId}:${tarea.fechaExpiracion}`,
+                    title: 'Trabajo vencido',
+                    body: `${describirTareaParaNotificacion(tarea)} supero su fecha limite.`,
+                    tag: `planify-expired-${tareaId}`
+                });
+            }
+        }
+    }
+
+    const conteos = obtenerConteosNotificables();
+    if (conteos.hePendientes > planifyNotifications.hePendientes) {
+        await enviarNotificacionPlanify({
+            key: `${audiencia}:he-pendientes:${conteos.hePendientes}`,
+            title: 'Horas extra pendientes',
+            body: `Hay ${conteos.hePendientes} solicitud(es) esperando revision.`,
+            tag: 'planify-he-pendientes'
+        });
+    }
+    if (conteos.solicitudesPendientes > planifyNotifications.solicitudesPendientes) {
+        await enviarNotificacionPlanify({
+            key: `${audiencia}:insumos-pendientes:${conteos.solicitudesPendientes}`,
+            title: 'Solicitudes de insumos pendientes',
+            body: `Hay ${conteos.solicitudesPendientes} solicitud(es) de insumos por resolver.`,
+            tag: 'planify-insumos-pendientes'
+        });
+    }
+    if (conteos.stockBajo > planifyNotifications.stockBajo) {
+        const primero = obtenerInsumosStockBajo()[0];
+        await enviarNotificacionPlanify({
+            key: `${audiencia}:stock-bajo:${conteos.stockBajo}:${primero?.id || 'catalogo'}`,
+            title: 'Stock bajo en inventario',
+            body: primero
+                ? `${primero.nombre}: quedan ${enteroSeguro(primero.stock_actual, 0)} ${normalizarUnidadInsumo(primero.unidad).toLowerCase()}.`
+                : `Hay ${conteos.stockBajo} insumo(s) bajo minimo.`,
+            tag: 'planify-stock-bajo'
+        });
+    }
+
+    planifyNotifications.taskIds = idsActuales;
+    planifyNotifications.hePendientes = conteos.hePendientes;
+    planifyNotifications.solicitudesPendientes = conteos.solicitudesPendientes;
+    planifyNotifications.stockBajo = conteos.stockBajo;
+}
+
+function iniciarMonitorNotificaciones({ resetBaseline = false } = {}) {
+    if (resetBaseline || !planifyNotifications.initialized) prepararLineaBaseNotificaciones();
+    if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
+    planifyNotifications.intervalId = setInterval(() => {
+        evaluarNotificacionesPlanify();
+    }, 60000);
+}
+
+async function activarNotificacionesPlanify() {
+    if (!navegadorSoportaNotificaciones()) {
+        alert('Este navegador no soporta notificaciones.');
+        return;
+    }
+    const permiso = Notification.permission === 'granted'
+        ? 'granted'
+        : await Notification.requestPermission();
+    if (permiso !== 'granted') {
+        localStorage.setItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY, 'false');
+        alert('Las notificaciones quedaron bloqueadas. Puedes habilitarlas desde los permisos del navegador.');
+        renderizarVistaActual();
+        return;
+    }
+    localStorage.setItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY, 'true');
+    iniciarMonitorNotificaciones({ resetBaseline: true });
+    await enviarNotificacionPlanify({
+        title: 'Notificaciones activadas',
+        body: 'Planify te avisara sobre trabajos, vencimientos y pendientes importantes.',
+        tag: 'planify-notificaciones-activadas'
+    });
+    renderizarVistaActual();
+}
+
+function desactivarNotificacionesPlanify() {
+    localStorage.setItem(PLANIFY_NOTIFICATIONS_ENABLED_KEY, 'false');
+    if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
+    planifyNotifications.intervalId = null;
+    planifyNotifications.initialized = false;
+    renderizarVistaActual();
+}
+
+function renderNotificacionesPerfilHtml() {
+    const soportadas = navegadorSoportaNotificaciones();
+    const permiso = soportadas ? Notification.permission : 'unsupported';
+    const activas = notificacionesActivadas();
+    const bloqueadas = permiso === 'denied';
+    const titulo = !soportadas
+        ? 'No soportadas'
+        : activas
+            ? 'Activas'
+            : bloqueadas
+                ? 'Bloqueadas'
+                : 'Disponibles';
+    const detalle = !soportadas
+        ? 'Este navegador no permite notificaciones.'
+        : activas
+            ? 'Recibiras avisos de trabajos nuevos, vencimientos, pendientes y stock bajo segun tu rol.'
+            : bloqueadas
+                ? 'El permiso esta bloqueado desde el navegador. Revisa la configuracion del sitio para habilitarlo.'
+                : 'Activalas para recibir avisos aunque Planify este en segundo plano.';
+    const icono = activas ? 'fa-bell' : bloqueadas ? 'fa-bell-slash' : 'fa-bell';
+    const boton = activas
+        ? `<button id="btn-notificaciones-toggle" type="button" class="btn btn-outline"><i class="fa-solid fa-bell-slash"></i> Desactivar</button>`
+        : `<button id="btn-notificaciones-toggle" type="button" class="btn btn-primary" ${!soportadas || bloqueadas ? 'disabled' : ''}><i class="fa-solid fa-bell"></i> Activar notificaciones</button>`;
+
+    return `
+        <section class="panel">
+            <div class="profile-header">
+                <div class="profile-header-main">
+                    <div style="width:48px;height:48px;border-radius:12px;background:#fff7ed;color:var(--primary-color);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0;">
+                        <i class="fa-solid ${icono}"></i>
+                    </div>
+                    <div>
+                        <h2 style="margin:0;font-size:1.05rem;">Notificaciones</h2>
+                        <div class="profile-role">${titulo}</div>
+                        <p style="margin:0.35rem 0 0;color:var(--text-muted);font-size:0.92rem;">${detalle}</p>
+                    </div>
+                </div>
+                <div class="profile-actions">
+                    ${boton}
+                    ${activas ? `<button id="btn-notificaciones-test" type="button" class="btn btn-outline"><i class="fa-solid fa-paper-plane"></i> Probar</button>` : ''}
+                </div>
+            </div>
+        </section>
+    `;
+}
+
+function conectarBotonesNotificacionesPerfil() {
+    document.getElementById('btn-notificaciones-toggle')?.addEventListener('click', () => {
+        if (notificacionesActivadas()) {
+            desactivarNotificacionesPlanify();
+        } else {
+            activarNotificacionesPlanify();
+        }
+    });
+    document.getElementById('btn-notificaciones-test')?.addEventListener('click', () => {
+        enviarNotificacionPlanify({
+            title: 'Prueba de Planify',
+            body: 'Las notificaciones estan funcionando correctamente.',
+            tag: 'planify-test'
+        });
+    });
+}
+
 async function refrescarDatosInsumos({ preferRemote = true } = {}) {
     let catalogoLocal = [];
     let solicitudesLocal = [];
@@ -861,6 +1207,7 @@ function configurarRealtime() {
                     horaAsignacion: t.hora_asignacion,
                     fechaAsignacion: t.created_at || null,
                     estadoEjecucion: t.estado_ejecucion || 'activo',
+                    fechaExpiracion: t.fecha_expiracion || null,
                     equipoId: t.equipo_id || null,
                     tiposSeleccionados: t.tipos_trabajo || [],
                     componentesSeleccionados: t.componentes_trabajo || [],
@@ -930,6 +1277,7 @@ function configurarRealtime() {
         pendingHorasExtra = false;
         pendingEquipos = false;
         await Promise.all(fetches);
+        evaluarNotificacionesPlanify();
         solicitarRenderRealtimeNoIntrusivo();
     }
 
@@ -3264,6 +3612,9 @@ function renderPerfilView() {
 function _volverAlLogin() {
     estado.usuarioActual = 'visita';
     estado.trabajadorLogueado = null;
+    if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
+    planifyNotifications.intervalId = null;
+    planifyNotifications.initialized = false;
     document.getElementById('login-overlay').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     document.querySelector('.role-cards').style.display = 'block';
@@ -3958,46 +4309,62 @@ function renderEquiposView() {
         .trim();
 
     const criticidadColor = { A: '#ef4444', B: '#f59e0b', C: '#22c55e' };
-    const equipos = [...(estado.equipos || [])].sort((a, b) => {
-        const nombreA = String(a.activo || '').localeCompare(String(b.activo || ''), 'es');
-        if (nombreA !== 0) return nombreA;
-        return String(a.ubicacion || '').localeCompare(String(b.ubicacion || ''), 'es');
+    const equiposRaw = estado.equipos || [];
+
+    // Agrupar por activo + ubicación → una tarjeta por grupo
+    const gruposMap = new Map();
+    equiposRaw.forEach(eq => {
+        const key = `${String(eq.activo || '').trim().toLowerCase()}__${String(eq.ubicacion || '').trim().toLowerCase()}`;
+        if (!gruposMap.has(key)) gruposMap.set(key, []);
+        gruposMap.get(key).push(eq);
+    });
+    const grupos = [...gruposMap.values()].sort((a, b) => {
+        const na = String(a[0].activo || '').localeCompare(String(b[0].activo || ''), 'es');
+        if (na !== 0) return na;
+        return String(a[0].ubicacion || '').localeCompare(String(b[0].ubicacion || ''), 'es');
     });
 
-    const renderTarjetaEquipo = (eq) => {
-        const crit = String(eq.criticidad || '').toUpperCase();
+    const renderTarjetaEquipo = (comps) => {
+        // Elegir equipo representativo (el de mayor criticidad, o el primero)
+        const orderCrit = { A: 0, B: 1, C: 2 };
+        const rep = [...comps].sort((a, b) =>
+            (orderCrit[String(a.criticidad||'').toUpperCase()] ?? 9) -
+            (orderCrit[String(b.criticidad||'').toUpperCase()] ?? 9)
+        )[0];
+        const crit = String(rep.criticidad || '').toUpperCase();
         const critColor = criticidadColor[crit] || '#64748b';
-        const searchText = normalizar([
-            eq.activo,
-            eq.componente,
-            eq.kks,
-            eq.ubicacion,
-            eq.ubicacion_original,
-            eq.frecuencia_nueva
-        ].join(' '));
+        const componentes = comps.map(c => c.componente).filter(Boolean);
+        const componentesStr = componentes.length ? componentes.join(' · ') : 'Sin componentes';
+        const ubicacionEsc = String(rep.ubicacion || '').replace(/'/g, "\\'");
+        const onclick = comps.length > 1
+            ? `window.elegirComponenteYAbrirFicha('${rep.id}','${ubicacionEsc}')`
+            : `window.abrirFichaTecnica('${rep.id}')`;
+        const searchText = normalizar(comps.flatMap(eq => [
+            eq.activo, eq.componente, eq.kks, eq.ubicacion, eq.ubicacion_original, eq.frecuencia_nueva
+        ]).join(' '));
 
         return `
-            <article class="equipment-card" data-equipo-card data-search="${searchText}" onclick="window.abrirFichaTecnica('${eq.id}')">
+            <article class="equipment-card" data-equipo-card data-search="${searchText}" onclick="${onclick}">
                 <div class="equipment-card-head">
                     <div>
-                        <div class="equipment-card-title">${eq.activo || 'Equipo sin nombre'}</div>
-                        <div class="equipment-card-subtitle">${eq.componente || 'Sin componente definido'}</div>
+                        <div class="equipment-card-title">${rep.activo || 'Equipo sin nombre'}</div>
+                        <div class="equipment-card-subtitle">${componentesStr}${comps.length > 1 ? ` <span style="color:#FF6900;font-weight:700;">(${comps.length})</span>` : ''}</div>
                     </div>
                     ${crit ? `<span class="equipment-card-badge" style="background:${critColor}18;color:${critColor};border-color:${critColor}55;">Crit. ${crit}</span>` : ''}
                 </div>
                 <div class="equipment-card-meta">
-                    <span><i class="fa-solid fa-location-dot"></i> ${eq.ubicacion || 'Sin ubicación'}</span>
-                    <span><i class="fa-solid fa-hashtag"></i> ${eq.kks || 'KKS no informado'}</span>
-                    ${eq.frecuencia_nueva ? `<span><i class="fa-solid fa-rotate"></i> ${eq.frecuencia_nueva}</span>` : ''}
+                    <span><i class="fa-solid fa-location-dot"></i> ${rep.ubicacion || 'Sin ubicación'}</span>
+                    <span><i class="fa-solid fa-hashtag"></i> ${rep.kks || 'KKS no informado'}</span>
+                    ${rep.frecuencia_nueva ? `<span><i class="fa-solid fa-rotate"></i> ${rep.frecuencia_nueva}</span>` : ''}
                 </div>
                 <div class="equipment-card-footer">
-                    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir ficha técnica</span>
+                    <span><i class="fa-solid fa-arrow-up-right-from-square"></i> ${comps.length > 1 ? 'Elegir componente' : 'Abrir ficha técnica'}</span>
                 </div>
             </article>
         `;
     };
 
-    const ubicaciones = [...new Set(equipos.map(eq => eq.ubicacion).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const ubicaciones = [...new Set(equiposRaw.map(eq => eq.ubicacion).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
 
     mainContent.innerHTML = `
         <div class="fade-in equipment-view">
@@ -4009,7 +4376,7 @@ function renderEquiposView() {
                         <p class="crew-subtitle">Busca activos por nombre, componente, KKS o ubicación y entra directo a su ficha técnica.</p>
                     </div>
                     <div class="dashboard-hero-badges">
-                        <span class="dashboard-hero-badge"><i class="fa-solid fa-microchip"></i> ${equipos.length} equipos</span>
+                        <span class="dashboard-hero-badge"><i class="fa-solid fa-microchip"></i> ${grupos.length} equipos</span>
                         <span class="dashboard-hero-badge"><i class="fa-solid fa-location-dot"></i> ${ubicaciones.length} ubicaciones</span>
                     </div>
                 </div>
@@ -4027,10 +4394,10 @@ function renderEquiposView() {
             <section class="panel">
                 <div class="panel-header" style="justify-content:space-between; gap:1rem; flex-wrap:wrap;">
                     <h2 style="margin:0;"><i class="fa-solid fa-layer-group"></i> Inventario de equipos</h2>
-                    <div id="equipos-search-status" style="color:var(--text-muted); font-size:0.88rem;">${equipos.length} resultado(s)</div>
+                    <div id="equipos-search-status" style="color:var(--text-muted); font-size:0.88rem;">${grupos.length} resultado(s)</div>
                 </div>
                 <div id="equipos-grid" class="equipment-grid">
-                    ${equipos.length ? equipos.map(renderTarjetaEquipo).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin equipos cargados</strong><p>Cuando existan equipos en la base, aparecerán aquí para búsqueda y consulta.</p></div></div>`}
+                    ${grupos.length ? grupos.map(renderTarjetaEquipo).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin equipos cargados</strong><p>Cuando existan equipos en la base, aparecerán aquí para búsqueda y consulta.</p></div></div>`}
                 </div>
             </section>
         </div>
@@ -6252,6 +6619,8 @@ function renderPerfilView() {
                         </div>
                     </section>
 
+                    ${renderNotificacionesPerfilHtml()}
+
                     ${seleccionado ? `
                         <section class="panel">
                             <div class="profile-header">
@@ -6301,6 +6670,7 @@ function renderPerfilView() {
             document.getElementById('select-perfil-admin')?.addEventListener('change', (event) => {
                 renderAdminPerfil(event.target.value || null);
             });
+            conectarBotonesNotificacionesPerfil();
 
             if (seleccionado) {
                 document.getElementById('btn-marcar-salida-admin')?.addEventListener('click', async () => {
@@ -6349,6 +6719,8 @@ function renderPerfilView() {
                 </div>
             </section>
 
+            ${renderNotificacionesPerfilHtml()}
+
             <section class="panel">
                 <div class="crew-skills">
                     ${(trabajador.habilidades || []).length
@@ -6367,6 +6739,7 @@ function renderPerfilView() {
             </section>
         </div>
     `;
+    conectarBotonesNotificacionesPerfil();
 }
 
 window._generarInformeTarea = function(id) {
@@ -8088,10 +8461,10 @@ function renderDashboardView() {
             { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
         ]
         : [
-            { view: 'perfil', icon: 'fa-id-badge', label: 'Jornada' },
+            { view: 'dashboard', icon: 'fa-helmet-safety', label: 'Trabajos' },
             { view: 'semanal', icon: 'fa-calendar-week', label: 'Semana' },
             { view: 'mis_horas', icon: 'fa-clock', label: 'Horas' },
-            { view: 'insumos', icon: 'fa-box-open', label: 'Insumos' }
+            { view: 'perfil', icon: 'fa-id-badge', label: 'Perfil' }
         ];
     const mobileHighlights = isAdmin
         ? [
@@ -8124,6 +8497,43 @@ function renderDashboardView() {
             }
         ];
     const tareasPreviewMobile = (isAdmin ? _tareasConPos : tareasPersonales).slice(0, 3);
+    const tareaActualMobile = !isAdmin ? (tareasPersonalesActivas[0] || null) : null;
+    const siguienteTareaMobile = !isAdmin ? (tareasPersonalesCola[0] || tareasPersonalesSemana[0] || null) : null;
+    const tareaActualTitulo = tituloTareaDashboard(tareaActualMobile);
+    const tareaActualSubtitulo = subtituloTareaDashboard(tareaActualMobile);
+    const tareaActualTecnicos = tareaActualMobile
+        ? [tareaActualMobile.liderNombre, ...(tareaActualMobile.ayudantesNombres || [])].filter(Boolean).join(', ')
+        : '';
+    const workerPrimaryActionHtml = !isAdmin
+        ? (tareaActualMobile
+            ? `<button type="button" class="worker-now-primary" onclick="window.completarTareaExposed('${tareaActualMobile.id}', '${tareaActualMobile.liderId || ''}', '${(tareaActualMobile.ayudantesIds || []).join(',')}')"><i class="fa-solid fa-flag-checkered"></i> Terminar trabajo</button>`
+            : `<button type="button" class="worker-now-primary" onclick="window.dashboardMobileNavigate('${trabajadorActual?.disponible ? 'semanal' : 'perfil'}')"><i class="fa-solid ${trabajadorActual?.disponible ? 'fa-calendar-week' : 'fa-circle-check'}"></i> ${trabajadorActual?.disponible ? 'Ver trabajos' : 'Revisar jornada'}</button>`)
+        : '';
+    const workerNowPanelHtml = !isAdmin
+        ? `
+            <div class="worker-now-card ${tareaActualMobile ? 'has-task' : 'is-empty'}">
+                <div class="worker-now-head">
+                    <span class="worker-now-label">${tareaActualMobile ? 'Trabajo actual' : 'Jornada sin trabajo activo'}</span>
+                    <span class="worker-now-state">${trabajadorActual?.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                </div>
+                <strong>${escapeHtml(tareaActualMobile ? tareaActualTitulo : 'Sin OT activa por ahora')}</strong>
+                <p>${escapeHtml(tareaActualMobile ? tareaActualSubtitulo : 'Cuando te asignen una tarea, aparecera aqui con su accion principal.')}</p>
+                ${tareaActualMobile ? `
+                    <div class="worker-now-meta">
+                        <span><i class="fa-solid fa-location-dot"></i> ${escapeHtml(obtenerUbicacionTarea(tareaActualMobile))}</span>
+                        ${tareaActualTecnicos ? `<span><i class="fa-solid fa-users"></i> ${escapeHtml(tareaActualTecnicos)}</span>` : ''}
+                    </div>
+                ` : ''}
+                ${siguienteTareaMobile ? `
+                    <div class="worker-next-line">
+                        <span>Siguiente</span>
+                        <strong>${escapeHtml(tituloTareaDashboard(siguienteTareaMobile))}</strong>
+                    </div>
+                ` : ''}
+                ${workerPrimaryActionHtml}
+            </div>
+        `
+        : '';
     const tareasSemanaFuturas = !isAdmin
         ? tareasPersonalesSemana.filter((tarea) => !tareasPersonales.some((actual) => actual.id === tarea.id)).slice(0, 3)
         : [];
@@ -8176,6 +8586,8 @@ function renderDashboardView() {
                     <span><i class="fa-solid fa-location-dot"></i> ${escapeHtml(ubicacionUsuarioDashboard)}</span>
                 </div>
             </div>
+
+            ${workerNowPanelHtml}
 
             <div class="dashboard-mobile-stats">
                 ${mobilePrimaryStats.map((item) => `
@@ -8327,11 +8739,18 @@ function renderDashboardView() {
                 <!-- Header -->
                 <div style="padding:1.1rem 1.4rem; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; background:#fff;">
                     <h2 style="margin:0; font-size:1.05rem; font-weight:700; color:#1e293b;">
-                        <i class="fa-solid fa-clipboard-user" style="color:var(--primary-color);"></i> Asignación Diaria
+                        <i class="fa-solid fa-clipboard-user" style="color:var(--primary-color);"></i> Asignar técnicos
                     </h2>
                     <button onclick="window.cerrarDrawerAsignacion()"
                         style="background:#f1f5f9; border:none; cursor:pointer; color:#475569; font-size:1rem; font-weight:700; width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center;"
                         onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">✕</button>
+                </div>
+
+                <div class="assignment-stepper">
+                    <span><strong>1</strong> Trabajo</span>
+                    <span><strong>2</strong> Líder</span>
+                    <span><strong>3</strong> Técnicos</span>
+                    <span><strong>4</strong> Confirmar</span>
                 </div>
 
                 <!-- Cuerpo scrolleable -->
@@ -8387,8 +8806,9 @@ function renderDashboardView() {
 
                 <div id="ayudantes-container" style="display:none; ${_div}">
         <label style="${_lbl}"><i class="fa-solid fa-users" style="color:var(--primary-color);"></i> Técnicos asignados <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
-                    <p style="font-size:13px; color:#64748b; margin:0 0 0.5rem 0;">Personal disponible hoy con la especialidad requerida.</p>
-                    <div id="lista-ayudantes" style="background:#f8fafc; border-radius:8px; padding:0.5rem; border:1.5px solid #e2e8f0;">
+                    <p style="font-size:13px; color:#64748b; margin:0 0 0.5rem 0;">Primero veras los mejores candidatos por habilidad y disponibilidad.</p>
+                    <div id="tecnicos-recomendados" class="assignment-recommended"></div>
+                    <div id="lista-ayudantes" class="assignment-tech-list">
                         <!-- checkboxes via JS -->
                     </div>
                 </div>
@@ -8672,10 +9092,12 @@ function renderDashboardView() {
         function actualizarAyudantes(liderIdSeleccionado) {
             const container = document.getElementById('ayudantes-container');
             const lista = document.getElementById('lista-ayudantes');
+            const recomendados = document.getElementById('tecnicos-recomendados');
 
             if (!liderIdSeleccionado) {
                 container.style.display = 'none';
                 lista.innerHTML = '';
+                if (recomendados) recomendados.innerHTML = '';
                 return;
             }
 
@@ -8687,8 +9109,26 @@ function renderDashboardView() {
             });
 
             if (elegibles.length === 0) {
+                if (recomendados) recomendados.innerHTML = '';
                 lista.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem; text-align:center; margin:0;">No hay personal con esta especialidad.</p>';
             } else {
+                if (recomendados) {
+                    const ordenados = elegibles.slice().sort((a, b) => {
+                        const score = (t) => (t.disponible ? 2 : 0) + (!t.ocupado ? 1 : 0) + (t.habilidades || []).filter(h => tiposSeleccionados.includes(h)).length;
+                        return score(b) - score(a) || a.nombre.localeCompare(b.nombre, 'es');
+                    });
+                    recomendados.innerHTML = ordenados.slice(0, 3).map(t => {
+                        const estadoLabel = t.ocupado ? 'Trabajando' : (!t.disponible ? 'Sin check-in' : 'Disponible');
+                        const estadoClass = t.ocupado ? 'is-busy' : (!t.disponible ? 'is-away' : 'is-ready');
+                        return `<button type="button" class="assignment-recommended-card" data-tech-id="${t.id}">
+                            <span>
+                                <span class="assignment-recommended-name">${t.nombre}</span>
+                                <span class="assignment-recommended-meta">${t.puesto || 'Técnico'}</span>
+                            </span>
+                            <span class="assignment-status ${estadoClass}">${estadoLabel}</span>
+                        </button>`;
+                    }).join('');
+                }
                 lista.innerHTML = elegibles.map(t => {
                     const badge = t.ocupado
                         ? `<small style="color:#d97706; font-weight:600;">[→Cola]</small>`
@@ -8703,6 +9143,15 @@ function renderDashboardView() {
                 }).join('');
             }
             container.style.display = 'block';
+
+            document.querySelectorAll('.assignment-recommended-card').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const checkbox = document.querySelector(`.ayudante-checkbox[value="${btn.dataset.techId}"]`);
+                    if (!checkbox) return;
+                    checkbox.checked = !checkbox.checked;
+                    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
 
             // Agregar listeners
             document.querySelectorAll('.ayudante-checkbox').forEach(cb => {
@@ -8917,7 +9366,7 @@ function renderSemanalView() {
     // Excluir tareas con personal asignado: ya aparecen en Diario como "En Cola"
     const tareasSemanales = estado.tareas.filter(t => {
         if (t.estadoTarea !== 'programada_semana') return false;
-        if (t.liderId) return false; // tiene personal asignado → aparece en Diario
+        if (isAdmin && t.liderId) return false; // tiene personal asignado → aparece en Diario
         if (isAdmin) return true;
         return t.liderId === trabajador?.id || (t.ayudantesIds || []).includes(trabajador?.id);
     });
@@ -9840,6 +10289,7 @@ const navConfig = {
     'nav-insumos': 'insumos',
     'nav-mobile-dashboard': 'dashboard',
     'nav-mobile-semanal': 'semanal',
+    'nav-mobile-hours': 'mis_horas',
     'nav-mobile-perfil': 'perfil',
     'nav-mobile-insumos': 'insumos',
     'nav-perfil': 'perfil',
@@ -12006,9 +12456,11 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-checkin':            ['admin'],
         'nav-horas-extra-admin':  ['admin'],
         'nav-insumos':            ['admin', 'trabajador'],
-        'nav-mobile-semanal':     ['admin'],
+        'nav-mobile-semanal':     ['admin', 'trabajador'],
+        'nav-mobile-hours':       ['trabajador'],
         'nav-mobile-perfil':      ['trabajador'],
         'nav-mobile-insumos':     ['admin', 'trabajador'],
+        'nav-mobile-menu':        [],
         'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin']
     };
@@ -12018,10 +12470,30 @@ function accederApp(rol, trabajadorObj = null) {
         const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
         el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
+    const setMobileDockItem = (id, icon, label) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const iconEl = el.querySelector('i');
+        const labelEl = el.querySelector('span');
+        if (iconEl) iconEl.className = `fa-solid ${icon}`;
+        if (labelEl) labelEl.textContent = label;
+    };
+    if (rol === 'trabajador') {
+        setMobileDockItem('nav-mobile-dashboard', 'fa-house', 'Inicio');
+        setMobileDockItem('nav-mobile-semanal', 'fa-helmet-safety', 'Trabajos');
+        setMobileDockItem('nav-mobile-hours', 'fa-clock', 'Horas');
+        setMobileDockItem('nav-mobile-perfil', 'fa-id-badge', 'Perfil');
+        setMobileDockItem('nav-mobile-insumos', 'fa-box-open', 'Insumos');
+    } else {
+        setMobileDockItem('nav-mobile-dashboard', 'fa-house', 'Inicio');
+        setMobileDockItem('nav-mobile-semanal', 'fa-calendar-week', 'Semana');
+        setMobileDockItem('nav-mobile-insumos', 'fa-box-open', 'Insumos');
+    }
 
     // Badge de pendientes solo para planificador
     if (rol === 'admin') actualizarBadgeHE();
     actualizarBadgeInsumos();
+    if (notificacionesActivadas()) iniciarMonitorNotificaciones({ resetBaseline: true });
 
     const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
     vistaActual = rol === 'admin'

@@ -1,5 +1,5 @@
 // Service Worker — Planify Offline v5
-const CACHE_NAME = 'planify-offline-v13';
+const CACHE_NAME = 'planify-offline-v14';
 
 // En localhost no cacheamos nada — siempre red directa
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -133,4 +133,18 @@ async function cacheFirst(request) {
 // ── Mensajes desde la app (ej: forzar skipWaiting) ──────────────────────────
 self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clientList => {
+        for (const client of clientList) {
+          if ('focus' in client) return client.focus();
+        }
+        if (clients.openWindow) return clients.openWindow('./index.html');
+        return undefined;
+      })
+  );
 });
