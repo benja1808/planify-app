@@ -603,34 +603,93 @@ function marcarNotificacionEnviada(key) {
     guardarNotificacionesEnviadas(sent);
 }
 
-function mostrarToastNotificacion(titulo, cuerpo) {
-    const toast = document.createElement('div');
-    toast.innerHTML = `
-        <div style="font-weight:800;margin-bottom:0.15rem;">${escapeHtml(titulo)}</div>
-        <div style="font-size:0.86rem;opacity:0.92;">${escapeHtml(cuerpo)}</div>
-    `;
-    Object.assign(toast.style, {
-        position: 'fixed',
-        right: '1rem',
-        bottom: '1rem',
-        width: 'min(360px, calc(100vw - 2rem))',
-        background: '#111827',
-        color: '#ffffff',
-        padding: '0.85rem 1rem',
-        borderRadius: '10px',
-        zIndex: '10000',
-        boxShadow: '0 16px 36px rgba(15,23,42,0.28)'
-    });
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 5200);
+// Contenedor único para stackear toasts
+function _toastContainer() {
+    let c = document.getElementById('planify-toast-stack');
+    if (!c) {
+        c = document.createElement('div');
+        c.id = 'planify-toast-stack';
+        Object.assign(c.style, {
+            position: 'fixed',
+            right: '1rem',
+            bottom: '1rem',
+            zIndex: '10000',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.55rem',
+            pointerEvents: 'none',
+            maxHeight: 'calc(100vh - 2rem)',
+            overflow: 'hidden'
+        });
+        document.body.appendChild(c);
+    }
+    return c;
 }
 
-async function enviarNotificacionPlanify({ key = '', title, body, tag = 'planify-alert' }) {
+const TOAST_STYLES = {
+    info:    { bg: '#111827', fg: '#fff',    border: '#1f2937', icon: 'fa-circle-info'           },
+    success: { bg: '#065f46', fg: '#ecfdf5', border: '#047857', icon: 'fa-circle-check'          },
+    warning: { bg: '#78350f', fg: '#fffbeb', border: '#b45309', icon: 'fa-triangle-exclamation'  },
+    danger:  { bg: '#7f1d1d', fg: '#fef2f2', border: '#b91c1c', icon: 'fa-circle-exclamation'    }
+};
+
+function mostrarToastNotificacion(titulo, cuerpo, opts = {}) {
+    const { type = 'info', duration = 6000, onClick = null } = opts;
+    const theme = TOAST_STYLES[type] || TOAST_STYLES.info;
+    const c = _toastContainer();
+
+    const toast = document.createElement('div');
+    toast.setAttribute('role', 'status');
+    Object.assign(toast.style, {
+        width: 'min(380px, calc(100vw - 2rem))',
+        background: theme.bg,
+        color: theme.fg,
+        padding: '0.8rem 0.95rem 0.8rem 1rem',
+        borderRadius: '12px',
+        borderLeft: `4px solid ${theme.border}`,
+        boxShadow: '0 16px 36px rgba(15,23,42,0.28)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '0.7rem',
+        pointerEvents: 'auto',
+        cursor: onClick ? 'pointer' : 'default',
+        transform: 'translateX(110%)',
+        transition: 'transform 220ms cubic-bezier(.4,0,.2,1), opacity 220ms'
+    });
+    toast.innerHTML = `
+        <i class="fa-solid ${theme.icon}" style="font-size:1rem; margin-top:2px; opacity:0.95;"></i>
+        <div style="flex:1; min-width:0;">
+            <div style="font-weight:800; margin-bottom:0.15rem; font-size:0.93rem;">${escapeHtml(titulo)}</div>
+            <div style="font-size:0.85rem; opacity:0.92; line-height:1.35;">${escapeHtml(cuerpo)}</div>
+        </div>
+        <button class="toast-close" aria-label="Cerrar"
+            style="background:transparent; border:none; color:${theme.fg}; opacity:0.7; cursor:pointer; font-size:0.95rem; padding:0 0.1rem; line-height:1;">&times;</button>
+    `;
+    c.appendChild(toast);
+    // animar entrada
+    requestAnimationFrame(() => { toast.style.transform = 'translateX(0)'; });
+
+    const dismiss = () => {
+        toast.style.transform = 'translateX(110%)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 260);
+    };
+    toast.querySelector('.toast-close')?.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        dismiss();
+    });
+    if (onClick) {
+        toast.addEventListener('click', () => { try { onClick(); } catch {} dismiss(); });
+    }
+    if (duration > 0) setTimeout(dismiss, duration);
+}
+
+async function enviarNotificacionPlanify({ key = '', title, body, tag = 'planify-alert', type = 'info', onClick = null }) {
     if (!notificacionesActivadas()) return false;
     if (key && notificacionFueEnviada(key)) return false;
     if (key) marcarNotificacionEnviada(key);
 
-    mostrarToastNotificacion(title, body);
+    mostrarToastNotificacion(title, body, { type, onClick });
 
     const options = {
         body,
@@ -904,7 +963,9 @@ async function evaluarNotificacionesPlanify() {
                 key: `${audiencia}:tarea-nueva:${tareaId}`,
                 title: esTrabajador ? 'Nuevo trabajo asignado' : 'Nuevo trabajo en Planify',
                 body: describirTareaParaNotificacion(tarea),
-                tag: `planify-task-${tareaId}`
+                tag: `planify-task-${tareaId}`,
+                type: 'info',
+                onClick: () => { try { window.mostrarVista?.('dashboard'); } catch {} }
             });
         }
 
@@ -916,14 +977,16 @@ async function evaluarNotificacionesPlanify() {
                     key: `${audiencia}:tarea-vence:${tareaId}:${tarea.fechaExpiracion}`,
                     title: 'Trabajo por vencer',
                     body: `${describirTareaParaNotificacion(tarea)} vence ${formatearFechaHora(tarea.fechaExpiracion)}.`,
-                    tag: `planify-due-${tareaId}`
+                    tag: `planify-due-${tareaId}`,
+                    type: 'warning'
                 });
             } else if (!Number.isNaN(vence.getTime()) && restante <= 0) {
                 await enviarNotificacionPlanify({
                     key: `${audiencia}:tarea-vencida:${tareaId}:${tarea.fechaExpiracion}`,
                     title: 'Trabajo vencido',
                     body: `${describirTareaParaNotificacion(tarea)} supero su fecha limite.`,
-                    tag: `planify-expired-${tareaId}`
+                    tag: `planify-expired-${tareaId}`,
+                    type: 'danger'
                 });
             }
         }
@@ -935,7 +998,9 @@ async function evaluarNotificacionesPlanify() {
             key: `${audiencia}:he-pendientes:${conteos.hePendientes}`,
             title: 'Horas extra pendientes',
             body: `Hay ${conteos.hePendientes} solicitud(es) esperando revision.`,
-            tag: 'planify-he-pendientes'
+            tag: 'planify-he-pendientes',
+            type: 'warning',
+            onClick: () => { try { window.mostrarVista?.('horas-extra'); } catch {} }
         });
     }
     if (conteos.solicitudesPendientes > planifyNotifications.solicitudesPendientes) {
@@ -943,7 +1008,9 @@ async function evaluarNotificacionesPlanify() {
             key: `${audiencia}:insumos-pendientes:${conteos.solicitudesPendientes}`,
             title: 'Solicitudes de insumos pendientes',
             body: `Hay ${conteos.solicitudesPendientes} solicitud(es) de insumos por resolver.`,
-            tag: 'planify-insumos-pendientes'
+            tag: 'planify-insumos-pendientes',
+            type: 'warning',
+            onClick: () => { try { window.mostrarVista?.('insumos'); } catch {} }
         });
     }
     if (conteos.stockBajo > planifyNotifications.stockBajo) {
@@ -954,7 +1021,9 @@ async function evaluarNotificacionesPlanify() {
             body: primero
                 ? `${primero.nombre}: quedan ${enteroSeguro(primero.stock_actual, 0)} ${normalizarUnidadInsumo(primero.unidad).toLowerCase()}.`
                 : `Hay ${conteos.stockBajo} insumo(s) bajo minimo.`,
-            tag: 'planify-stock-bajo'
+            tag: 'planify-stock-bajo',
+            type: 'danger',
+            onClick: () => { try { window.mostrarVista?.('insumos'); } catch {} }
         });
     }
 
@@ -967,7 +1036,8 @@ async function evaluarNotificacionesPlanify() {
                 key: `${audiencia}:he-estado:${id}:${estadoActual}`,
                 title: estadoActual === 'aprobado' ? 'Horas extra aprobadas' : 'Horas extra rechazadas',
                 body: `${formatearFechaCorta(registro.fecha)} - ${registro.horas || 0} hora(s).`,
-                tag: `planify-he-${id}`
+                tag: `planify-he-${id}`,
+                type: estadoActual === 'aprobado' ? 'success' : 'danger'
             });
         }
     }
@@ -981,7 +1051,8 @@ async function evaluarNotificacionesPlanify() {
                 key: `${audiencia}:insumo-estado:${id}:${estadoActual}`,
                 title: estadoActual === 'aprobada' ? 'Solicitud de insumo aprobada' : 'Solicitud de insumo rechazada',
                 body: `${solicitud.insumo_nombre || 'Insumo'} - ${formatearCantidadInsumo(solicitud.cantidad || 0, solicitud.unidad || 'UNI')}.`,
-                tag: `planify-insumo-${id}`
+                tag: `planify-insumo-${id}`,
+                type: estadoActual === 'aprobada' ? 'success' : 'danger'
             });
         }
     }
@@ -1025,7 +1096,8 @@ async function activarNotificacionesPlanify() {
         body: pushRemoto
             ? 'Planify tambien podra avisarte cuando no estes dentro de la app.'
             : 'Planify te avisara mientras la app este abierta o en segundo plano.',
-        tag: 'planify-notificaciones-activadas'
+        tag: 'planify-notificaciones-activadas',
+        type: 'success'
     });
     renderizarVistaActual();
 }
@@ -2399,8 +2471,17 @@ function hayUIBloqueandoRealtime() {
     const activeElement = document.activeElement;
     const tag = (activeElement?.tagName || '').toLowerCase();
     if (document.hidden) return true;
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || activeElement?.isContentEditable) {
-        return true;
+    // Solo bloquear si el usuario realmente está escribiendo o en un textarea.
+    // Un <select> o un input de búsqueda ya poblado no debería bloquear el refresh.
+    if (tag === 'textarea' || activeElement?.isContentEditable) return true;
+    if (tag === 'input') {
+        const type = (activeElement?.type || '').toLowerCase();
+        // Solo bloquear inputs de texto/número donde el usuario probablemente esté tecleando
+        if (['text','number','password','email','tel','url','search','date','time','datetime-local'].includes(type)) {
+            // Si el input tiene valor ya escrito, dar margen al usuario
+            const val = String(activeElement.value || '');
+            if (val.length > 0) return true;
+        }
     }
 
     const overlays = [
@@ -2409,6 +2490,51 @@ function hayUIBloqueandoRealtime() {
     ].filter(Boolean);
 
     return overlays.some(esElementoVisibleUI);
+}
+
+// Pill "Hay cambios nuevos" — visible cuando un render se difiere
+function _mostrarPillCambios() {
+    let pill = document.getElementById('planify-pending-pill');
+    if (pill) return;
+    pill = document.createElement('button');
+    pill.id = 'planify-pending-pill';
+    pill.type = 'button';
+    pill.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Hay cambios nuevos · toca para aplicar';
+    Object.assign(pill.style, {
+        position: 'fixed',
+        top: '1rem',
+        left: '50%',
+        transform: 'translateX(-50%) translateY(-80px)',
+        zIndex: '9998',
+        background: '#FF6900',
+        color: '#ffffff',
+        border: 'none',
+        borderRadius: '999px',
+        padding: '0.55rem 1.1rem',
+        fontSize: '0.85rem',
+        fontWeight: '700',
+        cursor: 'pointer',
+        boxShadow: '0 8px 24px rgba(255,105,0,0.35)',
+        transition: 'transform 280ms cubic-bezier(.4,0,.2,1)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.5rem'
+    });
+    pill.addEventListener('click', () => {
+        _ocultarPillCambios();
+        pendingRealtimeRender = false;
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = null;
+        renderizarVistaActualPreservandoViewport();
+    });
+    document.body.appendChild(pill);
+    requestAnimationFrame(() => { pill.style.transform = 'translateX(-50%) translateY(0)'; });
+}
+function _ocultarPillCambios() {
+    const pill = document.getElementById('planify-pending-pill');
+    if (!pill) return;
+    pill.style.transform = 'translateX(-50%) translateY(-80px)';
+    setTimeout(() => pill.remove(), 280);
 }
 
 function renderizarVistaActualPreservandoViewport() {
@@ -2428,12 +2554,14 @@ function intentarAplicarRealtimePendiente() {
     if (hayUIBloqueandoRealtime()) {
         clearTimeout(realtimeResumeTimer);
         realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
+        _mostrarPillCambios();
         return;
     }
 
     pendingRealtimeRender = false;
     clearTimeout(realtimeResumeTimer);
     realtimeResumeTimer = null;
+    _ocultarPillCambios();
     renderizarVistaActualPreservandoViewport();
 }
 
@@ -2448,12 +2576,14 @@ function solicitarRenderRealtimeNoIntrusivo() {
         pendingRealtimeRender = true;
         clearTimeout(realtimeResumeTimer);
         realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
+        _mostrarPillCambios();
         return;
     }
 
     pendingRealtimeRender = false;
     clearTimeout(realtimeResumeTimer);
     realtimeResumeTimer = null;
+    _ocultarPillCambios();
     renderizarVistaActualPreservandoViewport();
 }
 
