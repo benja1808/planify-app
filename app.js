@@ -685,11 +685,15 @@ function mostrarToastNotificacion(titulo, cuerpo, opts = {}) {
 }
 
 async function enviarNotificacionPlanify({ key = '', title, body, tag = 'planify-alert', type = 'info', onClick = null }) {
-    if (!notificacionesActivadas()) return false;
+    // Dedup por key
     if (key && notificacionFueEnviada(key)) return false;
     if (key) marcarNotificacionEnviada(key);
 
+    // ① Toast in-app SIEMPRE se muestra (no requiere permiso del SO)
     mostrarToastNotificacion(title, body, { type, onClick });
+
+    // ② Notificación nativa del SO solo si el usuario otorgó permiso + activó el flag
+    if (!notificacionesActivadas()) return true; // toast suficiente
 
     const options = {
         body,
@@ -12873,8 +12877,10 @@ function accederApp(rol, trabajadorObj = null) {
     // Badge de pendientes solo para planificador
     if (rol === 'admin') actualizarBadgeHE();
     actualizarBadgeInsumos();
+    // Monitor SIEMPRE arranca → así los toasts in-app funcionan sin permisos del SO
+    iniciarMonitorNotificaciones({ resetBaseline: true });
+    // Push remoto (servidor → SO) solo si el usuario ya activó permisos
     if (notificacionesActivadas()) {
-        iniciarMonitorNotificaciones({ resetBaseline: true });
         registrarPushRemotoPlanify();
     }
 
