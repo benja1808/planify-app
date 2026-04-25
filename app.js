@@ -538,7 +538,11 @@ const PLANIFY_NOTIFICATION_LEAD_MS = 2 * 60 * 60 * 1000;
 const planifyNotifications = {
     initialized: false,
     intervalId: null,
+    syncInFlight: false,
+    lastSyncAt: 0,
     taskIds: new Set(),
+    heEstados: new Map(),
+    solicitudesEstados: new Map(),
     hePendientes: 0,
     solicitudesPendientes: 0,
     stockBajo: 0
@@ -688,13 +692,129 @@ function obtenerConteosNotificables() {
     return { hePendientes, solicitudesPendientes, stockBajo };
 }
 
+function horasExtraNotificables() {
+    const registros = estado.horasExtra || [];
+    if (estado.usuarioActual === 'admin') return registros;
+    const trabajadorId = obtenerTrabajadorActual()?.id;
+    if (!trabajadorId) return [];
+    return registros.filter((item) => String(item.trabajador_id || '') === String(trabajadorId));
+}
+
+function solicitudesInsumosNotificables() {
+    const solicitudes = estado.solicitudesInsumos || [];
+    if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos()) return solicitudes;
+    const trabajadorId = usuarioSolicitanteActualId();
+    if (!trabajadorId) return [];
+    return solicitudes.filter((item) => String(item.trabajador_id || '') === String(trabajadorId));
+}
+
+function crearMapaEstados(items = []) {
+    return new Map(items.map((item) => [String(item.id), String(item.estado || 'pendiente')]));
+}
+
 function prepararLineaBaseNotificaciones() {
     planifyNotifications.taskIds = new Set(tareasRelevantesParaNotificar().map((tarea) => String(tarea.id)));
+    planifyNotifications.heEstados = crearMapaEstados(horasExtraNotificables());
+    planifyNotifications.solicitudesEstados = crearMapaEstados(solicitudesInsumosNotificables());
     const conteos = obtenerConteosNotificables();
     planifyNotifications.hePendientes = conteos.hePendientes;
     planifyNotifications.solicitudesPendientes = conteos.solicitudesPendientes;
     planifyNotifications.stockBajo = conteos.stockBajo;
     planifyNotifications.initialized = true;
+}
+
+function normalizarTareaPlanify(t) {
+    return {
+        id: t.id, tipo: t.tipo,
+        liderId: t.lider_id || t.liderId, liderNombre: t.lider_nombre || t.liderNombre,
+        ayudantesIds: t.ayudantes_ids || t.ayudantesIds || [],
+        ayudantesNombres: t.ayudantes_nombres || t.ayudantesNombres || [],
+        estadoTarea: t.estado_tarea || t.estadoTarea, otNumero: t.ot_numero || t.otNumero,
+        horaAsignacion: t.hora_asignacion || t.horaAsignacion,
+        fechaAsignacion: t.created_at || t.fechaAsignacion || null,
+        estadoEjecucion: t.estado_ejecucion || t.estadoEjecucion || 'activo',
+        fechaExpiracion: t.fecha_expiracion || t.fechaExpiracion || null,
+        equipoId: t.equipo_id || t.equipoId || null,
+        tiposSeleccionados: t.tipos_trabajo || t.tiposSeleccionados || [],
+        componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || [],
+        ubicacion: t.ubicacion || null,
+        espacioConfinado: !!(t.espacio_confinado ?? t.espacioConfinado),
+        vigiaId: t.vigia_id || t.vigiaId || null,
+        vigiaNombre: t.vigia_nombre || t.vigiaNombre || null,
+        orden: t.orden || 0
+    };
+}
+
+function crearFirmaDatosNotificables() {
+    const tareas = (estado.tareas || [])
+        .map((tarea) => `${tarea.id}:${tarea.estadoTarea}:${tarea.estadoEjecucion}:${tarea.fechaExpiracion || ''}:${tarea.liderId || ''}:${(tarea.ayudantesIds || []).join(',')}`)
+        .sort()
+        .join('|');
+    const he = (estado.horasExtra || [])
+        .map((item) => `${item.id}:${item.estado || 'pendiente'}`)
+        .sort()
+        .join('|');
+    const solicitudes = (estado.solicitudesInsumos || [])
+        .map((item) => `${item.id}:${item.estado || 'pendiente'}`)
+        .sort()
+        .join('|');
+    const stock = obtenerInsumosStockBajo().map((item) => `${item.id}:${item.stock_actual}`).sort().join('|');
+    return `${tareas}::${he}::${solicitudes}::${stock}`;
+}
+
+async function sincronizarDatosParaNotificaciones({ force = false, renderOnChange = true } = {}) {
+    if (!notificacionesActivadas() || estado.usuarioActual === 'visita') return false;
+    if (!navigator.onLine || !supabaseClient) {
+        await evaluarNotificacionesPlanify();
+        return false;
+    }
+    const ahora = Date.now();
+    if (!force && ahora - planifyNotifications.lastSyncAt < 25000) return false;
+    if (planifyNotifications.syncInFlight) return false;
+
+    planifyNotifications.syncInFlight = true;
+    planifyNotifications.lastSyncAt = ahora;
+    const firmaAnterior = crearFirmaDatosNotificables();
+
+    try {
+        const fetches = [
+            supabaseClient.from('tareas').select('*').then(({ data, error }) => {
+                if (error || !Array.isArray(data)) return;
+                estado.tareas = data.map(normalizarTareaPlanify);
+                if (window.localDB) window.localDB.tareas.bulk(estado.tareas).catch(() => {});
+            })
+        ];
+
+        fetches.push(
+            supabaseClient.from('horas_extra').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+                if (!Array.isArray(data)) return;
+                estado.horasExtra = data.map((item) => ({ ...item, estado: item.estado || 'pendiente', synced: true }));
+                if (window.localDB) window.localDB.horas_extra.bulk(estado.horasExtra).catch(() => {});
+            }).catch(() => {})
+        );
+
+        if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos() || estado.usuarioActual === 'trabajador') {
+            fetches.push(refrescarDatosInsumos({ preferRemote: true }).catch(() => null));
+        }
+
+        await Promise.all(fetches);
+        await evaluarNotificacionesPlanify();
+
+        const huboCambios = crearFirmaDatosNotificables() !== firmaAnterior;
+        if (huboCambios) {
+            if (estado.usuarioActual === 'admin') actualizarBadgeHE();
+            actualizarBadgeInsumos();
+            if (renderOnChange && document.visibilityState === 'visible') {
+                solicitarRenderRealtimeNoIntrusivo();
+            }
+        }
+        return huboCambios;
+    } catch (error) {
+        console.warn('[notificaciones] No se pudo refrescar datos:', error);
+        return false;
+    } finally {
+        planifyNotifications.syncInFlight = false;
+    }
 }
 
 async function evaluarNotificacionesPlanify() {
@@ -767,7 +887,37 @@ async function evaluarNotificacionesPlanify() {
         });
     }
 
+    for (const registro of horasExtraNotificables()) {
+        const id = String(registro.id);
+        const estadoAnterior = planifyNotifications.heEstados.get(id);
+        const estadoActual = String(registro.estado || 'pendiente');
+        if (estado.usuarioActual === 'trabajador' && estadoAnterior === 'pendiente' && estadoActual !== 'pendiente') {
+            await enviarNotificacionPlanify({
+                key: `${audiencia}:he-estado:${id}:${estadoActual}`,
+                title: estadoActual === 'aprobado' ? 'Horas extra aprobadas' : 'Horas extra rechazadas',
+                body: `${formatearFechaCorta(registro.fecha)} - ${registro.horas || 0} hora(s).`,
+                tag: `planify-he-${id}`
+            });
+        }
+    }
+
+    for (const solicitud of solicitudesInsumosNotificables()) {
+        const id = String(solicitud.id);
+        const estadoAnterior = planifyNotifications.solicitudesEstados.get(id);
+        const estadoActual = String(solicitud.estado || 'pendiente');
+        if (estado.usuarioActual === 'trabajador' && estadoAnterior === 'pendiente' && estadoActual !== 'pendiente') {
+            await enviarNotificacionPlanify({
+                key: `${audiencia}:insumo-estado:${id}:${estadoActual}`,
+                title: estadoActual === 'aprobada' ? 'Solicitud de insumo aprobada' : 'Solicitud de insumo rechazada',
+                body: `${solicitud.insumo_nombre || 'Insumo'} - ${formatearCantidadInsumo(solicitud.cantidad || 0, solicitud.unidad || 'UNI')}.`,
+                tag: `planify-insumo-${id}`
+            });
+        }
+    }
+
     planifyNotifications.taskIds = idsActuales;
+    planifyNotifications.heEstados = crearMapaEstados(horasExtraNotificables());
+    planifyNotifications.solicitudesEstados = crearMapaEstados(solicitudesInsumosNotificables());
     planifyNotifications.hePendientes = conteos.hePendientes;
     planifyNotifications.solicitudesPendientes = conteos.solicitudesPendientes;
     planifyNotifications.stockBajo = conteos.stockBajo;
@@ -777,8 +927,9 @@ function iniciarMonitorNotificaciones({ resetBaseline = false } = {}) {
     if (resetBaseline || !planifyNotifications.initialized) prepararLineaBaseNotificaciones();
     if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
     planifyNotifications.intervalId = setInterval(() => {
-        evaluarNotificacionesPlanify();
+        sincronizarDatosParaNotificaciones();
     }, 60000);
+    setTimeout(() => sincronizarDatosParaNotificaciones({ force: true, renderOnChange: false }), 1200);
 }
 
 async function activarNotificacionesPlanify() {
@@ -874,6 +1025,23 @@ function conectarBotonesNotificacionesPerfil() {
             tag: 'planify-test'
         });
     });
+}
+
+function registrarResyncNotificaciones() {
+    if (registrarResyncNotificaciones.instalado) return;
+    registrarResyncNotificaciones.instalado = true;
+
+    const resync = (force = false) => {
+        if (!notificacionesActivadas() || estado.usuarioActual === 'visita') return;
+        sincronizarDatosParaNotificaciones({ force });
+    };
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') resync(true);
+    });
+    window.addEventListener('focus', () => resync(true));
+    window.addEventListener('pageshow', () => resync(true));
+    window.addEventListener('online', () => resync(true));
 }
 
 async function refrescarDatosInsumos({ preferRemote = true } = {}) {
@@ -12506,6 +12674,7 @@ function accederApp(rol, trabajadorObj = null) {
 window.addEventListener('DOMContentLoaded', () => {
     inicializarDatos();
     actualizarEstadoSyncStripUI();
+    registrarResyncNotificaciones();
 });
 
 // Registrar Service Worker para PWA
