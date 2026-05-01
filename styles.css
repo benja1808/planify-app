@@ -2206,6 +2206,44 @@ h3 {
     line-height: 1.35;
 }
 
+.weekly-task-subtitle {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.4;
+    margin-top: 0.15rem;
+}
+
+.weekly-import-subtitle {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.4;
+    margin-top: 0.15rem;
+}
+
+.weekly-fecha-edit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1px solid rgba(203, 213, 225, 0.7);
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.7rem;
+    transition: all 150ms;
+}
+
+.weekly-fecha-edit:hover {
+    background: #fff7f0;
+    color: #FF6900;
+    border-color: #fdc898;
+}
+
 .weekly-task-flags,
 .weekly-task-meta,
 .weekly-task-types,

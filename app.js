@@ -228,6 +228,35 @@ function normalizarClaveExcel(valor) {
         .toUpperCase();
 }
 
+// Formatea YYYY-MM-DD → "DD-MM-YYYY" sin desplazamiento por timezone.
+function formatearFechaCortaDia(yyyymmdd) {
+    if (!yyyymmdd) return '';
+    const m = String(yyyymmdd).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return String(yyyymmdd);
+    return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+// Convierte una celda Excel a YYYY-MM-DD.
+// Soporta serial Excel, Date, "DD-MM-YYYY", "DD/MM/YYYY", "YYYY-MM-DD".
+function parseFechaExcel(valor) {
+    if (valor === null || valor === undefined || valor === '') return null;
+    if (typeof valor === 'number' && isFinite(valor)) {
+        const d = new Date((valor - 25569) * 86400000);
+        if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+    }
+    if (valor instanceof Date && !isNaN(valor.getTime())) {
+        return valor.toISOString().slice(0, 10);
+    }
+    const s = String(valor).trim();
+    let m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (m) {
+        const [, d, mo, y] = m;
+        return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    return null;
+}
+
 function obtenerValorFilaExcel(row, aliases = []) {
     if (!row || typeof row !== 'object') return '';
     const entries = Object.entries(row);
@@ -872,6 +901,8 @@ function normalizarTareaPlanify(t) {
         tiposSeleccionados: t.tipos_trabajo || t.tiposSeleccionados || [],
         componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || [],
         ubicacion: t.ubicacion || null,
+        subtitulo: t.subtitulo || null,
+        fechaInicioPermiso: t.fecha_inicio_permiso || t.fechaInicioPermiso || null,
         espacioConfinado: !!(t.espacio_confinado ?? t.espacioConfinado),
         vigiaId: t.vigia_id || t.vigiaId || null,
         vigiaNombre: t.vigia_nombre || t.vigiaNombre || null,
@@ -1342,6 +1373,8 @@ async function inicializarDatos() {
             tiposSeleccionados: t.tipos_trabajo || [],
             componentesSeleccionados: t.componentes_trabajo || [],
             ubicacion: t.ubicacion || null,
+            subtitulo: t.subtitulo || null,
+            fechaInicioPermiso: t.fecha_inicio_permiso || null,
             espacioConfinado: !!t.espacio_confinado,
             vigiaId: t.vigia_id || null,
             vigiaNombre: t.vigia_nombre || null,
@@ -1449,9 +1482,12 @@ async function inicializarDatos() {
                     tiposSeleccionados: t.tipos_trabajo || t.tiposSeleccionados || [],
                     componentesSeleccionados: t.componentes_trabajo || t.componentesSeleccionados || [],
                     ubicacion: t.ubicacion || null,
+                    subtitulo: t.subtitulo || null,
+                    fechaInicioPermiso: t.fecha_inicio_permiso || t.fechaInicioPermiso || null,
                     espacioConfinado: !!(t.espacio_confinado ?? t.espacioConfinado),
                     vigiaId: t.vigia_id || t.vigiaId || null,
-                    vigiaNombre: t.vigia_nombre || t.vigiaNombre || null
+                    vigiaNombre: t.vigia_nombre || t.vigiaNombre || null,
+                    orden: t.orden || 0
                 }));
                 estado.equipos            = equipos    || [];
                 estado.historialTareas    = historial  || [];
@@ -1533,9 +1569,12 @@ function configurarRealtime() {
                     tiposSeleccionados: t.tipos_trabajo || [],
                     componentesSeleccionados: t.componentes_trabajo || [],
                     ubicacion: t.ubicacion || null,
+                    subtitulo: t.subtitulo || null,
+                    fechaInicioPermiso: t.fecha_inicio_permiso || null,
                     espacioConfinado: !!t.espacio_confinado,
                     vigiaId: t.vigia_id || null,
-                    vigiaNombre: t.vigia_nombre || null
+                    vigiaNombre: t.vigia_nombre || null,
+                    orden: t.orden || 0
                 }));
             })
         );
@@ -1664,7 +1703,7 @@ async function updateTrabajadorDisponibilidad(id, disponible) {
     await _db.update('trabajadores', id, payload);
 }
 
-async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null, espacioConfinado = false, vigiaId = null) {
+async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null, espacioConfinado = false, vigiaId = null, subtitulo = null, fechaInicioPermiso = null) {
     const lider = estado.trabajadores.find(t => t.id === liderId);
     const ayudantesNombres = ayudantesIds.map(id => {
         const t = estado.trabajadores.find(x => x.id === id);
@@ -1718,6 +1757,8 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
     if (tiposSeleccionados.length) nuevaTarea.tipos_trabajo = tiposSeleccionados;
     if (componentesSeleccionados.length) nuevaTarea.componentes_trabajo = componentesSeleccionados;
     if (ubicacion) nuevaTarea.ubicacion = ubicacion;
+    if (subtitulo) nuevaTarea.subtitulo = subtitulo;
+    if (fechaInicioPermiso) nuevaTarea.fecha_inicio_permiso = fechaInicioPermiso;
     const vigia = vigiaId ? estado.trabajadores.find(t => t.id === vigiaId) : null;
     if (espacioConfinado) {
         nuevaTarea.espacio_confinado = true;
@@ -1740,6 +1781,8 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         tiposSeleccionados,
         componentesSeleccionados,
         ubicacion: ubicacion || null,
+        subtitulo: subtitulo || null,
+        fechaInicioPermiso: fechaInicioPermiso || null,
         espacioConfinado: !!espacioConfinado,
         vigiaId: espacioConfinado ? (vigiaId || null) : null,
         vigiaNombre: espacioConfinado ? (vigia?.nombre || null) : null,
@@ -2014,6 +2057,70 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
 window.completarTareaExposed = completarTarea;
 window.eliminarTareaExposed = eliminarTarea;
 window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
+
+// Editar fecha de inicio del permiso o de término (vencimiento) de una tarea
+window.editarFechaTarea = function(tareaId, campo) {
+    const tarea = (estado?.tareas || []).find(t => t.id === tareaId);
+    if (!tarea) return;
+    const modal = document.getElementById('modal-editar-fecha');
+    if (!modal) return;
+    const titulo = document.getElementById('modal-editar-fecha-titulo');
+    const label = document.getElementById('modal-editar-fecha-label');
+    const input = document.getElementById('modal-editar-fecha-input');
+    const btnGuardar = document.getElementById('btn-modal-editar-fecha-guardar');
+    const esInicio = campo === 'inicio';
+    titulo.textContent = esInicio ? 'Editar fecha de inicio del permiso' : 'Editar fecha de término del permiso';
+    label.textContent = esInicio ? 'Desde cuándo se puede ejecutar' : 'Hasta cuándo está vigente';
+    const valorActual = esInicio ? (tarea.fechaInicioPermiso || '') : (tarea.fechaExpiracion || '');
+    input.value = valorActual ? String(valorActual).slice(0, 10) : '';
+    btnGuardar.onclick = async () => {
+        const nuevoValor = input.value || null;
+        // Optimistic update local
+        estado.tareas = estado.tareas.map(t => t.id === tareaId
+            ? { ...t, [esInicio ? 'fechaInicioPermiso' : 'fechaExpiracion']: nuevoValor }
+            : t
+        );
+        modal.style.display = 'none';
+        renderizarVistaActual();
+        try {
+            const payload = esInicio
+                ? { fecha_inicio_permiso: nuevoValor }
+                : { fecha_expiracion: nuevoValor };
+            await _db.update('tareas', tareaId, payload);
+        } catch (e) {
+            console.error('No se pudo actualizar la fecha:', e);
+            alert('No se pudo guardar la fecha. Intenta de nuevo.');
+        }
+    };
+    modal.style.display = 'flex';
+};
+
+// Abrir modal con la OT en grande (lectura cómoda)
+window.abrirModalOT = function(otNumero, tareaId) {
+    const modal = document.getElementById('modal-leer-ot');
+    if (!modal) return;
+    const elNumero = document.getElementById('modal-leer-ot-numero');
+    const elTitulo = document.getElementById('modal-leer-ot-titulo');
+    const elSubt   = document.getElementById('modal-leer-ot-subtitulo');
+    const btnCopy  = document.getElementById('btn-modal-leer-ot-copiar');
+    const ot = String(otNumero || '').trim();
+    elNumero.textContent = ot || '—';
+    let tarea = null;
+    if (tareaId) tarea = (estado?.tareas || []).find(t => t.id === tareaId);
+    elTitulo.textContent = tarea ? String(tarea.tipo || '').replace(/^\s*\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '').trim() : '';
+    elSubt.textContent   = tarea?.subtitulo || '';
+    btnCopy.onclick = async () => {
+        try {
+            await navigator.clipboard.writeText(ot);
+            const original = btnCopy.innerHTML;
+            btnCopy.innerHTML = '<i class="fa-solid fa-check"></i> Copiado';
+            setTimeout(() => { btnCopy.innerHTML = original; }, 1500);
+        } catch (e) {
+            alert('No se pudo copiar al portapapeles');
+        }
+    };
+    modal.style.display = 'flex';
+};
 
 // Iniciar tarea que estaba en cola (programada_semana → en_curso)
 window.iniciarTareaColaExposed = async function(tareaId) {
@@ -2495,6 +2602,8 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
                 tiposSeleccionados: t.tipos_trabajo || [],
                 componentesSeleccionados: t.componentes_trabajo || [],
                 ubicacion: t.ubicacion || null,
+                subtitulo: t.subtitulo || null,
+                fechaInicioPermiso: t.fecha_inicio_permiso || null,
                 espacioConfinado: !!t.espacio_confinado,
                 vigiaId: t.vigia_id || null,
                 vigiaNombre: t.vigia_nombre || null,
@@ -4156,6 +4265,10 @@ function renderPerfilView() {
 function _volverAlLogin() {
     estado.usuarioActual = 'visita';
     estado.trabajadorLogueado = null;
+    try {
+        localStorage.removeItem('planify_session');
+        localStorage.removeItem('planify_vista');
+    } catch (e) { /* noop */ }
     if (planifyNotifications.intervalId) clearInterval(planifyNotifications.intervalId);
     planifyNotifications.intervalId = null;
     planifyNotifications.initialized = false;
@@ -4169,6 +4282,44 @@ function _volverAlLogin() {
     if (rutEl) rutEl.value = '';
     if (pinEl) pinEl.value = '';
 }
+
+// Restaurar sesión persistida (admin / trabajador / visita)
+async function restaurarSesionPersistida() {
+    let raw;
+    try { raw = localStorage.getItem('planify_session'); }
+    catch (e) { return false; }
+    if (!raw) return false;
+    let data;
+    try { data = JSON.parse(raw); } catch (e) { return false; }
+    if (!data || !data.rol) return false;
+
+    if (data.rol === 'admin' || data.rol === 'visita') {
+        accederApp(data.rol);
+        return true;
+    }
+    if (data.rol === 'trabajador' && data.trabajadorId) {
+        // Esperar a que carguen los trabajadores antes de loguear
+        let trabajador = (estado.trabajadores || []).find(t => t.id === data.trabajadorId);
+        if (!trabajador && navigator.onLine && supabaseClient) {
+            try {
+                const { data: lista } = await supabaseClient.from('trabajadores').select('*');
+                trabajador = (lista || []).find(t => t.id === data.trabajadorId) || null;
+                if (trabajador && !estado.trabajadores.find(t => t.id === trabajador.id)) {
+                    estado.trabajadores = [...estado.trabajadores, trabajador];
+                }
+            } catch (e) { /* sin conexión */ }
+        }
+        if (trabajador) {
+            accederApp('trabajador', trabajador);
+            return true;
+        }
+    }
+    return false;
+}
+
+window.cerrarSesionPlanify = function() {
+    _volverAlLogin();
+};
 
 window.marcarSalidaTrabajador = async function(id) {
     await updateTrabajadorDisponibilidad(id, false);
@@ -9929,7 +10080,16 @@ function renderSemanalView() {
         minimumFractionDigits: 0,
         maximumFractionDigits: maxDecimals
     }).format(Number(valor || 0));
-    const getUbicSemanal = (tarea) => tarea.ubicacion || (String(tarea.tipo || '').match(/^\[([^\]]+)\]/) || [])[1] || 'Sin unidad';
+    const getUbicSemanal = (tarea) => {
+        if (tarea.ubicacion) return tarea.ubicacion;
+        const tipo = String(tarea.tipo || '');
+        const bracket = tipo.match(/^\[([^\]]+)\]/);
+        if (bracket) return bracket[1];
+        const subt = String(tarea.subtitulo || '');
+        const m = `${tipo} ${subt}`.match(/\bU\s?([1-9]\d?)\b/i);
+        if (m) return `U${m[1]}`;
+        return 'Sin unidad';
+    };
     const getNombreSemanal = (tarea) => String(tarea.tipo || 'Trabajo programado')
         .replace(/^\s*\[[^\]]+\]\s*/, '')
         .replace(/\s*\([^)]+\)\s*$/, '')
@@ -10007,15 +10167,24 @@ function renderSemanalView() {
             <div class="weekly-task-top">
                 <div class="weekly-task-main">
                     <div class="weekly-task-title">${nombreLimpio}</div>
+                    ${tarea.subtitulo ? `<div class="weekly-task-subtitle">${escapeHtml(tarea.subtitulo)}</div>` : ''}
                     <div class="weekly-task-flags">
-                        ${otNumero ? `<span class="weekly-group-badge"><i class="fa-solid fa-hashtag"></i> ${otNumero}</span>` : ''}
                         ${vencida ? `<span class="weekly-group-badge" style="background:#fef2f2;color:#b91c1c;border-color:rgba(239,68,68,0.22);"><i class="fa-solid fa-triangle-exclamation"></i> Vencido</span>` : ''}
                         ${!vencida && porVencer ? `<span class="weekly-group-badge" style="background:#fffbeb;color:#b45309;border-color:rgba(245,158,11,0.22);"><i class="fa-solid fa-hourglass-half"></i> Por vencer</span>` : ''}
                     </div>
                     <div class="weekly-task-meta">
                         <span><i class="fa-solid fa-location-dot"></i> ${getUbicSemanal(tarea)}</span>
                         <span><i class="fa-solid fa-user-tie"></i> ${supervisor}</span>
-                        ${fechaExp ? `<span><i class="fa-regular fa-calendar"></i> ${fechaExp.toLocaleDateString('es-CL')}</span>` : `<span><i class="fa-regular fa-calendar"></i> Sin vencimiento</span>`}
+                        <span style="color:#047857; display:inline-flex; align-items:center; gap:0.3rem;">
+                            <i class="fa-regular fa-calendar-plus"></i>
+                            Desde ${tarea.fechaInicioPermiso ? formatearFechaCortaDia(tarea.fechaInicioPermiso) : '—'}
+                            <button type="button" class="weekly-fecha-edit" onclick="window.editarFechaTarea('${tarea.id}','inicio')" title="Editar fecha de inicio"><i class="fa-solid fa-pen"></i></button>
+                        </span>
+                        <span style="display:inline-flex; align-items:center; gap:0.3rem;">
+                            <i class="fa-regular fa-calendar-xmark"></i>
+                            Hasta ${fechaExp ? fechaExp.toLocaleDateString('es-CL') : '—'}
+                            <button type="button" class="weekly-fecha-edit" onclick="window.editarFechaTarea('${tarea.id}','fin')" title="Editar fecha de término"><i class="fa-solid fa-pen"></i></button>
+                        </span>
                     </div>
                     ${tipos.length ? `<div class="weekly-task-types">${tipos.map(tipo => renderTipoSemanal(tipo, tarea.id)).join('')}</div>` : ''}
                     <div class="weekly-task-summary">
@@ -10024,7 +10193,9 @@ function renderSemanalView() {
                     </div>
                     <div class="weekly-task-actions">
                         ${equipoBtn}
-                        ${otNumero ? `<span class="weekly-task-chip"><i class="fa-solid fa-clipboard-list"></i> OT registrada</span>` : `<span class="weekly-task-chip"><i class="fa-regular fa-clipboard"></i> Sin OT</span>`}
+                        ${otNumero
+                            ? `<button type="button" class="weekly-task-chip" onclick="window.abrirModalOT('${String(otNumero).replace(/'/g, "\\'")}','${tarea.id}')" style="cursor:pointer; border:1px solid rgba(203,213,225,0.95); font:inherit;" title="Ver / copiar OT"><i class="fa-solid fa-clipboard-list"></i> OT registrada</button>`
+                            : `<span class="weekly-task-chip"><i class="fa-regular fa-clipboard"></i> Sin OT</span>`}
                     </div>
                 </div>
                 <div class="weekly-task-side">
@@ -10081,9 +10252,13 @@ function renderSemanalView() {
                             <article class="weekly-import-item" data-weekly-import-item="${t.id}">
                                 <div class="weekly-import-copy">
                                     <div class="weekly-import-title">${escapeHtml(t.titulo)}</div>
+                                    ${t.subtitulo ? `<div class="weekly-import-subtitle">${escapeHtml(t.subtitulo)}</div>` : ''}
                                     <div class="weekly-import-meta">
                                         ${t.ot ? `<span class="weekly-task-chip"><i class="fa-solid fa-hashtag"></i> ${escapeHtml(t.ot)}</span>` : ''}
                                         ${t.ubicacion ? `<span class="weekly-task-chip"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(t.ubicacion)}</span>` : ''}
+                                        ${t.ubicacionTecnica ? `<span class="weekly-task-chip" style="background:#eef2ff;color:#3730a3;border-color:rgba(99,102,241,0.25);"><i class="fa-solid fa-diagram-project"></i> ${escapeHtml(t.ubicacionTecnica)}</span>` : ''}
+                                        ${t.fechaInicioPermiso ? `<span class="weekly-task-chip" style="background:#ecfdf5;color:#047857;border-color:rgba(16,185,129,0.25);"><i class="fa-regular fa-calendar-plus"></i> Desde ${formatearFechaCortaDia(t.fechaInicioPermiso)}</span>` : ''}
+                                        ${t.fechaExpiracion ? `<span class="weekly-task-chip" style="background:#fef2f2;color:#b91c1c;border-color:rgba(239,68,68,0.25);"><i class="fa-regular fa-calendar-xmark"></i> Hasta ${formatearFechaCortaDia(t.fechaExpiracion)}</span>` : ''}
                                     </div>
                                 </div>
                                 <button data-weekly-import-id="${t.id}" class="btn btn-primary" type="button">
@@ -10105,7 +10280,7 @@ function renderSemanalView() {
                         <h2 style="color: #34d399;"><i class="fa-solid fa-file-excel"></i> Importar Plan Semanal</h2>
                     </div>
                     <p style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
-                        Sube tu archivo Excel. El sistema identificará los trabajos de <strong>APPLUS+</strong> y los agregará automáticamente.
+                        Sube tu archivo Excel. El sistema identificará los trabajos de <strong>APPLUS+</strong> y <strong>GUAPRED</strong> y los agregará automáticamente.
                     </p>
                     <input type="file" id="input-excel-semanal" accept=".xlsx, .xls, .csv" style="display:none;" />
                     <button id="btn-trigger-excel" class="btn btn-success" style="width:100%;" onclick="document.getElementById('input-excel-semanal').click()">
@@ -10378,7 +10553,7 @@ function renderSemanalView() {
             reader.onload = async (evt) => {
                 try {
                     const data = new Uint8Array(evt.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: true});
                     const sheet = workbook.Sheets[workbook.SheetNames[0]];
                     // Parsear con letras de columna para filtrar por columna O exacta
                     const jsonRaw = XLSX.utils.sheet_to_json(sheet, { header: 'A' });
@@ -10386,40 +10561,58 @@ function renderSemanalView() {
 
                     console.log("Excel cargado:", json);
 
-                    // Filtrar solo por columna O (empresa/contratista)
-                    // jsonRaw[0] es la fila de cabeceras, jsonRaw[1..] son datos
-                    const filasValidas = new Set(
-                        jsonRaw.slice(1)
-                            .map((row, i) => String(row['O'] || '').toUpperCase().includes('APPLUS') ? i : -1)
-                            .filter(i => i >= 0)
-                    );
-                    const tareasAppus = json.filter((_, i) => filasValidas.has(i));
+                    // Filtrar por columna O (empresa/contratista): APPLUS+ o GUAPRED.
+                    // jsonRaw[0] es cabecera, jsonRaw[1..] datos. Mantengo ambas vistas
+                    // (named + por letra) vinculadas por índice.
+                    const tareasAppus = [];
+                    jsonRaw.slice(1).forEach((rawRow, i) => {
+                        const oVal = String(rawRow['O'] || '').toUpperCase();
+                        if (oVal.includes('APPLUS') || oVal.includes('GUAPRED')) {
+                            tareasAppus.push({ named: json[i] || {}, raw: rawRow });
+                        }
+                    });
 
                     if(tareasAppus.length === 0) {
                         semanalExcelImportState = {
                             fileName: file.name,
                             total: 0,
                             items: [],
-                            message: 'No se encontraron tareas para APPLUS+ en este archivo.',
+                            message: 'No se encontraron tareas para APPLUS+ ni GUAPRED en este archivo.',
                             tone: 'warning'
                         };
                         renderizarVistaActual();
                         return;
                     }
 
-                    // Construir lista de tareas encontradas para que el usuario las agregue manualmente
-                    const tareasExtraidas = tareasAppus.map(row => {
+                    // Construir lista de tareas encontradas. Mapeo de columnas:
+                    //   K = Texto breve (título)
+                    //   H = subtítulo
+                    //   G = ubicación técnica del equipo
+                    //   L = Fe.inic.extr (desde cuándo se puede ejecutar)
+                    //   M = Fe.fin extre (hasta cuándo está vigente el permiso)
+                    const tareasExtraidas = tareasAppus.map(({ named: row, raw }) => {
                         const ot = obtenerValorFilaExcel(row, ['OT', 'Orden', 'Nro OT']);
-                        const desc = row['Descripción'] || row['Texto breve'] || row['Tarea'] || '';
+                        const textoBreve = String(row['Texto breve'] || raw['K'] || row['Descripción'] || row['Tarea'] || '').trim();
+                        const rawH = raw['H'];
+                        const subtitulo = String(typeof rawH === 'string' || typeof rawH === 'number' ? rawH : '').trim();
                         const eq  = row['Equipo'] || row['Activo'] || row['Ubicación Técnica'] || '';
-                        const tit = `${ot ? '['+ot+'] ' : ''}${eq ? eq + ' - ' : ''}${desc}`;
-                        const ubicacion = resolverUbicacionFilaSemanal(row, eq);
-                        const tituloNormalizado = `${ubicacion ? `[${ubicacion}] ` : ''}${eq ? `${eq}${desc ? ' - ' : ''}` : ''}${desc}`.trim();
+                        let ubicacion = resolverUbicacionFilaSemanal(row, eq);
+                        if (!ubicacion) {
+                            const m = `${textoBreve} ${subtitulo}`.match(/\bU\s?([1-9]\d?)\b/i);
+                            if (m) ubicacion = `U${m[1]}`;
+                        }
+                        const fechaInicioPermiso = parseFechaExcel(raw['L']);
+                        const fechaExpiracion   = parseFechaExcel(raw['M']);
+                        const ubicacionTecnica  = String(typeof raw['G'] === 'string' || typeof raw['G'] === 'number' ? raw['G'] : '').trim();
                         return {
                             id: crypto.randomUUID(),
                             ot: String(ot || '').trim(),
-                            titulo: tituloNormalizado,
-                            ubicacion: String(ubicacion || '').trim()
+                            titulo: textoBreve,
+                            subtitulo,
+                            ubicacion: String(ubicacion || '').trim(),
+                            ubicacionTecnica,
+                            fechaInicioPermiso,
+                            fechaExpiracion
                         };
                     }).filter(t => t.titulo);
 
@@ -10479,6 +10672,39 @@ function renderSemanalView() {
                     semanalExcelImportState.tone = 'success';
                 }
 
+                // Resolver / crear equipo según ubicación técnica (col G)
+                let equipoId = null;
+                const ubicTecnica = String(tareaImportada.ubicacionTecnica || '').trim();
+                if (ubicTecnica) {
+                    const norm = (v) => String(v || '').trim().toUpperCase();
+                    let equipo = (estado.equipos || []).find(e =>
+                        norm(e.kks) === norm(ubicTecnica) ||
+                        norm(e.ubicacion_tecnica) === norm(ubicTecnica) ||
+                        norm(e.ubicacion_tecnica_propuesta) === norm(ubicTecnica)
+                    );
+                    if (!equipo) {
+                        const nuevoEq = {
+                            id: crypto.randomUUID(),
+                            kks: ubicTecnica,
+                            activo: tareaImportada.subtitulo || ubicTecnica,
+                            ubicacion: tareaImportada.ubicacion || null,
+                            componente: '',
+                            criticidad: 'MEDIA',
+                            ubicacion_tecnica_propuesta: ubicTecnica,
+                            denominacion_ut: tareaImportada.subtitulo || null
+                        };
+                        try {
+                            const { data: equipoGuardado } = await _db.insert('equipos', nuevoEq);
+                            equipo = equipoGuardado || nuevoEq;
+                        } catch (err) {
+                            console.error('No se pudo crear el equipo:', err);
+                            equipo = nuevoEq;
+                        }
+                        estado.equipos = [...(estado.equipos || []), equipo];
+                    }
+                    equipoId = equipo?.id || null;
+                }
+
                 await asignarTarea(
                     tareaImportada.titulo,
                     null,
@@ -10486,11 +10712,15 @@ function renderSemanalView() {
                     'programada_semana',
                     tareaImportada.ot || null,
                     'activo',
-                    null,
-                    null,
+                    tareaImportada.fechaExpiracion || null,
+                    equipoId,
                     [],
                     [],
-                    tareaImportada.ubicacion || null
+                    tareaImportada.ubicacion || null,
+                    false,
+                    null,
+                    tareaImportada.subtitulo || null,
+                    tareaImportada.fechaInicioPermiso || null
                 );
             });
         });
@@ -10617,6 +10847,15 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     document.getElementById('modal-iniciar-tarea-id').value = id;
     document.getElementById('modal-iniciar-tipo').textContent = tarea.tipo;
 
+    // Reset estado del modal entre aperturas: evita que valores de la tarea
+    // anterior queden seleccionados silenciosamente.
+    const liderResetEl = document.getElementById('modal-iniciar-lider');
+    if (liderResetEl) liderResetEl.value = '';
+    const ubicResetSel = document.getElementById('modal-iniciar-ubicacion');
+    if (ubicResetSel) ubicResetSel.value = '';
+    const ubicChipResetText = document.querySelector('#modal-iniciar-ubicacion-chip span');
+    if (ubicChipResetText) ubicChipResetText.textContent = '';
+
     // ── Encontrar equipo asociado a esta tarea ────────────────────────────────
     let equipo = null;
     const eqIdGuardado = tarea.equipoId || tarea.equipo_id;
@@ -10626,6 +10865,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     if (!equipo) {
         // Fallback: intentar encontrar por prefijo del título
         equipo = estado.equipos.find(e => {
+            if (!e.ubicacion || !e.activo) return false;
             const pref = `[${e.ubicacion}] ${e.activo}`;
             return tarea.tipo.startsWith(pref);
         });
@@ -10634,10 +10874,34 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
     // ── UBICACIÓN ─────────────────────────────────────────────────────────────
     const ubicSel = document.getElementById('modal-iniciar-ubicacion');
+    const ubicDisplay = document.getElementById('modal-iniciar-ubicacion-display');
+    const ubicChipText = document.querySelector('#modal-iniciar-ubicacion-chip span');
+    const btnCambiarUbic = document.getElementById('modal-iniciar-ubicacion-cambiar');
     const ubicaciones = [...new Set([...ubicacionesDisponibles, ...estado.equipos.map(e => e.ubicacion).filter(Boolean)])].sort((a,b) => a.localeCompare(b,'es'));
-    const ubicActual = tarea.ubicacion || equipo?.ubicacion || (tarea.tipo.match(/^\[([^\]]+)\]/) || [])[1] || '';
+    let ubicActual = tarea.ubicacion || equipo?.ubicacion || (tarea.tipo.match(/^\[([^\]]+)\]/) || [])[1] || '';
+    if (!ubicActual) {
+        const m = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`.match(/\bU\s?([1-9]\d?)\b/i);
+        if (m) ubicActual = `U${m[1]}`;
+    }
+    const opcionesUbic = [...new Set([ubicActual, ...ubicaciones].filter(Boolean))];
     ubicSel.innerHTML = `<option value="">— Seleccionar —</option>` +
-        ubicaciones.map(u => `<option value="${u}" ${u === ubicActual ? 'selected' : ''}>${u}</option>`).join('');
+        opcionesUbic.map(u => `<option value="${u}" ${u === ubicActual ? 'selected' : ''}>${u}</option>`).join('');
+
+    if (ubicActual) {
+        if (ubicChipText) ubicChipText.textContent = ubicActual;
+        if (ubicDisplay) ubicDisplay.style.display = 'inline-flex';
+        ubicSel.style.display = 'none';
+    } else {
+        if (ubicDisplay) ubicDisplay.style.display = 'none';
+        ubicSel.style.display = '';
+    }
+    if (btnCambiarUbic) {
+        btnCambiarUbic.onclick = () => {
+            if (ubicDisplay) ubicDisplay.style.display = 'none';
+            ubicSel.style.display = '';
+            ubicSel.focus();
+        };
+    }
 
     // ── TIPOS DE TRABAJO: multi-select chips ──────────────────────────────────
     const tipoContainer = document.getElementById('modal-iniciar-tipo-trabajo');
@@ -10849,6 +11113,9 @@ function renderizarVistaActual() {
     pendingRealtimeRender = false;
     clearTimeout(realtimeResumeTimer);
     realtimeResumeTimer = null;
+    // Persistir la vista actual para sobrevivir F5
+    try { localStorage.setItem('planify_vista', String(vistaActual || '')); }
+    catch (e) { /* noop */ }
     // Limpiar contenido
     mainContent.innerHTML = '';
     document.body.dataset.view = vistaActual;
@@ -12991,6 +13258,13 @@ async function validarWorkerLogin() {
 function accederApp(rol, trabajadorObj = null) {
     estado.usuarioActual = rol;
     estado.trabajadorLogueado = trabajadorObj;
+    // Persistir sesión para sobrevivir F5 / recarga
+    try {
+        localStorage.setItem('planify_session', JSON.stringify({
+            rol,
+            trabajadorId: trabajadorObj?.id || null
+        }));
+    } catch (e) { /* localStorage puede fallar en privado */ }
     loginOverlay.style.display = 'none';
     document.getElementById('app').style.display = 'block';
     actualizarEstadoSyncStripUI();
@@ -13011,7 +13285,8 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mobile-insumos':     ['admin', 'trabajador'],
         'nav-mobile-menu':        [],
         'nav-perfil':             ['trabajador'],
-        'btn-copy-link':          ['admin']
+        'btn-copy-link':          ['admin'],
+        'btn-logout':             ['admin', 'trabajador', 'visita']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
@@ -13050,17 +13325,46 @@ function accederApp(rol, trabajadorObj = null) {
     }
 
     const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
-    vistaActual = rol === 'admin'
+    let vistaInicial = rol === 'admin'
         ? (esPantallaMovil ? 'dashboard' : 'control')
         : 'dashboard';
+    // Si hay una vista guardada de la sesión anterior, restaurarla
+    // siempre que esté permitida para el rol actual.
+    try {
+        const vistaGuardada = localStorage.getItem('planify_vista');
+        if (vistaGuardada) {
+            const permitidoAdmin = ['control','dashboard','semanal','historial','trabajadores','checkin','equipos','horas-extra-admin','insumos','perfil','mis_horas'];
+            const permitidoTrabajador = ['dashboard','semanal','perfil','mis_horas','insumos'];
+            const permitidoVisita = ['dashboard','semanal','historial','equipos'];
+            const lista = rol === 'admin' ? permitidoAdmin : (rol === 'trabajador' ? permitidoTrabajador : permitidoVisita);
+            if (lista.includes(vistaGuardada)) vistaInicial = vistaGuardada;
+        }
+    } catch (e) { /* noop */ }
+    vistaActual = vistaInicial;
     renderizarVistaActual();
 }
 
+// Botón Cerrar sesión (visible para todos los roles)
+document.getElementById('btn-logout')?.addEventListener('click', () => {
+    if (confirm('¿Cerrar sesión?')) {
+        window.cerrarSesionPlanify();
+    }
+});
+
 // Inicialización
-window.addEventListener('DOMContentLoaded', () => {
-    inicializarDatos();
+window.addEventListener('DOMContentLoaded', async () => {
     actualizarEstadoSyncStripUI();
     registrarResyncNotificaciones();
+    // Esperar a que carguen datos (trabajadores, tareas, equipos) antes
+    // de intentar restaurar sesión. Sin esto, sesiones de trabajador
+    // pueden no encontrar el objeto y caer al login.
+    try {
+        await inicializarDatos();
+    } catch (e) {
+        console.warn('inicializarDatos falló, continuamos con datos parciales:', e);
+    }
+    // Restaurar sesión si existe (sobrevive F5)
+    await restaurarSesionPersistida();
 });
 
 // Registrar Service Worker para PWA

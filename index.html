@@ -13,7 +13,7 @@
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css?v=35">
+    <link rel="stylesheet" href="styles.css?v=39">
     
     <!-- PWA / Mobile Capabilites -->
     <link rel="manifest" href="manifest.json">
@@ -193,6 +193,9 @@
                 <button id="btn-copy-link" title="Copiar enlace para Visitas" style="display: none; color: var(--success-color); border: 1px solid var(--success-color); margin-left: 1rem;">
                     <i class="fa-solid fa-link"></i> Link Visitas
                 </button>
+                <button id="btn-logout" title="Cerrar sesión" type="button" style="color: #b91c1c; border: 1px solid rgba(239,68,68,0.4); background:#fff5f5; margin-left: 0.5rem;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+                </button>
             </div>
         </nav>
 
@@ -286,6 +289,10 @@
             <input type="hidden" id="modal-iniciar-equipo-id">
             <div class="form-group">
                 <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;">Unidad / Ubicación</label>
+                <div id="modal-iniciar-ubicacion-display" style="display:none; align-items:center; gap:0.6rem; flex-wrap:wrap;">
+                    <span id="modal-iniciar-ubicacion-chip" style="display:inline-flex; align-items:center; gap:0.4rem; background:#fff7f0; color:#9a3412; border:1px solid #fdc898; border-radius:999px; font-size:0.85rem; font-weight:700; padding:0.35rem 0.85rem;"><i class="fa-solid fa-location-dot"></i><span></span></span>
+                    <button id="modal-iniciar-ubicacion-cambiar" type="button" class="btn btn-outline" style="font-size:0.78rem; padding:0.3rem 0.7rem;"><i class="fa-solid fa-pen"></i> Cambiar</button>
+                </div>
                 <select id="modal-iniciar-ubicacion" class="form-control">
                     <option value="">— Seleccionar —</option>
                 </select>
@@ -608,6 +615,52 @@
                 </div>
             </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar fecha (inicio / fin permiso) -->
+    <div id="modal-editar-fecha" class="modal-overlay-base" style="z-index:10500;">
+        <div class="modal-shell modal-shell--compact">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-regular fa-calendar"></i> Edición rápida</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-pen"></i> <span id="modal-editar-fecha-titulo">Editar fecha</span></h2>
+                </div>
+                <button onclick="document.getElementById('modal-editar-fecha').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label style="font-size:0.85rem; font-weight:600; color:#374151; display:block; margin-bottom:0.4rem;" id="modal-editar-fecha-label">Fecha</label>
+                    <input type="date" id="modal-editar-fecha-input" class="form-control" />
+                    <p style="font-size:0.78rem; color:#6b7280; margin-top:0.4rem;">Deja en blanco para quitar la fecha.</p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-modal-editar-fecha-guardar" class="btn btn-primary" style="flex:1; border-radius:10px;"><i class="fa-solid fa-check"></i> Guardar</button>
+                <button onclick="document.getElementById('modal-editar-fecha').style.display='none'" class="btn" style="border-radius:10px; border:1px solid var(--border-color); background:transparent; color:var(--text-muted); padding:0 1.2rem;">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Leer OT (clic en chip de OT) -->
+    <div id="modal-leer-ot" class="modal-overlay-base" style="z-index:10500;">
+        <div class="modal-shell modal-shell--compact">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-clipboard-list"></i> Orden de Trabajo</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-hashtag"></i> Número de OT</h2>
+                </div>
+                <button onclick="document.getElementById('modal-leer-ot').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align:center; padding-top:1rem;">
+                <div id="modal-leer-ot-numero" style="font-size:2.4rem; font-weight:800; color:#0f172a; letter-spacing:0.05em; padding:1.25rem 0.5rem; background:#fff7f0; border:2px dashed #fdc898; border-radius:12px; user-select:all;"></div>
+                <p id="modal-leer-ot-titulo" style="font-size:0.95rem; font-weight:600; color:#374151; margin-top:1rem;"></p>
+                <p id="modal-leer-ot-subtitulo" style="font-size:0.85rem; color:#6b7280; margin-top:0.25rem;"></p>
+            </div>
+            <div class="modal-actions">
+                <button id="btn-modal-leer-ot-copiar" class="btn btn-primary" style="flex:1; border-radius:10px;"><i class="fa-regular fa-copy"></i> Copiar OT</button>
+                <button onclick="document.getElementById('modal-leer-ot').style.display='none'" class="btn" style="border-radius:10px; border:1px solid var(--border-color); background:transparent; color:var(--text-muted); padding:0 1.2rem;">Cerrar</button>
             </div>
         </div>
     </div>
