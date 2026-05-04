@@ -2967,6 +2967,7 @@ h3 {
         height: 100dvh;
         display: flex;
         flex-direction: column;
+        flex-wrap: nowrap;
         align-items: stretch;
         gap: 0.55rem;
         padding: 4.5rem 1rem 6.5rem 1rem;
@@ -3034,7 +3035,8 @@ h3 {
         border-color: rgba(249, 115, 22, 0.22);
     }
 
-    .nav-links #btn-copy-link {
+    .nav-links #btn-copy-link,
+    .nav-links #btn-logout {
         margin-left: 0 !important;
     }
 
