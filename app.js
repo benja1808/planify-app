@@ -1876,7 +1876,7 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
     document.getElementById('modal-recomendacion-analista').value = '';
 
     // Construir formulario dinámico de mediciones
-    _buildMedicionesForm(tarea.tiposSeleccionados || [], tarea.componentesSeleccionados || []);
+    _buildMedicionesForm(tarea.tiposSeleccionados || [], tarea.componentesSeleccionados || [], tarea);
 
     modal.style.display = 'flex';
 }
@@ -2016,11 +2016,16 @@ async function guardarTareaFinalizada({
                         fecha: fechaHoy
                     });
                 }
-                if (m.temperatura !== null && m.temperatura !== '') {
+                // Soporta array de temperaturas (varias lecturas) o valor único legacy
+                const lecturasTermo = Array.isArray(m.temperaturas) && m.temperaturas.length
+                    ? m.temperaturas
+                    : (m.temperatura !== null && m.temperatura !== '' ? [m.temperatura] : []);
+                for (const lectura of lecturasTermo) {
+                    if (lectura === null || lectura === '' || lectura === undefined) continue;
                     await guardarMedicion({
                         equipo_id: equipoIdComp,
                         tipo: 'termografia',
-                        valor: parseFloat(m.temperatura),
+                        valor: parseFloat(lectura),
                         punto_medicion: m.componente || equipoBase || 'General',
                         componente: m.componente || null,
                         fecha: fechaHoy
@@ -11295,10 +11300,89 @@ if (btnGuardarEq) {
 
 // --- LÓGICA DE FICHA TÉCNICA (DETALLES Y GRÁFICOS) ---
 
+// Equipos fijos para el panel especial de "SALA ELECTRICA"
+const SALA_ELECTRICA_EQUIPOS = [
+    'SWITCHGEAR UNIDAD 6 KV',
+    'SWITCHGEAR ESTACION 6 KV',
+    'SWITCHGER UNIT A',
+    'SWITCHGER UNIT B',
+    'SWITCHGER ESTACION A',
+    'SWITCHGER ESTACION B',
+    'CCM TURBINA',
+    'CCM CALDERA',
+    'CCM COMUN',
+    'CCM ESTACION',
+    'CCM EMERGENCIA'
+];
+
+function esTareaSalaElectrica(tarea) {
+    if (!tarea) return false;
+    const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return texto.includes('SALA ELECTRICA') || texto.includes('SALA ELÉCTRICA');
+}
+
+// Detecta tareas de Excitatriz/Escobillas/Carbones (Unidades U3, U4, U5)
+function esTareaEscobillas(tarea) {
+    if (!tarea) return false;
+    const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return texto.includes('ESCOBILLA') || texto.includes('CARBONES') || texto.includes('CARBON ') || texto.includes('EXCITATRIZ');
+}
+
+// Detecta tareas de Trafo Rectificador (precipitadores)
+function esTareaTrafoRectificador(tarea) {
+    if (!tarea) return false;
+    const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return /\bTRAFO\s+RECTIFICADOR\b/.test(texto)
+        || /\bTRANSFORMADOR\s+RECTIFICADOR\b/.test(texto)
+        || /TRAFO.*PRECIPITA/.test(texto)
+        || /RECTIFICADOR.*PRECIPITA/.test(texto);
+}
+
+// Detecta el número de unidad de una tarea (U3 / U5 / etc.)
+function obtenerUnidadTarea(tarea) {
+    const texto = `${tarea?.tipo || ''} ${tarea?.subtitulo || ''} ${tarea?.ubicacion || ''}`;
+    const m = texto.match(/\bU\s?([1-9]\d?)\b/i);
+    return m ? Number(m[1]) : null;
+}
+
+// Genera los códigos KKS de los trafos rectificadores según la unidad.
+// Solo cambian los 2 primeros (unidad) y los 2 últimos (correlativo).
+// U3 → 10 trafos (01..10), U5 → 8 trafos (01..08).
+function trafosRectificadoresPorUnidad(unidad) {
+    const total = unidad === 3 ? 10 : (unidad === 5 ? 8 : 0);
+    const prefijo = unidad === 3 ? '03' : (unidad === 5 ? '05' : '');
+    if (!total || !prefijo) return [];
+    const middle = 'HQ431GT1';
+    return Array.from({ length: total }, (_, i) => `${prefijo}${middle}${String(i + 1).padStart(2, '0')}`);
+}
+
 // ── Construir formulario dinámico de mediciones en modal-finalizar ────────────
-function _buildMedicionesForm(tipos, componentes) {
+function _buildMedicionesForm(tipos, componentes, tareaCtx = null) {
     const container = document.getElementById('modal-mediciones-container');
     if (!container) return;
+
+    // Panel especial: SALA ELÉCTRICA — checklist de equipos con sub-formulario
+    if (tareaCtx && esTareaSalaElectrica(tareaCtx)) {
+        _buildPanelSalaElectrica(container);
+        return;
+    }
+
+    // Panel especial: Excitatriz / Escobillas / Carbones — métricas de unidad +
+    // lista de escobillas con anormalidades.
+    if (tareaCtx && esTareaEscobillas(tareaCtx)) {
+        _buildPanelEscobillas(container, tareaCtx);
+        return;
+    }
+
+    // Panel especial: Trafos Rectificadores (precipitadores) — checklist de
+    // trafos según unidad con sub-formulario por trafo.
+    if (tareaCtx && esTareaTrafoRectificador(tareaCtx)) {
+        _buildPanelTrafosRectificador(container, tareaCtx);
+        return;
+    }
 
     const necesitaVibr    = tipos.some(t => t.toLowerCase().includes('vibrac'));
     const necesitaTermo   = tipos.some(t => t.toLowerCase().includes('termog'));
@@ -11345,12 +11429,27 @@ function _buildMedicionesForm(tipos, componentes) {
         }
 
         if (necesitaTermo) {
+            const compKey = comp || '';
+            const filas = Array.from({ length: 5 }).map((_, i) => `
+                <div class="med-termo-row" data-comp="${compKey}" style="display:flex; gap:0.4rem; margin-bottom:0.35rem;">
+                    <input type="number" class="form-control med-termo" data-comp="${compKey}"
+                        min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem; flex:1;">
+                    <button type="button" class="med-termo-del" title="Eliminar"
+                        style="flex:0 0 auto; width:34px; height:34px; padding:0; border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer; align-self:center;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>`).join('');
             html += `<div style="margin-bottom:0.65rem;">
-                <label style="font-size:0.8rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                <label style="font-size:0.8rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.35rem;">
                     <i class="fa-solid fa-temperature-half" style="color:#ef4444;"></i> Temperatura máx. (°C)
                 </label>
-                <input type="number" class="form-control med-termo" data-comp="${comp || ''}"
-                    min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem;">
+                <div class="med-termo-list" data-comp="${compKey}">
+                    ${filas}
+                </div>
+                <button type="button" class="med-termo-add" data-comp="${compKey}"
+                    style="margin-top:0.25rem; padding:0.4rem 0.75rem; font-size:0.82rem; border:1px dashed #fdc898; background:#fff7f0; color:#9a3412; border-radius:8px; cursor:pointer;">
+                    <i class="fa-solid fa-plus"></i> Agregar otra medición
+                </button>
             </div>`;
         }
 
@@ -11386,6 +11485,343 @@ function _buildMedicionesForm(tipos, componentes) {
             cb.closest('.med-comp-section').style.borderColor = on ? '#e5e7eb' : '#d1d5db';
         });
     });
+
+    // Agregar / eliminar filas de temperatura (delegación de eventos)
+    container.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.med-termo-add');
+        const delBtn = e.target.closest('.med-termo-del');
+        if (addBtn) {
+            const compKey = addBtn.dataset.comp || '';
+            const list = container.querySelector(`.med-termo-list[data-comp="${compKey}"]`);
+            if (!list) return;
+            const row = document.createElement('div');
+            row.className = 'med-termo-row';
+            row.dataset.comp = compKey;
+            row.style.cssText = 'display:flex; gap:0.4rem; margin-bottom:0.35rem;';
+            row.innerHTML = `
+                <input type="number" class="form-control med-termo" data-comp="${compKey}"
+                    min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem; flex:1;">
+                <button type="button" class="med-termo-del" title="Eliminar"
+                    style="flex:0 0 auto; width:34px; height:34px; padding:0; border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer; align-self:center;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>`;
+            list.appendChild(row);
+            row.querySelector('input')?.focus();
+        }
+        if (delBtn) {
+            delBtn.closest('.med-termo-row')?.remove();
+        }
+    });
+}
+
+// Panel especializado para tareas de SALA ELECTRICA: checklist de equipos
+// con sub-formulario por equipo (Temp máx. múltiple, Elemento, Corriente).
+function _buildPanelSalaElectrica(container) {
+    const filaTermo = (eqIdx, idx) => `
+        <div class="se-termo-row" data-eq="${eqIdx}" style="display:flex; gap:0.4rem; margin-bottom:0.35rem;">
+            <input type="number" class="form-control se-termo" data-eq="${eqIdx}"
+                min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem; flex:1;">
+            <button type="button" class="se-termo-del" title="Eliminar"
+                style="flex:0 0 auto; width:34px; height:34px; padding:0; border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer; align-self:center;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>`;
+
+    const itemHTML = (nombre, eqIdx) => `
+        <div class="se-item" data-eq="${eqIdx}" data-nombre="${escapeHtml(nombre)}"
+            style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; margin-bottom:0.6rem; overflow:hidden;">
+            <label style="display:flex; align-items:center; gap:0.6rem; padding:0.7rem 0.9rem; cursor:pointer;
+                font-weight:600; color:#0f172a; font-size:0.92rem; user-select:none;">
+                <input type="checkbox" class="se-check" data-eq="${eqIdx}"
+                    style="width:18px; height:18px; accent-color:#FF6900; cursor:pointer; flex-shrink:0;">
+                <i class="fa-solid fa-bolt" style="color:#f59e0b; font-size:0.85rem;"></i>
+                <span>${escapeHtml(nombre)}</span>
+            </label>
+            <div class="se-body" data-eq="${eqIdx}" style="display:none; padding:0 0.9rem 0.9rem 2.4rem; background:#f9fafb; border-top:1px dashed #e5e7eb;">
+                <div style="margin-top:0.7rem; margin-bottom:0.65rem;">
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.35rem;">
+                        <i class="fa-solid fa-temperature-half" style="color:#ef4444;"></i> Temperatura máx. (°C)
+                    </label>
+                    <div class="se-termo-list" data-eq="${eqIdx}">
+                        ${filaTermo(eqIdx, 0)}
+                    </div>
+                    <button type="button" class="se-termo-add" data-eq="${eqIdx}"
+                        style="margin-top:0.25rem; padding:0.4rem 0.75rem; font-size:0.8rem; border:1px dashed #fdc898; background:#fff7f0; color:#9a3412; border-radius:8px; cursor:pointer;">
+                        <i class="fa-solid fa-plus"></i> Agregar otra medición
+                    </button>
+                </div>
+                <div style="margin-bottom:0.6rem;">
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                        <i class="fa-solid fa-cube" style="color:#6366f1;"></i> Elemento
+                    </label>
+                    <input type="text" class="form-control se-elemento" data-eq="${eqIdx}"
+                        placeholder="Ej: Interruptor principal, Barra A..." style="font-size:0.88rem;">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                        <i class="fa-solid fa-bolt-lightning" style="color:#eab308;"></i> Corriente (A)
+                    </label>
+                    <input type="text" class="form-control se-corriente" data-eq="${eqIdx}"
+                        placeholder="Ej: 120 A" style="font-size:0.88rem;">
+                </div>
+            </div>
+        </div>`;
+
+    container.innerHTML = `
+        <div>
+            <div style="font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:0.9rem;
+                padding-bottom:0.45rem; border-bottom:2px solid #FF6900; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fa-solid fa-bolt" style="color:#FF6900;"></i>
+                Sala Eléctrica — selecciona los equipos inspeccionados
+            </div>
+            <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.9rem;">
+                Marca cada equipo donde se realizó medición. Se abrirá su formulario para registrar temperatura, elemento y corriente.
+            </p>
+            <div class="se-list">
+                ${SALA_ELECTRICA_EQUIPOS.map((n, i) => itemHTML(n, i)).join('')}
+            </div>
+        </div>`;
+
+    // Delegación: toggle, agregar/eliminar filas de temperatura
+    container.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.se-termo-add');
+        const delBtn = e.target.closest('.se-termo-del');
+        if (addBtn) {
+            const eqIdx = addBtn.dataset.eq;
+            const list = container.querySelector(`.se-termo-list[data-eq="${eqIdx}"]`);
+            if (!list) return;
+            const row = document.createElement('div');
+            row.className = 'se-termo-row';
+            row.dataset.eq = eqIdx;
+            row.style.cssText = 'display:flex; gap:0.4rem; margin-bottom:0.35rem;';
+            row.innerHTML = `
+                <input type="number" class="form-control se-termo" data-eq="${eqIdx}"
+                    min="-50" step="0.1" placeholder="Ej: 85.0" style="font-size:0.9rem; flex:1;">
+                <button type="button" class="se-termo-del" title="Eliminar"
+                    style="flex:0 0 auto; width:34px; height:34px; padding:0; border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer; align-self:center;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>`;
+            list.appendChild(row);
+            row.querySelector('input')?.focus();
+        }
+        if (delBtn) {
+            delBtn.closest('.se-termo-row')?.remove();
+        }
+    });
+
+    // Toggle del cuerpo cuando se marca/desmarca el checkbox
+    container.querySelectorAll('.se-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const eqIdx = cb.dataset.eq;
+            const body = container.querySelector(`.se-body[data-eq="${eqIdx}"]`);
+            if (!body) return;
+            body.style.display = cb.checked ? 'block' : 'none';
+            if (!cb.checked) {
+                body.querySelectorAll('input').forEach(i => { i.value = ''; });
+            } else {
+                body.querySelector('input')?.focus();
+            }
+        });
+    });
+}
+
+// Panel especializado para Excitatriz / Escobillas / Carbones.
+// Métricas globales de la unidad + lista de escobillas con anormalidades.
+function _buildPanelEscobillas(container, tarea) {
+    const unidad = (() => {
+        const t = `${tarea?.tipo || ''} ${tarea?.subtitulo || ''}`;
+        const m = t.match(/\bU\s?([1-9]\d?)\b/i);
+        return m ? `U${m[1]}` : '';
+    })();
+
+    const filaEscobilla = (idx) => `
+        <div class="esc-row" data-idx="${idx}" style="display:grid; grid-template-columns: 80px 1fr 1fr 36px; gap:0.4rem; margin-bottom:0.4rem; align-items:center;">
+            <input type="text" class="form-control esc-num" placeholder="N° ${idx + 1}"
+                style="font-size:0.88rem; padding:0.5rem 0.55rem;">
+            <input type="number" class="form-control esc-temp" min="-50" step="0.1" placeholder="Temp. (°C)"
+                style="font-size:0.88rem; padding:0.5rem 0.55rem;">
+            <input type="text" class="form-control esc-corr" placeholder="Corriente (A)"
+                style="font-size:0.88rem; padding:0.5rem 0.55rem;">
+            <button type="button" class="esc-del" title="Eliminar"
+                style="width:34px; height:34px; padding:0; border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+        </div>`;
+
+    container.innerHTML = `
+        <div>
+            <div style="font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:0.9rem;
+                padding-bottom:0.45rem; border-bottom:2px solid #FF6900; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fa-solid fa-bolt-lightning" style="color:#FF6900;"></i>
+                Excitatriz ${unidad ? unidad : ''} — Mediciones
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.7rem; margin-bottom:1rem;">
+                <div>
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                        <i class="fa-solid fa-industry" style="color:#0ea5e9;"></i> Generación unidad (MW)
+                    </label>
+                    <input type="text" id="exc-generacion" class="form-control"
+                        placeholder="Ej: 350" style="font-size:0.9rem; padding:0.5rem 0.7rem;">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                        <i class="fa-solid fa-bolt-lightning" style="color:#eab308;"></i> Corriente de campo (A)
+                    </label>
+                    <input type="text" id="exc-corriente-campo" class="form-control"
+                        placeholder="Ej: 1850" style="font-size:0.9rem; padding:0.5rem 0.7rem;">
+                </div>
+                <div style="grid-column: 1 / -1;">
+                    <label style="font-size:0.78rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.25rem;">
+                        <i class="fa-solid fa-plug-circle-bolt" style="color:#7c3aed;"></i> Tensión de campo (V)
+                    </label>
+                    <input type="text" id="exc-tension-campo" class="form-control"
+                        placeholder="Ej: 320" style="font-size:0.9rem; padding:0.5rem 0.7rem;">
+                </div>
+            </div>
+
+            <div style="margin-top:0.5rem; padding:0.9rem; border:1px solid #fde68a; background:#fffbeb; border-radius:10px;">
+                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color:#d97706;"></i>
+                    <strong style="color:#92400e; font-size:0.88rem;">Escobillas con anormalidades</strong>
+                </div>
+                <p style="font-size:0.78rem; color:#78350f; margin:0 0 0.6rem;">
+                    Registra solo las escobillas con problemas. Indica número, temperatura medida y corriente.
+                </p>
+                <div style="display:grid; grid-template-columns: 80px 1fr 1fr 36px; gap:0.4rem; margin-bottom:0.4rem; font-size:0.72rem; font-weight:600; color:#92400e; text-transform:uppercase;">
+                    <span>N°</span><span>Temperatura</span><span>Corriente</span><span></span>
+                </div>
+                <div id="esc-list">
+                    ${filaEscobilla(0)}
+                </div>
+                <button type="button" id="esc-add"
+                    style="margin-top:0.3rem; padding:0.4rem 0.75rem; font-size:0.8rem; border:1px dashed #fdc898; background:#fff7f0; color:#9a3412; border-radius:8px; cursor:pointer;">
+                    <i class="fa-solid fa-plus"></i> Agregar otra escobilla
+                </button>
+            </div>
+        </div>`;
+
+    // Delegación: agregar/eliminar escobillas
+    container.addEventListener('click', (e) => {
+        if (e.target.closest('#esc-add')) {
+            const list = container.querySelector('#esc-list');
+            if (!list) return;
+            const idx = list.querySelectorAll('.esc-row').length;
+            const tmp = document.createElement('div');
+            tmp.innerHTML = filaEscobilla(idx).trim();
+            const newRow = tmp.firstElementChild;
+            list.appendChild(newRow);
+            newRow.querySelector('input')?.focus();
+        }
+        if (e.target.closest('.esc-del')) {
+            e.target.closest('.esc-row')?.remove();
+        }
+    });
+}
+
+// Panel especializado para tareas de Trafos Rectificadores (precipitadores).
+// Muestra el listado de trafos según la unidad detectada, cada uno con un
+// checkbox que despliega un sub-formulario con: Temp. carcasa, Temp. aceite,
+// Nivel de aceite, Voltaje (V), Corriente (mA).
+function _buildPanelTrafosRectificador(container, tarea) {
+    const unidad = obtenerUnidadTarea(tarea);
+    const trafos = trafosRectificadoresPorUnidad(unidad);
+
+    if (!trafos.length) {
+        container.innerHTML = `
+            <div style="padding:1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:10px; color:#b91c1c; font-size:0.9rem;">
+                <i class="fa-solid fa-circle-exclamation"></i>
+                No hay listado de trafos rectificadores configurado para
+                ${unidad ? `U${unidad}` : 'esta unidad'}. Por ahora solo U3 (10 trafos) y U5 (8 trafos) están definidos.
+            </div>`;
+        return;
+    }
+
+    const itemHTML = (codigo, idx) => `
+        <div class="tr-item" data-idx="${idx}" data-codigo="${escapeHtml(codigo)}"
+            style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; margin-bottom:0.6rem; overflow:hidden;">
+            <label style="display:flex; align-items:center; gap:0.6rem; padding:0.7rem 0.9rem; cursor:pointer;
+                font-weight:600; color:#0f172a; font-size:0.9rem; user-select:none;">
+                <input type="checkbox" class="tr-check" data-idx="${idx}"
+                    style="width:18px; height:18px; accent-color:#FF6900; cursor:pointer; flex-shrink:0;">
+                <i class="fa-solid fa-bolt-lightning" style="color:#7c3aed; font-size:0.85rem;"></i>
+                <span style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:0.02em;">${escapeHtml(codigo)}</span>
+            </label>
+            <div class="tr-body" data-idx="${idx}" style="display:none; padding:0.7rem 0.9rem 0.9rem 2.4rem; background:#f9fafb; border-top:1px dashed #e5e7eb;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.7rem;">
+                    <div>
+                        <label style="font-size:0.76rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.2rem;">
+                            <i class="fa-solid fa-temperature-half" style="color:#ef4444;"></i> Temp. carcasa (°C)
+                        </label>
+                        <input type="number" class="form-control tr-tcarcasa" data-idx="${idx}"
+                            min="-50" step="0.1" placeholder="Ej: 65.0" style="font-size:0.88rem; padding:0.45rem 0.6rem;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.2rem;">
+                            <i class="fa-solid fa-droplet" style="color:#0ea5e9;"></i> Temp. aceite (°C) — termómetro local
+                        </label>
+                        <input type="number" class="form-control tr-taceite" data-idx="${idx}"
+                            min="-50" step="0.1" placeholder="Ej: 70.0" style="font-size:0.88rem; padding:0.45rem 0.6rem;">
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.2rem;">
+                            <i class="fa-solid fa-gauge" style="color:#0d9488;"></i> Nivel de aceite (visual)
+                        </label>
+                        <select class="form-control tr-nivel" data-idx="${idx}" style="font-size:0.88rem; padding:0.45rem 0.6rem;">
+                            <option value="">Seleccionar…</option>
+                            <option value="Normal">Normal</option>
+                            <option value="Bajo">Bajo</option>
+                            <option value="Muy bajo">Muy bajo</option>
+                            <option value="Alto">Alto</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.76rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.2rem;">
+                            <i class="fa-solid fa-plug-circle-bolt" style="color:#eab308;"></i> Voltaje (V)
+                        </label>
+                        <input type="number" class="form-control tr-voltaje" data-idx="${idx}"
+                            step="0.1" placeholder="Ej: 380" style="font-size:0.88rem; padding:0.45rem 0.6rem;">
+                    </div>
+                    <div style="grid-column: 1 / -1;">
+                        <label style="font-size:0.76rem; font-weight:500; color:#6b7280; display:block; margin-bottom:0.2rem;">
+                            <i class="fa-solid fa-bolt" style="color:#f59e0b;"></i> Corriente (mA)
+                        </label>
+                        <input type="number" class="form-control tr-corriente" data-idx="${idx}"
+                            step="0.1" placeholder="Ej: 250" style="font-size:0.88rem; padding:0.45rem 0.6rem;">
+                    </div>
+                </div>
+            </div>
+        </div>`;
+
+    container.innerHTML = `
+        <div>
+            <div style="font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:0.9rem;
+                padding-bottom:0.45rem; border-bottom:2px solid #FF6900; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fa-solid fa-bolt-lightning" style="color:#FF6900;"></i>
+                Trafos Rectificadores — U${unidad} (${trafos.length} trafos)
+            </div>
+            <p style="font-size:0.8rem; color:#6b7280; margin:0 0 0.9rem;">
+                Marca cada trafo inspeccionado para registrar sus mediciones.
+            </p>
+            <div class="tr-list">
+                ${trafos.map((c, i) => itemHTML(c, i)).join('')}
+            </div>
+        </div>`;
+
+    // Toggle del cuerpo cuando se marca/desmarca el checkbox
+    container.querySelectorAll('.tr-check').forEach(cb => {
+        cb.addEventListener('change', () => {
+            const idx = cb.dataset.idx;
+            const body = container.querySelector(`.tr-body[data-idx="${idx}"]`);
+            if (!body) return;
+            body.style.display = cb.checked ? 'block' : 'none';
+            if (!cb.checked) {
+                body.querySelectorAll('input, select').forEach(el => { el.value = ''; });
+            } else {
+                body.querySelector('input, select')?.focus();
+            }
+        });
+    });
 }
 
 const modalFinalizar = document.getElementById('modal-finalizar-tarea');
@@ -11414,14 +11850,112 @@ if (btnConfirmarFinalizar) {
                 const activoChk = section.querySelector('.comp-activo-check');
                 const activo = activoChk ? activoChk.checked : true;
                 const vibrInput  = section.querySelector('.med-vibr');
-                const termoInput = section.querySelector('.med-termo');
+                const termoInputs = [...section.querySelectorAll('.med-termo')]
+                    .map(el => el.value)
+                    .filter(v => v !== '' && v !== null && v !== undefined);
                 const accionesInput = section.querySelector('.med-acciones');
                 medicionesData.push({
                     componente: comp || null,
                     activo,
                     vibracion:   vibrInput  && vibrInput.value  !== '' ? vibrInput.value  : null,
-                    temperatura: termoInput && termoInput.value !== '' ? termoInput.value : null,
+                    // Compatibilidad: dejamos `temperatura` como la primera lectura
+                    // y exponemos `temperaturas` con TODAS para guardar cada una.
+                    temperatura: termoInputs[0] ?? null,
+                    temperaturas: termoInputs,
                     acciones: accionesInput ? accionesInput.value.trim() : null
+                });
+            });
+
+            // Panel especial Excitatriz / Escobillas: métricas globales + lista
+            // de escobillas con anormalidades. Cada escobilla marcada se vuelve
+            // un componente "Escobilla N°X" con su temperatura.
+            const excGen   = medContainer.querySelector('#exc-generacion')?.value.trim() || '';
+            const excCorrC = medContainer.querySelector('#exc-corriente-campo')?.value.trim() || '';
+            const excTenC  = medContainer.querySelector('#exc-tension-campo')?.value.trim() || '';
+            const escFilas = medContainer.querySelectorAll('.esc-row');
+            if (excGen || excCorrC || excTenC || escFilas.length) {
+                const partesExc = [];
+                if (excGen)   partesExc.push(`Generación unidad: ${excGen} MW`);
+                if (excCorrC) partesExc.push(`Corriente de campo: ${excCorrC} A`);
+                if (excTenC)  partesExc.push(`Tensión de campo: ${excTenC} V`);
+                if (partesExc.length) {
+                    medicionesData.push({
+                        componente: 'Excitatriz',
+                        activo: true,
+                        vibracion: null,
+                        temperatura: null,
+                        temperaturas: [],
+                        acciones: partesExc.join(' | ')
+                    });
+                }
+                escFilas.forEach(row => {
+                    const num  = row.querySelector('.esc-num')?.value.trim() || '';
+                    const temp = row.querySelector('.esc-temp')?.value.trim() || '';
+                    const corr = row.querySelector('.esc-corr')?.value.trim() || '';
+                    if (!num && !temp && !corr) return; // Fila vacía → ignorar
+                    const partes = [];
+                    if (corr) partes.push(`Corriente: ${corr} A`);
+                    medicionesData.push({
+                        componente: num ? `Escobilla N°${num}` : 'Escobilla anómala',
+                        activo: true,
+                        vibracion: null,
+                        temperatura: temp || null,
+                        temperaturas: temp ? [temp] : [],
+                        acciones: partes.length ? partes.join(' | ') : 'Anormalidad reportada'
+                    });
+                });
+            }
+
+            // Panel especial Trafos Rectificadores: cada trafo marcado se
+            // vuelve un componente con su código KKS y todas sus mediciones.
+            medContainer.querySelectorAll('.tr-item').forEach(item => {
+                const checkbox = item.querySelector('.tr-check');
+                if (!checkbox || !checkbox.checked) return;
+                const codigo = item.dataset.codigo || '';
+                const tCarcasa = item.querySelector('.tr-tcarcasa')?.value.trim() || '';
+                const tAceite  = item.querySelector('.tr-taceite')?.value.trim()  || '';
+                const nivel    = item.querySelector('.tr-nivel')?.value.trim()    || '';
+                const voltaje  = item.querySelector('.tr-voltaje')?.value.trim()  || '';
+                const corriente = item.querySelector('.tr-corriente')?.value.trim() || '';
+                const partes = [];
+                if (tAceite)  partes.push(`Temp. aceite: ${tAceite} °C`);
+                if (nivel)    partes.push(`Nivel aceite: ${nivel}`);
+                if (voltaje)  partes.push(`Voltaje: ${voltaje} V`);
+                if (corriente) partes.push(`Corriente: ${corriente} mA`);
+                // La temperatura de carcasa va como medición termográfica para
+                // que aparezca en gráficos de tendencia.
+                const temps = tCarcasa ? [tCarcasa] : [];
+                medicionesData.push({
+                    componente: codigo,
+                    activo: true,
+                    vibracion: null,
+                    temperatura: temps[0] ?? null,
+                    temperaturas: temps,
+                    acciones: partes.length ? partes.join(' | ') : null
+                });
+            });
+
+            // Panel especial Sala Eléctrica: cada equipo marcado se vuelve un
+            // "componente" con sus mediciones, elemento y corriente.
+            medContainer.querySelectorAll('.se-item').forEach(item => {
+                const checkbox = item.querySelector('.se-check');
+                if (!checkbox || !checkbox.checked) return;
+                const nombre = item.dataset.nombre || '';
+                const termos = [...item.querySelectorAll('.se-termo')]
+                    .map(el => el.value)
+                    .filter(v => v !== '' && v !== null && v !== undefined);
+                const elemento = item.querySelector('.se-elemento')?.value.trim() || '';
+                const corriente = item.querySelector('.se-corriente')?.value.trim() || '';
+                const partes = [];
+                if (elemento) partes.push(`Elemento: ${elemento}`);
+                if (corriente) partes.push(`Corriente: ${corriente}`);
+                medicionesData.push({
+                    componente: nombre,
+                    activo: true,
+                    vibracion: null,
+                    temperatura: termos[0] ?? null,
+                    temperaturas: termos,
+                    acciones: partes.length ? partes.join(' | ') : null
                 });
             });
         }
