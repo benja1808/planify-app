@@ -5654,7 +5654,13 @@ function renderHistorialView() {
             .trim();
         const tipos = parseTipos(item);
         const tipoPrincipal = detectarTipoPrincipal(item, tipos);
-        const unidad = item.ubicacion || equipoExacto?.ubicacion || (unidadMatch ? unidadMatch[1].trim() : '');
+        let unidad = item.ubicacion || equipoExacto?.ubicacion || (unidadMatch ? unidadMatch[1].trim() : '');
+        if (!unidad) {
+            // Fallback: buscar "U3", "U10", etc. dentro del título o subtítulo.
+            const textoUnidad = `${tipoRaw} ${item.subtitulo || ''}`;
+            const m = textoUnidad.match(/\bU\s?([1-9]\d?)\b/i);
+            if (m) unidad = `U${m[1]}`;
+        }
         const nombreActivo = equipoExacto?.activo || nombreLimpio || tipoRaw;
         const componente = equipoExacto?.componente || item.componente || item.punto_medicion || '';
         const ayudantes = parseAyudantes(item.ayudantes_nombres);
@@ -8933,8 +8939,12 @@ function renderDashboardView() {
     
     function extraerUbicacionDesdeTexto(texto) {
         if (!texto) return '';
-        const bracketMatch = String(texto).match(/^\[([^\]]+)\]/);
-        return bracketMatch ? bracketMatch[1] : '';
+        const s = String(texto);
+        const bracketMatch = s.match(/^\[([^\]]+)\]/);
+        if (bracketMatch) return bracketMatch[1];
+        // Fallback: detectar patrón "U3", "U10", etc. dentro del texto.
+        const u = s.match(/\bU\s?([1-9]\d?)\b/i);
+        return u ? `U${u[1]}` : '';
     }
 
     function obtenerUbicacionTarea(tarea) {
@@ -8944,7 +8954,8 @@ function renderDashboardView() {
             const equipo = estado.equipos.find(eq => String(eq.id) === String(tarea.equipoId));
             if (equipo?.ubicacion) return equipo.ubicacion;
         }
-        return extraerUbicacionDesdeTexto(tarea.tipo) || 'Sin unidad';
+        const fromTexto = extraerUbicacionDesdeTexto(`${tarea.tipo || ''} ${tarea.subtitulo || ''}`);
+        return fromTexto || 'Sin unidad';
     }
 
     function obtenerFechaRegistro(...valores) {
