@@ -96,7 +96,10 @@ let estado = {
 let semanalExcelImportState = {
     fileName: '',
     total: 0,
-    items: [],
+    items: [],            // tareas filtradas por contratistas seleccionados
+    allItems: [],         // todas las tareas extraídas del Excel
+    contratistas: [],     // [{nombre, count}] únicos en columna O
+    seleccionados: [],    // contratistas marcados (filtran items)
     message: '',
     tone: 'info'
 };
@@ -8582,6 +8585,9 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
                 <i class="fa-solid fa-play"></i> Iniciar
             </button>` : ''}
             ${!tarea._enCola && puedeGestionar ? `
+            ${isAdmin ? `<button onclick="asignarPersonalATarea('${tarea.id}')" class="btn btn-outline daily-task-action-icon" title="Editar personal" style="border-color:#cbd5e1; color:#475569;">
+                <i class="fa-solid fa-user-pen"></i>
+            </button>` : ''}
             <button onclick="window.ponerEnColaExposed('${tarea.id}')" class="daily-task-secondary-btn" style="flex:1; background:#4b5563; color:#fff; border:none; border-radius:8px; padding:0.5rem 1rem; font-size:0.88rem; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.4rem;" onmouseover="this.style.background='#374151'" onmouseout="this.style.background='#4b5563'">
                 <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
             </button>
@@ -8716,6 +8722,9 @@ function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
                 <i class="fa-solid fa-play"></i> Iniciar
             </button>` : ''}
             ${!tarea._enCola && puedeGestionar ? `
+            ${isAdmin ? `<button onclick="asignarPersonalATarea('${tarea.id}')" class="daily-task-action-icon" title="Editar personal" style="border:1px solid #cbd5e1; color:#475569; background:transparent; border-radius:8px; padding:0.5rem 0.7rem; cursor:pointer;">
+                <i class="fa-solid fa-user-pen"></i>
+            </button>` : ''}
             <button onclick="window.ponerEnColaExposed('${tarea.id}')" class="daily-task-secondary-btn">
                 <i class="fa-solid fa-clock-rotate-left"></i> Poner en Cola
             </button>
@@ -10209,7 +10218,7 @@ function renderSemanalView() {
                             <i class="fa-solid fa-trash"></i>
                         </button>
                         <button class="btn btn-outline" type="button" onclick="asignarPersonalATarea('${tarea.id}')">
-                            <i class="fa-solid fa-user-plus"></i> Asignar
+                            <i class="fa-solid fa-user-${tarea.liderId ? 'pen' : 'plus'}"></i> ${tarea.liderId ? 'Editar' : 'Asignar'}
                         </button>
                         <button class="btn btn-primary" type="button" onclick="comenzarTrabajoProgramado('${tarea.id}')">
                             <i class="fa-solid fa-play"></i> Iniciar hoy
@@ -10237,9 +10246,40 @@ function renderSemanalView() {
             success: 'color:var(--success-color);'
         };
         const excelItemsPendientes = semanalExcelImportState.items || [];
+        const excelContratistas    = semanalExcelImportState.contratistas || [];
+        const excelSeleccionados   = new Set(semanalExcelImportState.seleccionados || []);
         const excelStatusHtml = semanalExcelImportState.message
             ? `<div id="excel-status" class="weekly-import-status" style="${excelToneStyles[semanalExcelImportState.tone] || excelToneStyles.info}">${escapeHtml(semanalExcelImportState.message)}</div>`
             : `<div id="excel-status" class="weekly-import-status"></div>`;
+        const excelContratistasHtml = excelContratistas.length
+            ? `
+                <div class="weekly-import-contratistas" style="margin-top:0.85rem; padding:0.85rem; background:rgba(255,255,255,0.6); border:1px solid rgba(16,185,129,0.25); border-radius:10px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; margin-bottom:0.55rem; flex-wrap:wrap;">
+                        <div style="font-size:0.82rem; font-weight:700; color:#0f172a;">
+                            <i class="fa-solid fa-filter" style="color:#10b981; margin-right:0.3rem;"></i>
+                            Contratistas detectados (columna O)
+                        </div>
+                        <div style="display:flex; gap:0.4rem;">
+                            <button id="btn-contratistas-todos" type="button" class="btn btn-outline" style="font-size:0.72rem; padding:0.2rem 0.55rem;">Todos</button>
+                            <button id="btn-contratistas-ninguno" type="button" class="btn btn-outline" style="font-size:0.72rem; padding:0.2rem 0.55rem;">Ninguno</button>
+                        </div>
+                    </div>
+                    <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                        ${excelContratistas.map(c => {
+                            const checked = excelSeleccionados.has(c.nombre) ? 'checked' : '';
+                            const sel = excelSeleccionados.has(c.nombre);
+                            return `
+                            <label class="contratista-pill" style="display:inline-flex; align-items:center; gap:0.4rem; padding:0.35rem 0.7rem; border-radius:999px; cursor:pointer; user-select:none; font-size:0.8rem; font-weight:600; border:1px solid ${sel ? '#10b981' : 'rgba(148,163,184,0.45)'}; background:${sel ? 'rgba(16,185,129,0.12)' : 'rgba(255,255,255,0.85)'}; color:${sel ? '#047857' : '#475569'};">
+                                <input type="checkbox" class="contratista-check" data-nombre="${escapeHtml(c.nombre)}" ${checked}
+                                    style="width:14px; height:14px; accent-color:#10b981; cursor:pointer; margin:0;">
+                                <span>${escapeHtml(c.nombre)}</span>
+                                <span style="font-size:0.7rem; color:#64748b; font-weight:500;">(${c.count})</span>
+                            </label>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `
+            : '';
         const excelPendientesHtml = excelItemsPendientes.length
             ? `
                 <div class="weekly-import-queue">
@@ -10285,13 +10325,14 @@ function renderSemanalView() {
                         <h2 style="color: #34d399;"><i class="fa-solid fa-file-excel"></i> Importar Plan Semanal</h2>
                     </div>
                     <p style="color:var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">
-                        Sube tu archivo Excel. El sistema identificará los trabajos de <strong>APPLUS+</strong> y <strong>GUAPRED</strong> y los agregará automáticamente.
+                        Sube tu archivo Excel.
                     </p>
                     <input type="file" id="input-excel-semanal" accept=".xlsx, .xls, .csv" style="display:none;" />
                     <button id="btn-trigger-excel" class="btn btn-success" style="width:100%;" onclick="document.getElementById('input-excel-semanal').click()">
                         <i class="fa-solid fa-cloud-arrow-up"></i> Cargar Archivo (.xlsx / .csv)
                     </button>
                     ${excelStatusHtml}
+                    ${excelContratistasHtml}
                     ${excelPendientesHtml}
                 </div>
 
@@ -10566,39 +10607,23 @@ function renderSemanalView() {
 
                     console.log("Excel cargado:", json);
 
-                    // Filtrar por columna O (empresa/contratista): APPLUS+ o GUAPRED.
-                    // jsonRaw[0] es cabecera, jsonRaw[1..] datos. Mantengo ambas vistas
-                    // (named + por letra) vinculadas por índice.
-                    const tareasAppus = [];
-                    jsonRaw.slice(1).forEach((rawRow, i) => {
-                        const oVal = String(rawRow['O'] || '').toUpperCase();
-                        if (oVal.includes('APPLUS') || oVal.includes('GUAPRED')) {
-                            tareasAppus.push({ named: json[i] || {}, raw: rawRow });
-                        }
-                    });
-
-                    if(tareasAppus.length === 0) {
-                        semanalExcelImportState = {
-                            fileName: file.name,
-                            total: 0,
-                            items: [],
-                            message: 'No se encontraron tareas para APPLUS+ ni GUAPRED en este archivo.',
-                            tone: 'warning'
-                        };
-                        renderizarVistaActual();
-                        return;
-                    }
-
-                    // Construir lista de tareas encontradas. Mapeo de columnas:
+                    // Extraer TODAS las filas con sus datos. La columna O es el
+                    // contratista; el usuario decidirá luego cuáles ver con
+                    // los checkboxes de la UI.
+                    // Mapeo de columnas:
+                    //   O = contratista (filtro)
                     //   K = Texto breve (título)
                     //   H = subtítulo
                     //   G = ubicación técnica del equipo
                     //   L = Fe.inic.extr (desde cuándo se puede ejecutar)
                     //   M = Fe.fin extre (hasta cuándo está vigente el permiso)
-                    const tareasExtraidas = tareasAppus.map(({ named: row, raw }) => {
+                    const allItems = [];
+                    jsonRaw.slice(1).forEach((rawRow, i) => {
+                        const row = json[i] || {};
                         const ot = obtenerValorFilaExcel(row, ['OT', 'Orden', 'Nro OT']);
-                        const textoBreve = String(row['Texto breve'] || raw['K'] || row['Descripción'] || row['Tarea'] || '').trim();
-                        const rawH = raw['H'];
+                        const textoBreve = String(row['Texto breve'] || rawRow['K'] || row['Descripción'] || row['Tarea'] || '').trim();
+                        if (!textoBreve) return; // fila vacía
+                        const rawH = rawRow['H'];
                         const subtitulo = String(typeof rawH === 'string' || typeof rawH === 'number' ? rawH : '').trim();
                         const eq  = row['Equipo'] || row['Activo'] || row['Ubicación Técnica'] || '';
                         let ubicacion = resolverUbicacionFilaSemanal(row, eq);
@@ -10606,10 +10631,11 @@ function renderSemanalView() {
                             const m = `${textoBreve} ${subtitulo}`.match(/\bU\s?([1-9]\d?)\b/i);
                             if (m) ubicacion = `U${m[1]}`;
                         }
-                        const fechaInicioPermiso = parseFechaExcel(raw['L']);
-                        const fechaExpiracion   = parseFechaExcel(raw['M']);
-                        const ubicacionTecnica  = String(typeof raw['G'] === 'string' || typeof raw['G'] === 'number' ? raw['G'] : '').trim();
-                        return {
+                        const fechaInicioPermiso = parseFechaExcel(rawRow['L']);
+                        const fechaExpiracion   = parseFechaExcel(rawRow['M']);
+                        const ubicacionTecnica  = String(typeof rawRow['G'] === 'string' || typeof rawRow['G'] === 'number' ? rawRow['G'] : '').trim();
+                        const contratista = String(rawRow['O'] || '').trim();
+                        allItems.push({
                             id: crypto.randomUUID(),
                             ot: String(ot || '').trim(),
                             titulo: textoBreve,
@@ -10617,17 +10643,46 @@ function renderSemanalView() {
                             ubicacion: String(ubicacion || '').trim(),
                             ubicacionTecnica,
                             fechaInicioPermiso,
-                            fechaExpiracion
-                        };
-                    }).filter(t => t.titulo);
+                            fechaExpiracion,
+                            contratista
+                        });
+                    });
 
-                    status.innerHTML = `<span style="color:var(--primary-color);font-weight:600;">${tareasExtraidas.length} tarea(s) encontradas. Agrégalas al plan:</span>`;
+                    if (allItems.length === 0) {
+                        semanalExcelImportState = {
+                            fileName: file.name,
+                            total: 0,
+                            items: [],
+                            allItems: [],
+                            contratistas: [],
+                            seleccionados: [],
+                            message: 'No se encontraron tareas con texto breve en este archivo.',
+                            tone: 'warning'
+                        };
+                        renderizarVistaActual();
+                        return;
+                    }
+
+                    // Contar contratistas únicos
+                    const conteo = new Map();
+                    for (const it of allItems) {
+                        const k = it.contratista || '(Sin contratista)';
+                        conteo.set(k, (conteo.get(k) || 0) + 1);
+                    }
+                    const contratistas = [...conteo.entries()]
+                        .map(([nombre, count]) => ({ nombre, count }))
+                        .sort((a, b) => b.count - a.count);
+
+                    status.innerHTML = `<span style="color:var(--primary-color);font-weight:600;">${allItems.length} fila(s) leídas — selecciona contratistas para ver sus tareas.</span>`;
 
                     semanalExcelImportState = {
                         fileName: file.name,
-                        total: tareasExtraidas.length,
-                        items: tareasExtraidas,
-                        message: `${tareasExtraidas.length} tarea(s) encontradas. Agrégalas al plan sin volver a subir el archivo.`,
+                        total: allItems.length,
+                        items: [],          // empieza vacío, se llena al marcar
+                        allItems,
+                        contratistas,
+                        seleccionados: [],  // sin marcar por defecto
+                        message: `${allItems.length} fila(s) en el archivo. Marca los contratistas cuyas tareas quieras importar.`,
                         tone: 'info'
                     };
                     renderizarVistaActual();
@@ -10653,10 +10708,50 @@ function renderSemanalView() {
                 fileName: '',
                 total: 0,
                 items: [],
+                allItems: [],
+                contratistas: [],
+                seleccionados: [],
                 message: '',
                 tone: 'info'
             };
             renderizarVistaActual();
+        });
+
+        // Filtro por contratistas (col O): aplica los seleccionados a allItems.
+        function aplicarFiltroContratistas() {
+            const sel = new Set(semanalExcelImportState.seleccionados || []);
+            const all = semanalExcelImportState.allItems || [];
+            const filtradas = sel.size === 0
+                ? []
+                : all.filter(it => sel.has(it.contratista || '(Sin contratista)'));
+            semanalExcelImportState.items = filtradas;
+            if (sel.size === 0) {
+                semanalExcelImportState.message = `${all.length} fila(s) en el archivo. Marca los contratistas cuyas tareas quieras importar.`;
+                semanalExcelImportState.tone = 'info';
+            } else {
+                semanalExcelImportState.message = `${filtradas.length} tarea(s) de ${[...sel].join(', ')} listas para agregar al plan.`;
+                semanalExcelImportState.tone = 'info';
+            }
+            renderizarVistaActual();
+        }
+
+        document.querySelectorAll('.contratista-check').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const nombre = cb.dataset.nombre;
+                const set = new Set(semanalExcelImportState.seleccionados || []);
+                if (cb.checked) set.add(nombre); else set.delete(nombre);
+                semanalExcelImportState.seleccionados = [...set];
+                aplicarFiltroContratistas();
+            });
+        });
+        document.getElementById('btn-contratistas-todos')?.addEventListener('click', () => {
+            semanalExcelImportState.seleccionados =
+                (semanalExcelImportState.contratistas || []).map(c => c.nombre);
+            aplicarFiltroContratistas();
+        });
+        document.getElementById('btn-contratistas-ninguno')?.addEventListener('click', () => {
+            semanalExcelImportState.seleccionados = [];
+            aplicarFiltroContratistas();
         });
 
         document.querySelectorAll('[data-weekly-import-id]').forEach((button) => {
@@ -10989,23 +11084,40 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     ));
 
     const liderSel = document.getElementById('modal-iniciar-lider');
+    // Si la tarea ya tiene líder, además de los disponibles asegurarnos de
+    // incluirlo aunque no esté disponible en este momento (modo edición).
+    const liderActualObj = tarea.liderId ? estado.trabajadores.find(t => t.id === tarea.liderId) : null;
+    const opcionesLider = liderActualObj && !todos.find(t => t.id === liderActualObj.id)
+        ? [...todos, liderActualObj]
+        : todos;
     liderSel.innerHTML = '<option value="">— Seleccionar —</option>' +
-        todos.map(t => {
+        opcionesLider.map(t => {
             const enTarea = idsEnTarea.has(t.id);
-            return `<option value="${t.id}">${t.nombre} — ${t.cargo || ''}${enTarea ? ' ⚡ trabajando' : ''}</option>`;
+            const sel = tarea.liderId && tarea.liderId === t.id ? ' selected' : '';
+            return `<option value="${t.id}"${sel}>${t.nombre} — ${t.cargo || ''}${enTarea ? ' ⚡ trabajando' : ''}</option>`;
         }).join('');
 
     const ayudContainer = document.getElementById('modal-iniciar-ayudantes');
+    const ayudantesPrev = new Set(tarea.ayudantesIds || []);
 
     function poblarAyudantes(liderIdActual) {
-        const lista = todos.filter(t => t.id !== liderIdActual);
+        // Incluir ayudantes ya asignados aunque no estén disponibles ahora.
+        const baseList = todos.filter(t => t.id !== liderIdActual);
+        const idsBase = new Set(baseList.map(t => t.id));
+        const extras = (tarea.ayudantesIds || [])
+            .filter(id => id !== liderIdActual && !idsBase.has(id))
+            .map(id => estado.trabajadores.find(t => t.id === id))
+            .filter(Boolean);
+        const lista = [...baseList, ...extras];
+
         ayudContainer.innerHTML = lista.map(t => {
             const enTarea = idsEnTarea.has(t.id);
+            const checked = ayudantesPrev.has(t.id) ? ' checked' : '';
             return `
                 <label style="display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.8rem; cursor:pointer;
                     font-size:0.88rem; color:#374151; transition:background 150ms;"
                     onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
-                    <input type="checkbox" value="${t.id}" style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer;">
+                    <input type="checkbox" value="${t.id}"${checked} style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer;">
                     ${t.nombre}${t.cargo ? ` <span style="color:#9ca3af; font-size:0.78rem;">— ${t.cargo}</span>` : ''}
                     ${enTarea ? `<span style="font-size:0.72rem; color:#f59e0b; font-weight:600; margin-left:auto;">⚡ trabajando → cola</span>` : ''}
                 </label>`;
@@ -11027,6 +11139,14 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         const componentesSeleccionados = [...compList.querySelectorAll('.comp-check:checked')].map(cb => cb.value);
         const ayudantesIds = [...ayudContainer.querySelectorAll('input[type=checkbox]:checked')]
             .map(cb => cb.value).filter(v => v !== liderId);
+
+        // Regla: trabajos semanales necesitan líder + 2 técnicos.
+        // El líder cuenta como uno de los 2 técnicos, así que basta con que
+        // haya al menos 1 ayudante adicional (líder + 1 ayudante = 2 técnicos).
+        if (ayudantesIds.length < 1) {
+            alert('Necesitas al menos 1 técnico adicional.\nEl líder cumple también como técnico, pero el equipo mínimo es de 2 personas.');
+            return;
+        }
         const lider = estado.trabajadores.find(t => t.id === liderId);
         const ayudantesNombres = ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '');
         const hora = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
