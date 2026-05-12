@@ -1,0 +1,6436 @@
+[
+  {
+    "nombre": "MOTOR G1-11.05P23-M",
+    "ut": "2893-21-MAE10-AP302--M01",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "DESALADORA -1 (U1)",
+    "ut": "2893-01-GAA01",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "DESALADORA -2 (U2)",
+    "ut": "2893-01-GAA02",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CALDERIN VAPOR -2 GBG70BB001",
+    "ut": "2893-01-GDA05-BB002",
+    "unidad": "D9",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CALDERIN VAPOR -3 GBG75BB001",
+    "ut": "2893-01-GDA05-BB003",
+    "unidad": "D10",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CALDERIN VAPOR -4 GBG80BB001",
+    "ut": "2893-01-GDA05-BB004",
+    "unidad": "D11",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 1 125V CC",
+    "ut": "2893-18-BHA12-GH101",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 2 125V CC",
+    "ut": "2893-18-BHA12-GH102",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V CA",
+    "ut": "2893-18-BHA12-GH103",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL 1 DISTRIBUCION 120V SEGURO",
+    "ut": "2893-18-BHA12-GH104",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO COMUN",
+    "ut": "2893-18-BHA12-GH105",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL CONTACTORES SOPLADORES HOLLIN",
+    "ut": "2893-18-BHA12-GH106",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO ESTACION",
+    "ut": "2893-18-BHA12-GT101",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO UNIDAD",
+    "ut": "2893-18-BHA12-GT102",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "INVERSORES Y CARGADORES BATERIAS",
+    "ut": "2893-18-BHA12-GU101",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 1 125V CC",
+    "ut": "2893-28-BHA12-GH101",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 2 125V CC",
+    "ut": "2893-28-BHA12-GH102",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V CA",
+    "ut": "2893-28-BHA12-GH103",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL 1 DISTRIBUCION 120V SEGURO",
+    "ut": "2893-28-BHA12-GH104",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO COMUN",
+    "ut": "2893-28-BHA12-GH105",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL CONTACTORES SOPLADORES HOLLIN",
+    "ut": "2893-28-BHA12-GH106",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO ESTACION",
+    "ut": "2893-28-BHA12-GT101",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO UNIDAD",
+    "ut": "2893-28-BHA12-GT102",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "INVERSORES Y CARGADORES BATERIAS",
+    "ut": "2893-28-BHA12-GU101",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 125V CC",
+    "ut": "2893-38-BHA12-GH101",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 125V CC COMUN",
+    "ut": "2893-38-BHA12-GH102",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V CA",
+    "ut": "2893-38-BHA12-GH103",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO",
+    "ut": "2893-38-BHA12-GH104",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO COMUN",
+    "ut": "2893-38-BHA12-GH105",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL CONTACTORES SOPLADORES HOLLIN",
+    "ut": "2893-38-BHA12-GH106",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO ESTACION",
+    "ut": "2893-38-BHA12-GT101",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO UNIDAD",
+    "ut": "2893-38-BHA12-GT102",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "INVERSORES Y CARGADORES BATERIAS",
+    "ut": "2893-38-BHA12-GU101",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 125V CC COMUN",
+    "ut": "2893-48-BHA12-GH102",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V CA",
+    "ut": "2893-48-BHA12-GH103",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO",
+    "ut": "2893-48-BHA12-GH104",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DISTRIBUCION 120V SEGURO COMUN",
+    "ut": "2893-48-BHA12-GH105",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL CONTACTORES SOPLADORES HOLLIN",
+    "ut": "2893-48-BHA12-GH106",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GENERADOR ELECTROGENO DIESEL EMERGENCIA",
+    "ut": "2893-48-BHA12-GR102",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO ESTACION",
+    "ut": "2893-48-BHA12-GT101",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR ALUMBRADO UNIDAD",
+    "ut": "2893-48-BHA12-GT102",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "INVERSORES Y CARGADORES BATERIAS",
+    "ut": "2893-48-BHA12-GU101",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR UNIDAD 6 KV",
+    "ut": "2893-18-BBA01",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR ESTACION 6 KV",
+    "ut": "2893-18-BBA02",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM UNIDAD",
+    "ut": "2893-18-BHA01",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM ESTACION",
+    "ut": "2893-18-BHA03",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM TURBINA",
+    "ut": "2893-18-BHA05",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM CALDERA",
+    "ut": "2893-18-BHA06",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM COMUN",
+    "ut": "2893-18-BHA07",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM ESTACION",
+    "ut": "2893-18-BHA08",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM EMERGENCIA",
+    "ut": "2893-18-BHA09",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR UNIDAD 6 KV",
+    "ut": "2893-48-BBA01",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR ESTACION 6 KV",
+    "ut": "2893-48-BBA02",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER UNIT A",
+    "ut": "2893-48-BHA01",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER UNIT B",
+    "ut": "2893-48-BHA02",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER ESTACION A",
+    "ut": "2893-48-BHA03",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER ESTACION B",
+    "ut": "2893-48-BHA04",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM TURBINA",
+    "ut": "2893-48-BHA05",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM CALDERA",
+    "ut": "2893-48-BHA06",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM ESTACION",
+    "ut": "2893-48-BHA08",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM EMERGENCIA",
+    "ut": "2893-48-BHA09",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR UNIDAD 6 KV",
+    "ut": "2893-58-BBA01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGEAR ESTACION 6 KV",
+    "ut": "2893-58-BBA02",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER 6KV INTAKE",
+    "ut": "2893-58-BBA03",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER UNIT A",
+    "ut": "2893-58-BHA01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER UNIT B",
+    "ut": "2893-58-BHA02",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER ESTACION A",
+    "ut": "2893-58-BHA03",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "SWITCHGER ESTACION B",
+    "ut": "2893-58-BHA04",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM TURBINA",
+    "ut": "2893-58-BHA05",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM CALDERA",
+    "ut": "2893-58-BHA06",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM ESTACION",
+    "ut": "2893-58-BHA08",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM EMERGENCIA",
+    "ut": "2893-58-BHA09",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM INTAKE",
+    "ut": "2893-58-BHA10",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTEC TRAFO PRIN./GENERA.",
+    "ut": "2893-17-CHB01-GH107",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE AVR REGULADOR AUTO. VOLTAJE",
+    "ut": "2893-17-CHB01-GH108",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INTERLOCK CALDERA & TURBINA",
+    "ut": "2893-17-CHB01-GH109",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE DE CONTROL DE HIDROGENO (GCP)",
+    "ut": "2893-17-CHB01-GH111",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE ALARMA ANORMALIDAD",
+    "ut": "2893-17-CHB01-GH112",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE DE MEDICION ENERGIA",
+    "ut": "2893-17-CHB01-GH113",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE SINCRONIZACION",
+    "ut": "2893-17-CHB01-GH114",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE INTERLOCK ELECTRICO",
+    "ut": "2893-17-CHB01-GH115",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE CONTROL SISTEMA AUTO TRANSFEREN",
+    "ut": "2893-17-CHB01-GH116",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCIONES RETROFIT",
+    "ut": "2893-17-CHB01-GH117",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTECCION TRAFO ESTACION",
+    "ut": "2893-17-CHB01-GH120",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE ATS RETROFIT",
+    "ut": "2893-17-CHB01-GH124",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INTERFACE BMS RETROFIT",
+    "ut": "2893-17-CHB01-GH125",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE SEÑALES COMUNES TRP4",
+    "ut": "2893-17-CHB01-GH126",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTEC TRAFO PRIN./GENERA.",
+    "ut": "2893-27-CHB01-GH107",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE AVR REGULADOR AUTO. VOLTAJE",
+    "ut": "2893-27-CHB01-GH108",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INTERLOCK CALDERA & TURBINA",
+    "ut": "2893-27-CHB01-GH109",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE DE CONTROL DE HIDROGENO (GCP)",
+    "ut": "2893-27-CHB01-GH111",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE ALARMA ANORMALIDAD",
+    "ut": "2893-27-CHB01-GH112",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE DE MEDICION ENERGIA",
+    "ut": "2893-27-CHB01-GH113",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE SINCRONIZACION",
+    "ut": "2893-27-CHB01-GH114",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE INTERLOCK ELECTRICO",
+    "ut": "2893-27-CHB01-GH115",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE CONTROL SISTEMA AUTO TRANSFEREN",
+    "ut": "2893-27-CHB01-GH116",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCIONES RETROFIT",
+    "ut": "2893-27-CHB01-GH117",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE ATS RETROFIT",
+    "ut": "2893-27-CHB01-GH124",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INTERFACE BMS RETROFIT",
+    "ut": "2893-27-CHB01-GH125",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE SEÑALES COMUNES TRP4",
+    "ut": "2893-27-CHB01-GH126",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTEC TRAFO PRIN./GENERA.",
+    "ut": "2893-37-CHB01-GH107",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE AVR REGULADOR AUTO. VOLTAJE",
+    "ut": "2893-37-CHB01-GH108",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION UNIDAD Y CALDERA",
+    "ut": "2893-37-CHB01-GH109",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PANEL CONTROL GAS HIDROGENO",
+    "ut": "2893-37-CHB01-GH111",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE INTERLOCK ELECTRICO",
+    "ut": "2893-37-CHB01-GH115",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION TURBINA",
+    "ut": "2893-37-CHB01-GH118",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE SEÑALES COMUNES U3/4",
+    "ut": "2893-37-CHB01-GH119",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTECCION TRAFO ESTACION",
+    "ut": "2893-37-CHB01-GH120",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELES DE INTERPOSICION",
+    "ut": "2893-37-CHB01-GH121",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INSTRUMENTOS SUPERVISOR TURBINA",
+    "ut": "2893-37-CHB01-GH122",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE CONTROL GENERADOR",
+    "ut": "2893-37-CHB01-GH123",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTEC TRAFO PRIN./GENERA.",
+    "ut": "2893-47-CHB01-GH107",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE AVR REGULADOR AUTO. VOLTAJE",
+    "ut": "2893-47-CHB01-GH108",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION UNIDAD Y CALDERA",
+    "ut": "2893-47-CHB01-GH109",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE INTERLOCK ELECTRICO",
+    "ut": "2893-47-CHB01-GH115",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION TURBINA",
+    "ut": "2893-47-CHB01-GH118",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELES DE INTERPOSICION",
+    "ut": "2893-47-CHB01-GH121",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INSTRUMENTOS SUPERVISOR TURBINA",
+    "ut": "2893-47-CHB01-GH122",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE CONTROL GENERADOR",
+    "ut": "2893-47-CHB01-GH123",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE ATS RETROFIT",
+    "ut": "2893-47-CHB01-GH124",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INTERFACE BMS RETROFIT",
+    "ut": "2893-47-CHB01-GH125",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTEC TRAFO PRIN./GENERA.",
+    "ut": "2893-57-CHB01-GH107",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE AVR REGULADOR AUTO. VOLTAJE",
+    "ut": "2893-57-CHB01-GH108",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION UNIDAD Y CALDERA",
+    "ut": "2893-57-CHB01-GH109",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE INTERLOCK ELECTRICO",
+    "ut": "2893-57-CHB01-GH115",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE PROTECCION TURBINA",
+    "ut": "2893-57-CHB01-GH118",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELE PROTECCION TRAFO ESTACION",
+    "ut": "2893-57-CHB01-GH120",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE RELES DE INTERPOSICION",
+    "ut": "2893-57-CHB01-GH121",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE INSTRUMENTOS SUPERVISOR TURBINA",
+    "ut": "2893-57-CHB01-GH122",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "GABINETE CONTROL GENERADOR",
+    "ut": "2893-57-CHB01-GH123",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR A2",
+    "ut": "2893-35-HNF02-GS102--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR A3",
+    "ut": "2893-35-HNF02-GS103--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR A4",
+    "ut": "2893-35-HNF02-GS104--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CUBICULO-A5 PANEL CONTROL EP",
+    "ut": "2893-35-HNF02-GS111--A01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B1",
+    "ut": "2893-35-HNF02-GS112--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B2",
+    "ut": "2893-35-HNF02-GS113--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B3",
+    "ut": "2893-35-HNF02-GS114--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B4",
+    "ut": "2893-35-HNF02-GS115--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR -A1",
+    "ut": "2893-35-HNF02-GS101--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B5",
+    "ut": "2893-35-HNF02-GS116--T01",
+    "unidad": "U3",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR A2",
+    "ut": "2893-55-HNF02-GS102--T01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR A3",
+    "ut": "2893-55-HNF02-GS103--T01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B2",
+    "ut": "2893-55-HNF02-GS112--T01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "TRANSFORMADOR RECTIFICADOR B3",
+    "ut": "2893-55-HNF02-GS114--T01",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "CCM 380V MANEJO DE CENIZA",
+    "ut": "2893-16-ETY01-GS301",
+    "unidad": "U1",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DE CTRL SIST DE CENIZA",
+    "ut": "2893-26-ETY02-GH101",
+    "unidad": "U2",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DE CTRL SIST DE CENIZA",
+    "ut": "2893-46-ETY02-GH101",
+    "unidad": "U4",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "PANEL DE CTRL SIST DE CENIZA",
+    "ut": "2893-56-ETY02-GH101",
+    "unidad": "U5",
+    "origenes": [
+      "TERM"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA 1A",
+    "ut": "2893-14-HFC01-BB101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA 1B",
+    "ut": "2893-14-HFC02-BB101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA 1C",
+    "ut": "2893-14-HFC03-BB101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA 1D",
+    "ut": "2893-14-HFC04-BB101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS ALIMENTADOR DE CARBON -A",
+    "ut": "2893-14-HFB01-AF101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS ALIMENTADOR DE CARBON -D",
+    "ut": "2893-14-HFB04-AF101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS ALIMENTADOR DE CARBON -C",
+    "ut": "2893-14-HFB03-AF101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS ALIMENTADOR DE CARBON -B",
+    "ut": "2893-14-HFB02-AF101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2 PULV 1A",
+    "ut": "2893-14-HFC01-AJ201-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3 PULV 1-A",
+    "ut": "2893-14-HFC01-AJ201-KJ03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2 PULV 1-A",
+    "ut": "2893-14-HFC01-AJ201-KJ02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1 PULV 1-A",
+    "ut": "2893-14-HFC01-AJ201-KJ01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1 PULV 1A",
+    "ut": "2893-14-HFC01-AJ201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3 PULV 1A",
+    "ut": "2893-14-HFC01-AJ201-MU03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2 PULV 1D",
+    "ut": "2893-14-HFC04-AJ201-KJ02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3 PULV 1-C",
+    "ut": "2893-14-HFC03-AJ201-MU03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1 PULV 1-D",
+    "ut": "2893-14-HFC04-AJ201-KJ01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-14-HFC04-AJ201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-14-HFC04-AJ201-MU03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-14-HFC04-AJ201-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-14-HFC02-AJ201-KJ03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-14-HFC03-AJ201-KJ01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-14-HFC03-AJ201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-14-HFC02-AJ201-MU03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-14-HFC03-AJ201-KJ02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-14-HFC03-AJ201-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-14-HFC02-AJ201-KJ02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-14-HFC02-AJ201-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-14-HFC04-AJ201-KJ03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-14-HFC02-AJ201-KJ01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-14-HFC02-AJ201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-14-HFC03-AJ201-KJ03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-14-HFC01-AJ201-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-14-HFC01-AJ201-MF02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-14-HFC01-AJ201-MF03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-14-HFC02-AJ201-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-14-HFC04-AJ201-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-14-HFC02-AJ201-MF02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-14-HFC02-AJ201-MF03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-14-HFC03-AJ201-MF03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-14-HFC04-AJ201-MF03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-14-HFC03-AJ201-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-14-HFC03-AJ201-MF02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-14-HFC04-AJ201-MF02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0224",
+    "ut": "2893-14-HFC03-BR105-KA04",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0221",
+    "ut": "2893-14-HFC03-BR105-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0222",
+    "ut": "2893-14-HFC03-BR105-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0223",
+    "ut": "2893-14-HFC03-BR105-KA03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0211",
+    "ut": "2893-14-HFC02-BR105-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0212",
+    "ut": "2893-14-HFC02-BR105-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0213",
+    "ut": "2893-14-HFC02-BR105-KA03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0214",
+    "ut": "2893-14-HFC02-BR105-KA04",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0201",
+    "ut": "2893-14-HFC01-BR105-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0202",
+    "ut": "2893-14-HFC01-BR105-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0203",
+    "ut": "2893-14-HFC01-BR105-KA03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0204",
+    "ut": "2893-14-HFC01-BR105-KA04",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0231",
+    "ut": "2893-14-HFC04-BR105-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0232",
+    "ut": "2893-14-HFC04-BR105-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0234",
+    "ut": "2893-14-HFC04-BR105-KA04",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0233",
+    "ut": "2893-14-HFC04-BR105-KA03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "REDUCTOR DE VELOCIDAD",
+    "ut": "2893-13-PUA01-AT101-MG01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-13-PUA01-AT301-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAMBOR REJA FIJA",
+    "ut": "2893-13-PUA01-AT101-KE01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-13-PUA02-AP101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-13-PUA02-AP102-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-24-HFC01-BB101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-24-HFC02-BB101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-24-HFC03-BB101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-24-HFC04-BB101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA -A G1-11.08P21A-M",
+    "ut": "2893-23-PUA02-AP101--M01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB",
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-24-HFB03-AF101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA -B G1-11.08P21B-M",
+    "ut": "2893-23-PUA02-AP102--M01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB",
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-24-HFB01-AF101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-24-HFB02-AF101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-24-HFC03-AJ201-KJ02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-24-HFC03-AJ201-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-24-HFC03-AJ201-KJ03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-24-HFC03-AJ201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-24-HFC03-AJ201-MU03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-24-HFB04-AF101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-24-HFC03-AJ201-KJ01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-24-HFC01-AJ201-KJ01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-24-HFC01-AJ201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-24-HFC01-AJ201-KJ02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-24-HFC01-AJ201-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-24-HFC01-AJ201-KJ03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-24-HFC01-AJ201-MU03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-24-HFC02-AJ201-KJ02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-24-HFC02-AJ201-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-24-HFC02-AJ201-KJ03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-24-HFC02-AJ201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-24-HFC02-AJ201-MU03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-24-HFC03-AJ201-MF02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-24-HFC03-AJ201-MF03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-24-HFC03-AJ201-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-24-HFC01-AJ201-MF02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-24-HFC01-AJ201-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-24-HFC01-AJ201-MF03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-24-HFC04-AJ201-KJ01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-24-HFC02-AJ201-MF03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-1",
+    "ut": "2893-24-HFC04-AJ201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-2",
+    "ut": "2893-24-HFC04-AJ201-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-24-HFC02-AJ201-MF02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-24-HFC04-AJ201-KJ02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-24-HFC04-AJ201-KJ03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE RODILLO R-3",
+    "ut": "2893-24-HFC04-AJ201-MU03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-24-HFC02-AJ201-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-24-HFC04-AJ201-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-24-HFC04-AJ201-MF02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-24-HFC04-AJ201-MF03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-24-HFC02-AJ201-KJ01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0211",
+    "ut": "2893-24-HFC02-BR105-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0212",
+    "ut": "2893-24-HFC02-BR105-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0213",
+    "ut": "2893-24-HFC02-BR105-KA03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0232",
+    "ut": "2893-24-HFC04-BR105-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0233",
+    "ut": "2893-24-HFC04-BR105-KA03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0234",
+    "ut": "2893-24-HFC04-BR105-KA04",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0204",
+    "ut": "2893-24-HFC01-BR105-KA04",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0223",
+    "ut": "2893-24-HFC03-BR105-KA03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0224",
+    "ut": "2893-24-HFC03-BR105-KA04",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0231",
+    "ut": "2893-24-HFC04-BR105-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 XV-0214",
+    "ut": "2893-24-HFC02-BR105-KA04",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0221",
+    "ut": "2893-24-HFC03-BR105-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0222",
+    "ut": "2893-24-HFC03-BR105-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 XV-0201",
+    "ut": "2893-24-HFC01-BR105-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 XV-0202",
+    "ut": "2893-24-HFC01-BR105-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 XV-0203",
+    "ut": "2893-24-HFC01-BR105-KA03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-23-PUA01-AT301-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "REDUCTOR DE VELOCIDAD",
+    "ut": "2893-23-PUA01-AT101-MG01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-23-PUA01-AT101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-34-HFC01-BB101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-34-HFC02-BB101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-34-HFC03-BB101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-34-HFC04-BB101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA132",
+    "ut": "2893-34-HFC02-BR105-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA112",
+    "ut": "2893-34-HFC02-BR105-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA122",
+    "ut": "2893-34-HFC02-BR105-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA142",
+    "ut": "2893-34-HFC02-BR105-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA113",
+    "ut": "2893-34-HFC03-BR105-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA123",
+    "ut": "2893-34-HFC03-BR105-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA144",
+    "ut": "2893-34-HFC04-BR105-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA133",
+    "ut": "2893-34-HFC03-BR105-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA124",
+    "ut": "2893-34-HFC04-BR105-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA134",
+    "ut": "2893-34-HFC04-BR105-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA111",
+    "ut": "2893-34-HFC01-BR105-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA143",
+    "ut": "2893-34-HFC03-BR105-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA114",
+    "ut": "2893-34-HFC04-BR105-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA121",
+    "ut": "2893-34-HFC01-BR105-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA131",
+    "ut": "2893-34-HFC01-BR105-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA141",
+    "ut": "2893-34-HFC01-BR105-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-34-HFC02-AJ201-MU03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-34-HFC02-AJ201-KJ03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-34-HFC01-AJ201-KJ01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-34-HFC01-AJ201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-34-HFC01-AJ201-KJ02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-34-HFC01-AJ201-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-34-HFC01-AJ201-KJ03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-34-HFC01-AJ201-MU03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-34-HFC02-AJ201-KJ01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-34-HFC02-AJ201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-34-HFC02-AJ201-KJ02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-34-HFC02-AJ201-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-34-HFC04-AJ201-KJ01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-34-HFC04-AJ201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-34-HFC04-AJ201-KJ02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-34-HFC04-AJ201-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-34-HFC04-AJ201-KJ03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-34-HFC04-AJ201-MU03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-34-HFC03-AJ201-KJ03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-34-HFC01-AJ201-MF02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-34-HFC03-AJ201-MU03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-34-HFC02-AJ201-MF02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-34-HFC01-AJ201-MF03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-34-HFC02-AJ201-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-34-HFC03-AJ201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-34-HFC02-AJ201-MF03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-34-HFC03-AJ201-KJ01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-34-HFB02-AF101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-34-HFC03-AJ201-KJ02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-34-HFC01-AJ201-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-34-HFC03-AJ201-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-34-HFB04-AF101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-34-HFC04-AJ201-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-34-HFC04-AJ201-MF02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-34-HFB03-AF101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-34-HFC03-AJ201-MF02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-34-HFC04-AJ201-MF03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-34-HFC03-AJ201-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-34-HFC03-AJ201-MF03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-34-HFB01-AF101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-33-PUA01-AT301-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-33-PUA01-AT101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-35-HRD02-AP101-KP04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "REDUCTOR DE VELOCIDAD",
+    "ut": "2893-33-PUA01-AT101-MG01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-33-PUA02-AP101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO -1",
+    "ut": "2893-35-HRD02-AJ101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-33-PUA02-AP102-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO -2",
+    "ut": "2893-35-HRD02-AJ101-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-44-HFC01-BB101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-44-HFC02-BB101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-44-HFC03-BB101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-44-HFC04-BB101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-44-HFC03-AJ201-KJ01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-44-HFC03-AJ201-KJ02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-44-HFC03-AJ201-KJ03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-44-HFC02-AJ201-KJ01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-44-HFC02-AJ201-KJ02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-44-HFC01-AJ201-KJ02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-44-HFC02-AJ201-KJ03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-44-HFC01-AJ201-KJ01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-44-HFC04-AJ201-KJ01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-44-HFC04-AJ201-KJ02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-44-HFC01-AJ201-KJ03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-44-HFC04-AJ201-KJ03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-44-HFC03-AJ201-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-44-HFC03-AJ201-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-44-HFC03-AJ201-MU03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-44-HFC02-AJ201-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-44-HFC02-AJ201-MU03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-44-HFC01-AJ201-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-44-HFC02-AJ201-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-44-HFC04-AJ201-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-44-HFC01-AJ201-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-44-HFC04-AJ201-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-44-HFC01-AJ201-MU03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-44-HFC04-AJ201-MU03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-44-HFB03-AF101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-44-HFC03-AJ201-MF01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-44-HFC03-AJ201-MF02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-44-HFB02-AF101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA111",
+    "ut": "2893-44-HFC01-BR105-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-44-HFC03-AJ201-MF03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA121",
+    "ut": "2893-44-HFC01-BR105-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-44-HFC02-AJ201-MF02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-44-HFC02-AJ201-MF03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA131",
+    "ut": "2893-44-HFC01-BR105-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-44-HFC02-AJ201-MF01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA141",
+    "ut": "2893-44-HFC01-BR105-KA04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA112",
+    "ut": "2893-44-HFC02-BR105-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA122",
+    "ut": "2893-44-HFC02-BR105-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA132",
+    "ut": "2893-44-HFC02-BR105-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA142",
+    "ut": "2893-44-HFC02-BR105-KA04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA124",
+    "ut": "2893-44-HFC04-BR105-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA114",
+    "ut": "2893-44-HFC04-BR105-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA134",
+    "ut": "2893-44-HFC04-BR105-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA144",
+    "ut": "2893-44-HFC04-BR105-KA04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA133",
+    "ut": "2893-44-HFC03-BR105-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA143",
+    "ut": "2893-44-HFC03-BR105-KA04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA113",
+    "ut": "2893-44-HFC03-BR105-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA123",
+    "ut": "2893-44-HFC03-BR105-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-44-HFC01-AJ201-MF01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-44-HFC04-AJ201-MF02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-44-HFC04-AJ201-MF03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-44-HFC01-AJ201-MF02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-44-HFB01-AF101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-44-HFC01-AJ201-MF03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-44-HFB04-AF101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-44-HFC04-AJ201-MF01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAMBOR REJA FIJA",
+    "ut": "2893-43-PUA01-AT101-KE01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-43-PUA01-AT301-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA -A PGA02AA902",
+    "ut": "2893-43-PGH01-AP102-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-43-PUA02-AP101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-43-PUA02-AP102-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-54-HFC01-BB101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-54-HFC02-BB101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-54-HFC03-BB101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE PIRITA",
+    "ut": "2893-54-HFC04-BB101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ",
+    "ut": "2893-53-PUA01-AT301-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-54-HFC04-AJ201-KJ01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-54-HFC04-AJ201-KJ03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-54-HFC02-AJ201-KJ02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-54-HFC02-AJ201-MU02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-54-HFC02-AJ201-KJ01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-54-HFC03-AJ201-KJ01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-54-HFC04-AJ201-MU03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-54-HFC03-AJ201-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-54-HFC04-AJ201-KJ02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-54-HFC04-AJ201-MU02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-54-HFC02-AJ201-KJ03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-54-HFC03-AJ201-KJ02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-54-HFC03-AJ201-KJ03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-54-HFC03-AJ201-MU03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-54-HFC02-AJ201-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-54-HFC03-AJ201-MU02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-54-HFC02-AJ201-MU03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-54-HFC04-AJ201-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-3",
+    "ut": "2893-54-HFC01-AJ201-KJ03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-1",
+    "ut": "2893-54-HFC01-AJ201-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-2",
+    "ut": "2893-54-HFC01-AJ201-KJ02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-2",
+    "ut": "2893-54-HFC01-AJ201-MU02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODILLO R-1",
+    "ut": "2893-54-HFC01-AJ201-KJ01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MECANISMO AJUSTE HIDRAULICO RODILLO R-3",
+    "ut": "2893-54-HFC01-AJ201-MU03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-54-HFC03-AJ201-MF01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-54-HFC02-AJ201-MF01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-54-HFC02-AJ201-MF02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-54-HFC02-AJ201-MF03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-54-HFC04-AJ201-MF03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-54-HFC04-AJ201-MF01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-54-HFC04-AJ201-MF02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-54-HFC03-AJ201-MF02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-54-HFC03-AJ201-MF03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-54-HFB04-AF101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-54-HFB02-AF101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-54-HFB03-AF101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-3",
+    "ut": "2893-54-HFC01-AJ201-MF03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-1",
+    "ut": "2893-54-HFC01-AJ201-MF01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TAPA RODILLO R-2",
+    "ut": "2893-54-HFC01-AJ201-MF02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-54-HFB01-AF101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA141",
+    "ut": "2893-54-HFC01-BR105-KA04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA111",
+    "ut": "2893-54-HFC01-BR105-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA121",
+    "ut": "2893-54-HFC01-BR105-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA131",
+    "ut": "2893-54-HFC01-BR105-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA143",
+    "ut": "2893-54-HFC03-BR105-KA04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA113",
+    "ut": "2893-54-HFC03-BR105-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA123",
+    "ut": "2893-54-HFC03-BR105-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA133",
+    "ut": "2893-54-HFC03-BR105-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA112",
+    "ut": "2893-54-HFC02-BR105-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA122",
+    "ut": "2893-54-HFC02-BR105-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA144",
+    "ut": "2893-54-HFC04-BR105-KA04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA132",
+    "ut": "2893-54-HFC02-BR105-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 4 HFC01AA142",
+    "ut": "2893-54-HFC02-BR105-KA04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 3 HFC01AA134",
+    "ut": "2893-54-HFC04-BR105-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 1 HFC01AA114",
+    "ut": "2893-54-HFC04-BR105-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA 2 HFC01AA124",
+    "ut": "2893-54-HFC04-BR105-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-53-PUA01-AT101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "REDUCTOR DE VELOCIDAD",
+    "ut": "2893-53-PUA01-AT101-MG01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-53-PUA02-AP102-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-53-PUA02-AP101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VTF",
+    "ut": "2893-15-HLB10-AA701",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DAMPER CONTROL ENTRADA",
+    "ut": "2893-15-HNF01-AD101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TRITURADOR DE ESCORIA",
+    "ut": "2893-16-ETA01-AJ101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -1 ESCORIA",
+    "ut": "2893-16-ETA02-AF101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -2 ESCORIA",
+    "ut": "2893-16-ETA02-AF102",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR HUMEDO",
+    "ut": "2893-16-ETG06-AF101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CALENTADOR AIRE REGENERATIVO",
+    "ut": "2893-15-HLD20-AC101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO DEBRIS",
+    "ut": "2893-13-PAC01-AT101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-15-HLB10-AA702-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DAMPER CONTROL ENTRADA VRG",
+    "ut": "2893-15-HNF01-AA101-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-16-ETG08-AP201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-11-MAE10-AN101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-15-HLB50-AN101-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-15-HLB50-AN101-MU02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTRUCTURA ENGANCHE Y DESENGANCHE",
+    "ut": "2893-15-HNF01-AE102-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO DEBRIS",
+    "ut": "2893-23-PAC01-AT101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VTF",
+    "ut": "2893-25-HLB10-AA701",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CALENTADOR AIRE REGENERATIVO",
+    "ut": "2893-25-HLD20-AC101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DAMPER CONTROL ENTRADA",
+    "ut": "2893-25-HNF01-AD101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TRITURADOR DE ESCORIA",
+    "ut": "2893-26-ETA01-AJ101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -1 ESCORIA",
+    "ut": "2893-26-ETA02-AF101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -2 ESCORIA",
+    "ut": "2893-26-ETA02-AF102",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DE LINEA ECO-AH",
+    "ut": "2893-26-ETG01-AA101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR HUMEDO",
+    "ut": "2893-26-ETG06-AF101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-25-HLB10-AA702-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VRG",
+    "ut": "2893-25-HNF01-AA101-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-26-ETG08-AP201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS B-CW-104",
+    "ut": "2893-23-PAC01-AT101-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA B-CW-103",
+    "ut": "2893-23-PAC01-AT101-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-21-MAE10-AN101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-25-HLB50-AN101-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTRUCTURA ENGANCHE Y DESENGANCHE",
+    "ut": "2893-25-HNF01-AE102-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-25-HLB50-AN101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO DEBRIS",
+    "ut": "2893-33-PAC01-AT101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VENTILADOR TIRO FORZADO VTF",
+    "ut": "2893-35-HLB10-AN101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VENTILADOR AIRE SELLO VAS -A",
+    "ut": "2893-35-HLB30-AN101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VENTILADOR TIRO INDUCIDO VTI",
+    "ut": "2893-35-HNC01-AN101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DAMPER CONTROL ENTRADA",
+    "ut": "2893-35-HNF01-AD101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO BANDA A",
+    "ut": "2893-35-HRB02-AT101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO BANDA B",
+    "ut": "2893-35-HRB03-AT101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TRITURADOR DE ESCORIA",
+    "ut": "2893-36-ETA01-AJ101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -1 ESCORIA",
+    "ut": "2893-36-ETA02-AF101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -2 ESCORIA",
+    "ut": "2893-36-ETA02-AF102",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR HUMEDO",
+    "ut": "2893-36-ETG06-AF101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-31-MAE10-AN101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VTI",
+    "ut": "2893-35-HNC01-AN101-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VRG",
+    "ut": "2893-35-HNF01-AA101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA SOLENOIDE ETG01AA815-Y01",
+    "ut": "2893-36-ETG01-AA101--Y01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-36-ETG08-AP201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "REDUCTOR DE AVANCE LENTO",
+    "ut": "2893-35-HRD02-AJ101-MG01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA SOLENOIDE ETG01AA816-Y01",
+    "ut": "2893-36-ETG02-AA101--Y01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA SOLENOIDE ETG01AA817-Y01",
+    "ut": "2893-36-ETG02-AA102--Y01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-35-HLB40-AN101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-35-HLB40-AN101-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-35-HLB50-AN101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-35-HLB50-AN101-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTRUCTURA ENGANCHE Y DESENGANCHE",
+    "ut": "2893-35-HNF01-AE102-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-35-HLB30-AN101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "FILTRO DEBRIS",
+    "ut": "2893-43-PAC01-AT101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO DESCARGA VTF",
+    "ut": "2893-45-HLB10-BR101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VENTILADOR AIRE SELLO VAS -A",
+    "ut": "2893-45-HLB30-AN101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DAMPER CONTROL ENTRADA",
+    "ut": "2893-45-HNF01-AD101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TRITURADOR DE ESCORIA",
+    "ut": "2893-46-ETA01-AJ101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -1 ESCORIA",
+    "ut": "2893-46-ETA02-AF101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -2 ESCORIA",
+    "ut": "2893-46-ETA02-AF102",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR HUMEDO",
+    "ut": "2893-46-ETG06-AF101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-46-ETG08-AP201-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA SOLENOIDE ETG01AA815-Y01",
+    "ut": "2893-46-ETG01-AA101--Y01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTRUCTURA DE ENGANCHE Y DESENGANCHE",
+    "ut": "2893-45-HNF01-AE102-MF01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-45-HLB40-AN101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-45-HLB40-AN101-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-45-HLB50-AN101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-45-HLB50-AN101-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS MOTOR",
+    "ut": "2893-45-HLB30-AN101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-14-HFC01-AT101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-14-HFC02-AT101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-14-HFC03-AT101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-14-HFC04-AT101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PURIFICADOR ACEITE",
+    "ut": "2893-11-MAD20-AT201",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DRENAJE ESTQ PURGA CONTINUA",
+    "ut": "2893-10-HAC08-BB101-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL",
+    "ut": "2893-10-HCH01-BR102-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-01-GCP13-AP102-KP01",
+    "unidad": "PA",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR GHC01AP101-M01",
+    "ut": "2893-01-GCL17-AP101--M01",
+    "unidad": "PA",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA BOOSTER -A 04PAC01AP701-M01",
+    "ut": "2893-01-GAF13-AP101--M01",
+    "unidad": "PA",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA BOOSTER -B 04PAC01AP702-M01",
+    "ut": "2893-01-GAF13-AP102--M01",
+    "unidad": "PA",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BBA GBG16AP001-M01",
+    "ut": "2893-01-GDR11-AP101--M01",
+    "unidad": "PA",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-24-HFC01-AT101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-24-HFC02-AT101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-24-HFC03-AT101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CLASIFICADOR MANUAL",
+    "ut": "2893-24-HFC04-AT101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PURIFICADOR ACEITE",
+    "ut": "2893-21-MAD20-AT201",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODAMIENTO SUPERIOR",
+    "ut": "2893-25-HLD20-AC101-MU02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DRENAJE ESTQ PURGA CONTINUA",
+    "ut": "2893-20-HAC08-BB101-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CILINDRO NEUMATICO",
+    "ut": "2893-25-HHC20-AA701-MS01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL",
+    "ut": "2893-20-HCH01-BR102-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "RODAMIENTO INFERIOR",
+    "ut": "2893-25-HLD20-AC101-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PURIFICADOR ACEITE MAV21AT201",
+    "ut": "2893-31-MAD20-AT201",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CADENA SUMERGIDA",
+    "ut": "2893-36-ETA01-AT101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-36-ETB01-AP201",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA VACIO -A",
+    "ut": "2893-36-ETG08-AP201",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA VACIO -B",
+    "ut": "2893-36-ETG08-AP202",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT211",
+    "ut": "2893-36-ETG04-AT102-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT212",
+    "ut": "2893-36-ETG04-AT103-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT202",
+    "ut": "2893-36-ETG03-BB103-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT201",
+    "ut": "2893-36-ETG03-BB102-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-36-ETB02-AP201-KP01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -B",
+    "ut": "2893-36-ETG08-AP202--M01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-36-ETG08-AP202-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ",
+    "ut": "2893-36-ETA01-AT101-MU03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA INFERIOR",
+    "ut": "2893-36-ETA01-AT101-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE TENSOR",
+    "ut": "2893-36-ETA01-AT101-MU06",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA SUPERIOR",
+    "ut": "2893-36-ETA01-AT101-MU02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO TRANSMISION",
+    "ut": "2893-36-ETA01-AT101-MU05",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO LIBRE",
+    "ut": "2893-36-ETA01-AT101-MU04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PURIFICADOR ACEITE MAV21AT201",
+    "ut": "2893-41-MAD20-AT201",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CADENA SUMERGIDA",
+    "ut": "2893-46-ETA01-AT101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-46-ETB01-AP201",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA VACIO -A",
+    "ut": "2893-46-ETG08-AP201",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA VACIO -B",
+    "ut": "2893-46-ETG08-AP202",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT201",
+    "ut": "2893-46-ETG03-BB102-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT202",
+    "ut": "2893-46-ETG03-BB103-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AT211",
+    "ut": "2893-46-ETG04-AT102-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LS DOBLE DAMPER ETG01AT212-S02",
+    "ut": "2893-46-ETG04-AT103--S02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR VENTILADOR FLUIDIZACION -A",
+    "ut": "2893-46-ETG07-AN101--M01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -B",
+    "ut": "2893-46-ETG08-AP202--M01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-46-ETG08-AP202-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-46-ETB01-AP201-KP01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-46-ETB02-AP201-KP01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS PAC01HA101",
+    "ut": "2893-33-PAC01-AP101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS PAC01HB102",
+    "ut": "2893-33-PAC01-AP102-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ",
+    "ut": "2893-46-ETA01-AT101-MU03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA INFERIOR",
+    "ut": "2893-46-ETA01-AT101-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE TENSOR",
+    "ut": "2893-46-ETA01-AT101-MU06",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA SUPERIOR",
+    "ut": "2893-46-ETA01-AT101-MU02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO LIBRE",
+    "ut": "2893-46-ETA01-AT101-MU04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO TRANSMISION",
+    "ut": "2893-46-ETA01-AT101-MU05",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PURIFICADOR ACEITE MAV21AT201",
+    "ut": "2893-51-MAD20-AT201",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TRITURADOR DE ESCORIA",
+    "ut": "2893-56-ETA01-AJ101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CADENA SUMERGIDA",
+    "ut": "2893-56-ETA01-AT101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -1 ESCORIA",
+    "ut": "2893-56-ETA02-AF101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CORREA TRANSPORTADORA -2 ESCORIA",
+    "ut": "2893-56-ETA02-AF102",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR HUMEDO",
+    "ut": "2893-56-ETG06-AF101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCARGADOR SECO",
+    "ut": "2893-56-ETG06-AF102",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AA201",
+    "ut": "2893-56-ETG03-BB102-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AA202",
+    "ut": "2893-56-ETG03-BB103-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AA211",
+    "ut": "2893-56-ETG04-AT102-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DOBLE DAMPER ETG01AA212",
+    "ut": "2893-56-ETG04-AT103-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA ROTATORIA ETH01AF101",
+    "ut": "2893-56-ETG06-BR101-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-56-ETB02-AP201-KP01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS PAC01HA101",
+    "ut": "2893-53-PAC01-AP101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS PAC01HB102",
+    "ut": "2893-53-PAC01-AP102-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ",
+    "ut": "2893-56-ETA01-AT101-MU03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA INFERIOR",
+    "ut": "2893-56-ETA01-AT101-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE TENSOR",
+    "ut": "2893-56-ETA01-AT101-MU06",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE GUIA SUPERIOR",
+    "ut": "2893-56-ETA01-AT101-MU02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO LIBRE",
+    "ut": "2893-56-ETA01-AT101-MU04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "EJE MOTRIZ LADO TRANSMISION",
+    "ut": "2893-56-ETA01-AT101-MU05",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-16-ETB01-AP201",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PEDESTAL TURBINA ALTA PRESION",
+    "ut": "2893-11-MAB15-BU101-MF01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PLACA DE BASE  TURBINA ALTA PRESION",
+    "ut": "2893-11-MAB15-BU101-MF02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TORNILLO APOYO CAJA DE TURBINA",
+    "ut": "2893-11-MAB15-BU101-MF03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -A",
+    "ut": "2893-16-ETG08-AP201--M01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL G-SC-113",
+    "ut": "2893-12-LCC01-AC101-KA07",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL G-SC-116",
+    "ut": "2893-12-LCC01-AC102-KA06",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL",
+    "ut": "2893-12-LCC01-AC103-KA06",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CBP-3",
+    "ut": "2893-12-LCC01-AC103-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-12-LCA02-AP201-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-12-LCA02-AP202-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO XV-5053",
+    "ut": "2893-12-LCA02-BB102-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-26-ETB01-AP201",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO DESCARGA",
+    "ut": "2893-26-ETG06-BR101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PEDESTAL TURBINA ALTA PRESION",
+    "ut": "2893-21-MAB15-BU101-MF01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PLACA DE BASE  TURBINA ALTA PRESION",
+    "ut": "2893-21-MAB15-BU101-MF02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TORNILLO APOYO CAJA DE TURBINA",
+    "ut": "2893-21-MAB15-BU101-MF03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -A",
+    "ut": "2893-26-ETG08-AP201--M01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL G-SC-113",
+    "ut": "2893-22-LCC01-AC101-KA07",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL G-SC-116",
+    "ut": "2893-22-LCC01-AC102-KA06",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CBP-2 G-SC-118",
+    "ut": "2893-22-LCC01-AC102-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL",
+    "ut": "2893-22-LCC01-AC103-KA06",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-22-LCA02-AP201-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO XV-5053",
+    "ut": "2893-22-LCA02-BB102-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PLACA DE BASE  TURBINA ALTA PRESION",
+    "ut": "2893-31-MAB15-BU101-MF02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TORNILLO APOYO CAJA DE TURBINA",
+    "ut": "2893-31-MAB15-BU101-MF03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-36-ETB01-AP201--M01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL ETH01AA521",
+    "ut": "2893-36-ETG06-AF102-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -A",
+    "ut": "2893-36-ETG08-AP201--M01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO MAJ11AA803",
+    "ut": "2893-32-LCA02-BB102-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO MAJ11AA811",
+    "ut": "2893-32-LCA02-BB102-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CAP LAB12AA512",
+    "ut": "2893-32-LAD01-AC101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PEDESTAL TURBINA ALTA PRESION",
+    "ut": "2893-31-MAB15-BU101-MF01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA INCOM. SALIDA CAP LAB21AA501",
+    "ut": "2893-32-LAD01-AC101-KA06",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA INCOM. SALIDA CAP LAB31AA501",
+    "ut": "2893-32-LAD01-AC102-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CBP-1 LCA13AA508",
+    "ut": "2893-32-LCC01-AC101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL LCA13AA507",
+    "ut": "2893-32-LCC01-AC101-KA07",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA INCOMUN SALIDA CBP-2 LCA31AA501",
+    "ut": "2893-32-LCC01-AC102-KA05",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL LCA21AA502",
+    "ut": "2893-32-LCC01-AC102-KA06",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CBP-3 LCA31AA503",
+    "ut": "2893-32-LCC01-AC103-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA INCOMUN SALIDA CBP-3 LCA44AA501",
+    "ut": "2893-32-LCC01-AC103-KA05",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL LCA31AA502",
+    "ut": "2893-32-LCC01-AC103-KA06",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA ENTRADA AIRE EYECTOR MAJ01AA911",
+    "ut": "2893-31-MAQ12-BR401-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL LCA13AA501",
+    "ut": "2893-32-LCB03-BR106-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA CHECK SALIDA MAW01AA953",
+    "ut": "2893-31-MAM22-AN101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA CHECK SALIDA MAW01AA954",
+    "ut": "2893-31-MAM22-AN102-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-32-LCA02-AP201-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS PAB01AA502",
+    "ut": "2893-33-PAC01-AT101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA DESCARGA PAB01AA503",
+    "ut": "2893-33-PAC01-AT101-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO DESCARGA",
+    "ut": "2893-46-ETG06-BR101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -A",
+    "ut": "2893-46-ETG08-AP201--M01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA DRENAJE ESCORIA -A",
+    "ut": "2893-46-ETB01-AP201--M01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA INCOM. ENTRADA CAP LAB21AA502",
+    "ut": "2893-32-LAD01-AC102-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS CAP LAB21AA503",
+    "ut": "2893-32-LAD01-AC102-KA11",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA ACEITE VIRADO",
+    "ut": "2893-51-MAE10-AP401",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA GUILLOTINA",
+    "ut": "2893-54-HFB01-AA101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA GUILLOTINA",
+    "ut": "2893-54-HFB02-AA101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA GUILLOTINA",
+    "ut": "2893-54-HFB03-AA101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA GUILLOTINA",
+    "ut": "2893-54-HFB04-AA101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PEDESTAL TURBINA ALTA PRESION",
+    "ut": "2893-51-MAB15-BU101-MF01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PLACA DE BASE  TURBINA ALTA PRESION",
+    "ut": "2893-51-MAB15-BU101-MF02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "TORNILLO APOYO CAJA DE TURBINA",
+    "ut": "2893-51-MAB15-BU101-MF03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO MAJ11AA803",
+    "ut": "2893-52-LCA02-BB102-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA QUEBRADORA VACIO MAJ11AA811",
+    "ut": "2893-52-LCA02-BB102-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL ETH01AA551",
+    "ut": "2893-56-ETG06-BR101-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA BYPASS PCV LAB12AA904",
+    "ut": "2893-52-LAC02-BR101-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-52-LCA02-AP201-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BOMBA VACIO -A",
+    "ut": "2893-56-ETG08-AP201--M01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO SUCCION VAI",
+    "ut": "2893-15-HLB40-BR101",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VAP",
+    "ut": "2893-15-HLB20-AA701",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "SISTEMA PULVERIZADORES DE CARBÓN",
+    "ut": "2893-14-HFC",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR SULFATO FERROSO",
+    "ut": "2893-10-HQI03-BB001",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR FOSFATO DE SODIO",
+    "ut": "2893-10-HQI02-BB001",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR ACONDICIO AGUA ENFR",
+    "ut": "2893-10-HQI04-BB001",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR HIDRACINA",
+    "ut": "2893-10-HQI01-BB001",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -1",
+    "ut": "2893-15-HLB40-BR102-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -2",
+    "ut": "2893-15-HLB40-BR102-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -3",
+    "ut": "2893-15-HLB40-BR102-KA03",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -4",
+    "ut": "2893-15-HLB40-BR102-KA04",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-15-HLB50-AA701-MU01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-15-HLB20-AA701-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL ENT",
+    "ut": "2893-15-HLB30-AA101-KA01",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL SAL",
+    "ut": "2893-15-HLB30-AA101-KA02",
+    "unidad": "U1",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO SUCCION VAI",
+    "ut": "2893-25-HLB40-BR101",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VAP",
+    "ut": "2893-25-HLB20-AA701",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR SULFATO FERROSO",
+    "ut": "2893-20-HQI03-BB001",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR FOSFATO DE SODIO",
+    "ut": "2893-20-HQI02-BB001",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR ACONDICIO AGUA ENFR",
+    "ut": "2893-20-HQI04-BB001",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "ESTANQUE DOSIFICADOR HIDRACINA",
+    "ut": "2893-20-HQI01-BB001",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "SISTEMA PULVERIZADORES DE CARBÓN",
+    "ut": "2893-24-HFC",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -1",
+    "ut": "2893-25-HLB40-BR102-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -2",
+    "ut": "2893-25-HLB40-BR102-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -3",
+    "ut": "2893-25-HLB40-BR102-KA03",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -4",
+    "ut": "2893-25-HLB40-BR102-KA04",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-25-HLB50-AA701-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO ACTUADOR",
+    "ut": "2893-25-HLB20-AA701-MU01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VAP",
+    "ut": "2893-35-HLB20-AA701",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO SUCCION VAI",
+    "ut": "2893-35-HLB40-BR101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CALENTADOR AIRE REGENERATIVO",
+    "ut": "2893-35-HLD20-AC101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOLINO DE BOLAS",
+    "ut": "2893-35-HRD02-AJ101",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR VALVULA ROTATORIA HRA04AA201",
+    "ut": "2893-35-HRC01-AA101--M01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR TRANSPORTADOR DE TORNILLO",
+    "ut": "2893-35-HRC01-AF101--M01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULAS BYPASS CONTROLPRESION",
+    "ut": "2893-30-HCG01-BR102-KA08",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL 03LBD12AA501",
+    "ut": "2893-30-HCG01-BR102-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MANUAL 03LBD12AA502",
+    "ut": "2893-30-HCG01-BR102-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA MOTORIZADA VAPOR AUX",
+    "ut": "2893-30-HCG01-BR103-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO ACTUADOR",
+    "ut": "2893-35-HLB20-AA701-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -1",
+    "ut": "2893-35-HLB40-BR102-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -2",
+    "ut": "2893-35-HLB40-BR102-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -3",
+    "ut": "2893-35-HLB40-BR102-KA03",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -4",
+    "ut": "2893-35-HLB40-BR102-KA04",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-35-HLB50-AA701-MU01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL ENTRADA",
+    "ut": "2893-35-HLB30-AA101-KA01",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL SALIDA",
+    "ut": "2893-35-HLB30-AA101-KA02",
+    "unidad": "U3",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "SISTEMA PULVERIZADORES DE CARBÓN",
+    "ut": "2893-44-HFC",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VAP",
+    "ut": "2893-45-HLB20-AA701",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO SUCCION VAI",
+    "ut": "2893-45-HLB40-BR101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "CALENTADOR AIRE REGENERATIVO",
+    "ut": "2893-45-HLD20-AC101",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-45-HSJ02-AP101-KP01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO ACTUADOR",
+    "ut": "2893-45-HLB20-AA701-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -1",
+    "ut": "2893-45-HLB40-BR102-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -2",
+    "ut": "2893-45-HLB40-BR102-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -3",
+    "ut": "2893-45-HLB40-BR102-KA03",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -4",
+    "ut": "2893-45-HLB40-BR102-KA04",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-45-HLB50-AA701-MU01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL ENTRADA",
+    "ut": "2893-45-HLB30-AA101-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL SALIDA",
+    "ut": "2893-45-HLB30-AA101-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR NEUMATICO",
+    "ut": "2893-45-HLD20-AC101--M02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VAP",
+    "ut": "2893-55-HLB20-AA701",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DUCTO SUCCION VAI",
+    "ut": "2893-55-HLB40-BR101",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "MOTOR BBA POZO SUMIDERO 05HRA01AP401-M01",
+    "ut": "2893-55-HRA11-AP101--M01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA",
+    "ut": "2893-55-HSJ02-AP101-KP01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA PURGA EMERGENCIA DOMO",
+    "ut": "2893-50-HAC08-BR106-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "VALVULA NORMAL PURGA CONTINUA",
+    "ut": "2893-50-HAC08-BR107-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -1",
+    "ut": "2893-55-HLB40-BR102-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSO ACTUADOR",
+    "ut": "2893-55-HLB20-AA701-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -2",
+    "ut": "2893-55-HLB40-BR102-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -3",
+    "ut": "2893-55-HLB40-BR102-KA03",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA AIRE IGNITORES ESQUINA -4",
+    "ut": "2893-55-HLB40-BR102-KA04",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL ENTRADA",
+    "ut": "2893-55-HNC02-BR101-KA01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "DESCANSOS",
+    "ut": "2893-55-HLB50-AA701-MU01",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO MANUAL SALIDA",
+    "ut": "2893-55-HNC02-BR102-KA02",
+    "unidad": "U5",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-25-HLB20-AA701-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-25-HLB20-AA702-MS01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-25-HLB20-AA702-KA01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-25-HLB20-AA701-MS01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-25-HLB10-AA701-KA02",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-25-HLB10-AA702-MS01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-25-HLB10-AA701-MS01",
+    "unidad": "U2",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VTF",
+    "ut": "2893-45-HLB10-AA701",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-45-HLB10-AA701-KA02",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-45-HLB10-AA701-MS01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "PERSIANAS",
+    "ut": "2893-45-HLB20-AA701-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BRAZO ACOPLAMIENTO",
+    "ut": "2893-45-HLB20-AA701-MS01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "LAMPO ENTRADA VRG",
+    "ut": "2893-45-HNF01-AA101-KA01",
+    "unidad": "U4",
+    "origenes": [
+      "LUB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION PRINCIPAL B.A.A 1C",
+    "ut": "2893-12-LAC01-AP103-KP03",
+    "unidad": "U1",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA SALMUERA GBG35AP001 DES10",
+    "ut": "2893-01-GDB03-AP111-M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA DE VACIO -2 DES9",
+    "ut": "2893-01-GDB02-AP302-M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION DESALADORA -3 (U3)",
+    "ut": "2893-01-GAA03-AP201--M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION DESALADORA -4 (U3)",
+    "ut": "2893-01-GAA04-AP201--M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION DESALADORA -5 (U4)",
+    "ut": "2893-01-GAA05-AP201--M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION DESALADORA -6 (U5)",
+    "ut": "2893-01-GAA06-AP201--M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA LUBRICACION DESALADORA -7 (U5)",
+    "ut": "2893-01-GAA07-AP201--M01",
+    "unidad": "PA",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -A LAVADO REJA MOVIL U1",
+    "ut": "2893-13-PUA02-AP101--M01",
+    "unidad": "U1",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -B LAVADO REJA MOVIL U1",
+    "ut": "2893-13-PUA02-AP102--M01",
+    "unidad": "U1",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -A LAVADO REJA MOVIL U3",
+    "ut": "2893-33-PUA02-AP101--M01",
+    "unidad": "U3",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -B LAVADO REJA MOVIL U3",
+    "ut": "2893-33-PUA02-AP102--M01",
+    "unidad": "U3",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -A LAVADO REJA MOVIL U4",
+    "ut": "2893-43-PUA02-AP101--M01",
+    "unidad": "U4",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -B LAVADO REJA MOVIL U4",
+    "ut": "2893-43-PUA02-AP102--M01",
+    "unidad": "U4",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -A LAVADO REJA MOVIL U5",
+    "ut": "2893-53-PUA02-AP101--M01",
+    "unidad": "U5",
+    "origenes": [
+      "VIB"
+    ]
+  },
+  {
+    "nombre": "BOMBA -B LAVADO REJA MOVIL U5",
+    "ut": "2893-53-PUA02-AP102--M01",
+    "unidad": "U5",
+    "origenes": [
+      "VIB"
+    ]
+  }
+]

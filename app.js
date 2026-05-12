@@ -2006,11 +2006,12 @@ async function guardarTareaFinalizada({
                 const equipoIdComp = eqParaComp?.id || equipoIdMed;
 
                 if (m.vibracion !== null && m.vibracion !== '') {
+                    const valorVibracion = Number(String(m.vibracion).replace(',', '.'));
                     await guardarMedicion({
                         equipo_id: equipoIdComp,
                         tipo: 'vibracion',
-                        valor: parseFloat(m.vibracion),
-                        punto_medicion: m.componente || equipoBase || 'General',
+                        valor: Number.isFinite(valorVibracion) ? valorVibracion : parseFloat(m.vibracion),
+                        punto_medicion: m.punto_medicion || m.componente || equipoBase || 'General',
                         componente: m.componente || null,
                         fecha: fechaHoy
                     });
@@ -2021,11 +2022,12 @@ async function guardarTareaFinalizada({
                     : (m.temperatura !== null && m.temperatura !== '' ? [m.temperatura] : []);
                 for (const lectura of lecturasTermo) {
                     if (lectura === null || lectura === '' || lectura === undefined) continue;
+                    const valorTemperatura = Number(String(lectura).replace(',', '.'));
                     await guardarMedicion({
                         equipo_id: equipoIdComp,
                         tipo: 'termografia',
-                        valor: parseFloat(lectura),
-                        punto_medicion: m.componente || equipoBase || 'General',
+                        valor: Number.isFinite(valorTemperatura) ? valorTemperatura : parseFloat(lectura),
+                        punto_medicion: m.punto_medicion || m.componente || equipoBase || 'General',
                         componente: m.componente || null,
                         fecha: fechaHoy
                     });
@@ -12572,6 +12574,115 @@ function trafosRectificadoresPorUnidad(unidad) {
 }
 
 // ── Construir formulario dinámico de mediciones en modal-finalizar ────────────
+const BAE_KKS = new Set([
+    '2893-11-MAE10-AP302--M01',
+    '2893-21-MAE10-AP302--M01',
+    '2893-31-MAE10-AP302--M01',
+    '2893-41-MAE10-AP302--M01',
+    '2893-51-MAE10-AP302--M01'
+]);
+
+function esTareaBombaAceiteEmergencia(tarea) {
+    if (!tarea) return false;
+    const equipoId = tarea.equipoId || tarea.equipo_id;
+    const equipo = equipoId ? estado.equipos.find(e => String(e.id) === String(equipoId)) : null;
+    const texto = [
+        tarea.tipo,
+        tarea.subtitulo,
+        tarea.ubicacion,
+        equipo?.activo,
+        equipo?.denominacion_ut,
+        equipo?.kks,
+        equipo?.ubicacion_tecnica
+    ].filter(Boolean).join(' ')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const kks = String(equipo?.kks || equipo?.ubicacion_tecnica || '').trim().toUpperCase();
+    return BAE_KKS.has(kks)
+        || texto.includes('BOMBA ACEITE EMERGENCIA')
+        || texto.includes('BBA ACEITE EMERGENCIA')
+        || texto.includes('BBA ACEITE D.C');
+}
+
+function _buildPanelBombaAceiteEmergencia(container, tareaCtx) {
+    const equipoId = tareaCtx?.equipoId || tareaCtx?.equipo_id;
+    const equipo = equipoId ? estado.equipos.find(e => String(e.id) === String(equipoId)) : null;
+    const unidad = equipo?.ubicacion || tareaCtx?.ubicacion || '';
+    const tempRows = [1, 2, 3, 4].map(porta => `
+        <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; overflow:hidden;">
+            <div style="background:#fff7ed; color:#9a3412; font-weight:800; padding:0.55rem 0.75rem; border-bottom:1px solid #fed7aa;">
+                Porta escobilla N°${porta}
+            </div>
+            <div style="display:grid; gap:0.45rem; padding:0.75rem;">
+                ${[1, 2, 3].map(esc => {
+                    const label = `Escobilla ${porta}-${esc}`;
+                    return `<label style="display:grid; grid-template-columns:minmax(110px,1fr) minmax(110px,150px); gap:0.6rem; align-items:center;">
+                        <span style="font-size:0.84rem; color:#334155; font-weight:700;">${label}</span>
+                        <input type="number" class="form-control bae-temp" data-label="${label}" min="-50" step="0.1" inputmode="decimal">
+                    </label>`;
+                }).join('')}
+            </div>
+        </div>`).join('');
+
+    container.innerHTML = `
+        <div class="bae-panel" style="border:1px solid #fed7aa; background:#fff7ed; border-radius:12px; padding:1rem;">
+            <div style="display:flex; align-items:flex-start; gap:0.65rem; margin-bottom:1rem;">
+                <span style="width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#ffedd5; color:#9a3412;">
+                    <i class="fa-solid fa-oil-can"></i>
+                </span>
+                <div>
+                    <div style="font-size:0.95rem; font-weight:900; color:#0f172a;">Bomba Aceite Emergencia${unidad ? ` · ${escapeHtml(unidad)}` : ''}</div>
+                    <div style="font-size:0.82rem; color:#64748b; line-height:1.45;">Completa las lecturas del formato fisico. Los campos parten vacios.</div>
+                </div>
+            </div>
+
+            <div style="font-size:0.82rem; font-weight:900; color:#9a3412; text-transform:uppercase; letter-spacing:0.04em; margin:0.75rem 0 0.55rem;">
+                Temperatura escobillas previa detencion
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.75rem;">
+                ${tempRows}
+            </div>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:0.85rem; margin-top:1rem;">
+                <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:0.85rem;">
+                    <div style="font-size:0.82rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.65rem;">
+                        Analisis de vibraciones Motor
+                    </div>
+                    <label style="display:grid; grid-template-columns:70px 1fr 54px; gap:0.5rem; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:800; color:#334155;">1V</span>
+                        <input type="number" class="form-control bae-vib" data-punto="1V" min="0" step="0.01" inputmode="decimal">
+                        <span style="color:#64748b; font-weight:700;">mm/s</span>
+                    </label>
+                    <label style="display:grid; grid-template-columns:70px 1fr 54px; gap:0.5rem; align-items:center;">
+                        <span style="font-weight:800; color:#334155;">3A</span>
+                        <input type="number" class="form-control bae-vib" data-punto="3A" min="0" step="0.01" inputmode="decimal">
+                        <span style="color:#64748b; font-weight:700;">mm/s</span>
+                    </label>
+                </div>
+
+                <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:0.85rem;">
+                    <div style="font-size:0.82rem; font-weight:900; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.65rem;">
+                        Mediciones electricas
+                    </div>
+                    <label style="display:grid; grid-template-columns:minmax(130px,1fr) minmax(90px,130px) 34px; gap:0.5rem; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:700; color:#334155;">Corriente armadura</span>
+                        <input type="number" class="form-control bae-electrica" data-label="Corriente armadura" data-unit="A" step="0.1" inputmode="decimal">
+                        <span style="color:#64748b; font-weight:700;">A</span>
+                    </label>
+                    <label style="display:grid; grid-template-columns:minmax(130px,1fr) minmax(90px,130px) 34px; gap:0.5rem; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:700; color:#334155;">Corriente campo</span>
+                        <input type="number" class="form-control bae-electrica" data-label="Corriente campo" data-unit="A" step="0.1" inputmode="decimal">
+                        <span style="color:#64748b; font-weight:700;">A</span>
+                    </label>
+                    <label style="display:grid; grid-template-columns:minmax(130px,1fr) minmax(90px,130px) 34px; gap:0.5rem; align-items:center;">
+                        <span style="font-weight:700; color:#334155;">Tension</span>
+                        <input type="number" class="form-control bae-electrica" data-label="Tension" data-unit="V" step="0.1" inputmode="decimal">
+                        <span style="color:#64748b; font-weight:700;">V</span>
+                    </label>
+                </div>
+            </div>
+        </div>`;
+}
+
 function _buildMedicionesForm(tipos, componentes, tareaCtx = null) {
     const container = document.getElementById('modal-mediciones-container');
     if (!container) return;
@@ -12579,6 +12690,11 @@ function _buildMedicionesForm(tipos, componentes, tareaCtx = null) {
     // Panel especial: SALA ELÉCTRICA — checklist de equipos con sub-formulario
     if (tareaCtx && esTareaSalaElectrica(tareaCtx)) {
         _buildPanelSalaElectrica(container);
+        return;
+    }
+
+    if (tareaCtx && esTareaBombaAceiteEmergencia(tareaCtx)) {
+        _buildPanelBombaAceiteEmergencia(container, tareaCtx);
         return;
     }
 
@@ -13170,6 +13286,56 @@ if (btnConfirmarFinalizar) {
                     acciones: partes.length ? partes.join(' | ') : null
                 });
             });
+
+            // Panel especial Bomba Aceite Emergencia: guarda cada escobilla y
+            // cada punto de vibracion como lectura independiente; las medidas
+            // electricas quedan como acciones estructuradas en el historial.
+            medContainer.querySelectorAll('.bae-temp').forEach(input => {
+                const valor = input.value.trim();
+                if (!valor) return;
+                const label = input.dataset.label || 'Escobilla';
+                medicionesData.push({
+                    componente: label,
+                    punto_medicion: label,
+                    activo: true,
+                    vibracion: null,
+                    temperatura: valor,
+                    temperaturas: [valor],
+                    acciones: null
+                });
+            });
+            medContainer.querySelectorAll('.bae-vib').forEach(input => {
+                const valor = input.value.trim();
+                if (!valor) return;
+                const punto = input.dataset.punto || 'Motor';
+                medicionesData.push({
+                    componente: `Motor ${punto}`,
+                    punto_medicion: punto,
+                    activo: true,
+                    vibracion: valor,
+                    temperatura: null,
+                    temperaturas: [],
+                    acciones: null
+                });
+            });
+            const electricas = [...medContainer.querySelectorAll('.bae-electrica')]
+                .map(input => {
+                    const valor = input.value.trim();
+                    if (!valor) return '';
+                    return `${input.dataset.label || 'Medicion'}: ${valor} ${input.dataset.unit || ''}`.trim();
+                })
+                .filter(Boolean);
+            if (electricas.length) {
+                medicionesData.push({
+                    componente: 'Mediciones electricas',
+                    punto_medicion: 'Mediciones electricas',
+                    activo: true,
+                    vibracion: null,
+                    temperatura: null,
+                    temperaturas: [],
+                    acciones: electricas.join(' | ')
+                });
+            }
         }
 
         // Acciones requeridas si no hay campos de acciones por componente con contenido
