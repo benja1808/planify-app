@@ -6,8 +6,10 @@
 
   const MAX_INTENTOS = 3;
   const LAST_SYNC_KEY = 'planify_last_sync_at';
+  const DISMISSED_KEY = 'planify_sync_banner_dismissed';
   let sincronizando = false;
   let ultimoExitoSync = Number(localStorage.getItem(LAST_SYNC_KEY) || 0);
+  let bannerDescartado = localStorage.getItem(DISMISSED_KEY) === '1';
 
   async function _obtenerEstado() {
     let pendientes = 0;
@@ -48,6 +50,8 @@
 
   async function addToQueue(tabla, operacion, payload) {
     if (!window.localDB) return;
+    bannerDescartado = false;
+    try { localStorage.removeItem(DISMISSED_KEY); } catch {}
     await window.localDB.cola.add({ tabla, operacion, payload });
     console.log(`[syncQueue] Encolado: ${operacion} en ${tabla}`);
     await _actualizarBanner();
@@ -101,8 +105,13 @@
       let error;
       if (operacion === 'INSERT') {
         ({ error } = await window.supabaseClient.from(tabla).insert([payload]));
+        if (error?.code === '23505' || /duplicate key/i.test(error?.message || '')) {
+          ({ error } = await window.supabaseClient.from(tabla).upsert([payload]));
+        }
       } else if (operacion === 'UPDATE') {
-        ({ error } = await window.supabaseClient.from(tabla).update(payload.data).eq('id', payload.id));
+        const { id, data, ...rest } = payload || {};
+        const patch = data && typeof data === 'object' ? data : rest;
+        ({ error } = await window.supabaseClient.from(tabla).update(patch).eq('id', id));
       } else if (operacion === 'DELETE') {
         ({ error } = await window.supabaseClient.from(tabla).delete().eq('id', payload.id));
       } else if (operacion === 'UPSERT') {
@@ -118,6 +127,54 @@
       console.warn(`[syncQueue] Excepcion en ${operacion} ${tabla}:`, err.message);
       return false;
     }
+  }
+
+  async function reintentarErrores() {
+    if (!window.localDB) return;
+    const errores = await window.localDB.cola.getErrores();
+    for (const item of errores || []) {
+      await window.localDB.cola.update({ ...item, synced: false, intentos: 0, lastError: null });
+    }
+    bannerDescartado = false;
+    try { localStorage.removeItem(DISMISSED_KEY); } catch {}
+    await _actualizarBanner();
+    await procesarCola();
+  }
+
+  async function descartarErrores() {
+    if (!window.localDB) return;
+    const errores = await window.localDB.cola.getErrores();
+    for (const item of errores || []) {
+      await window.localDB.cola.delete(item.id);
+    }
+    bannerDescartado = false;
+    try { localStorage.removeItem(DISMISSED_KEY); } catch {}
+    await _actualizarBanner();
+  }
+
+  function _cerrarBanner() {
+    bannerDescartado = true;
+    try { localStorage.setItem(DISMISSED_KEY, '1'); } catch {}
+    const banner = document.getElementById('offline-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  function _bannerHtml(icon, message, actions = '') {
+    return `
+      <i class="fa-solid ${icon}" style="font-size:1rem;"></i>
+      <span style="flex:0 1 auto;">${message}</span>
+      ${actions}
+      <button type="button" data-sync-dismiss title="Ocultar aviso"
+        style="margin-left:0.4rem; width:28px; height:28px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.5); border-radius:999px; background:rgba(255,255,255,0.12); color:white; cursor:pointer; font-weight:800;">
+        &times;
+      </button>
+    `;
+  }
+
+  function _conectarAccionesBanner(banner) {
+    banner.querySelector('[data-sync-dismiss]')?.addEventListener('click', _cerrarBanner);
+    banner.querySelector('[data-sync-retry]')?.addEventListener('click', reintentarErrores);
+    banner.querySelector('[data-sync-clear-errors]')?.addEventListener('click', descartarErrores);
   }
 
   window.addEventListener('online', () => {
@@ -137,36 +194,45 @@
 
     if (!banner) return estado;
 
+    if (bannerDescartado && estado.online && !estado.sincronizando) {
+      banner.style.display = 'none';
+      return estado;
+    }
+
     if (!estado.online) {
       banner.style.display = 'flex';
       banner.style.background = '#dc2626';
       let msg = 'Sin conexion';
       if (estado.pendientes > 0) msg += ` - <strong>${estado.pendientes}</strong> cambio(s) pendiente(s)`;
       if (estado.errores > 0) msg += ` - <strong>${estado.errores}</strong> con error permanente`;
-      banner.innerHTML = `
-        <i class="fa-solid fa-wifi-slash" style="font-size:1rem;"></i>
-        <span>${msg}</span>
-      `;
+      banner.innerHTML = _bannerHtml('fa-wifi-slash', msg);
+      _conectarAccionesBanner(banner);
       return estado;
     }
 
     if (estado.sincronizando) {
       banner.style.display = 'flex';
       banner.style.background = '#d97706';
-      banner.innerHTML = `
-        <i class="fa-solid fa-spinner fa-spin" style="font-size:1rem;"></i>
-        <span>Sincronizando cambios...</span>
-      `;
+      banner.innerHTML = _bannerHtml('fa-spinner fa-spin', 'Sincronizando cambios...');
+      _conectarAccionesBanner(banner);
       return estado;
     }
 
     if (estado.errores > 0) {
       banner.style.display = 'flex';
       banner.style.background = '#d97706';
-      banner.innerHTML = `
-        <i class="fa-solid fa-triangle-exclamation" style="font-size:1rem;"></i>
-        <span><strong>${estado.errores}</strong> cambio(s) no pudieron sincronizarse. Revisa la conexion o recarga la app.</span>
+      const actions = `
+        <button type="button" data-sync-retry
+          style="border:1px solid rgba(255,255,255,0.6); border-radius:999px; background:rgba(255,255,255,0.16); color:white; padding:0.25rem 0.65rem; font-weight:800; cursor:pointer;">
+          Reintentar
+        </button>
+        <button type="button" data-sync-clear-errors
+          style="border:1px solid rgba(255,255,255,0.45); border-radius:999px; background:transparent; color:white; padding:0.25rem 0.65rem; font-weight:800; cursor:pointer;">
+          Descartar
+        </button>
       `;
+      banner.innerHTML = _bannerHtml('fa-triangle-exclamation', `<strong>${estado.errores}</strong> cambio(s) no pudieron sincronizarse.`, actions);
+      _conectarAccionesBanner(banner);
       return estado;
     }
 
@@ -177,6 +243,8 @@
   window.syncQueue = {
     add: addToQueue,
     procesar: procesarCola,
+    reintentarErrores,
+    descartarErrores,
     actualizar: _actualizarBanner,
     resumen: _obtenerEstado
   };
