@@ -750,8 +750,26 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
     }
 
     function getUnitFromTitle(text) {
-        const m = String(text || '').match(/^\[([^\]]+)\]/);
-        return m ? m[1].trim() : '';
+        const value = String(text || '').trim();
+        const bracket = value.match(/^\[([^\]]+)\]/);
+        if (bracket) return bracket[1].trim();
+        const multiUnit = value.match(/\bU\s?([1-9]\d?(?:\s*-\s*\d+)*)\b/i);
+        if (multiUnit) return `U${multiUnit[1].replace(/\s+/g, '')}`;
+        const namedUnit = value.match(/\b(DESAL|SMC|SC)\b/i);
+        return namedUnit ? namedUnit[1].toUpperCase() : '';
+    }
+
+    function getRecordUnit(record, equipment) {
+        return record.ubicacion ||
+            record.unidad ||
+            equipment?.ubicacion ||
+            getUnitFromTitle([
+                record.tipo,
+                record.tarea,
+                record.subtitulo,
+                record.ubicacion_tecnica
+            ].filter(Boolean).join(' ')) ||
+            '';
     }
 
     function getEquipmentFromTitle(text) {
@@ -834,12 +852,13 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             const date = parseDate(record);
             if (!date) return null;
             const title = String(record.tipo || record.tarea || '');
-            const unit = record.ubicacion || getUnitFromTitle(title) || '';
             const equipment = getEquipmentFromTitle(title) || 'Trabajo sin equipo';
             const types = getWorkTypes(record);
             const techs = Array.isArray(record.ayudantes_nombres)
                 ? record.ayudantes_nombres
                 : String(record.ayudantes_nombres || '').split(',').map(x => x.trim()).filter(Boolean);
+            const eqDirect = record.equipo_id ? equipos.find(item => String(item.id) === String(record.equipo_id)) || null : null;
+            const unit = getRecordUnit(record, eqDirect);
             const eq = resolveEquipment(equipment, unit, record.equipo_id);
             return {
                 id: record.id,

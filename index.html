@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
     <link rel="stylesheet" href="styles.css?v=41">
+    <link rel="stylesheet" href="modules/seguimiento/seguimiento.css?v=5">
     
     <!-- PWA / Mobile Capabilites -->
     <link rel="manifest" href="manifest.json">
@@ -177,6 +178,7 @@
                 <button id="nav-control">Control</button>
                 <button id="nav-dashboard" class="active">Diario</button>
                 <button id="nav-semanal">Semanal</button>
+                <button id="nav-rutas">Vibraciones</button>
                 <button id="nav-historial">Historial</button>
                 <button id="nav-equipos">Equipos</button>
                 <button id="nav-trabajadores">Trabajadores</button>
@@ -504,9 +506,10 @@
     <script src="syncQueue.js?v=2"></script>
 
     <!-- Scripts locales modulares -->
-    <script src="app.js?v=202" defer></script>
+    <script src="modules/seguimiento/seguimiento.js?v=6" defer></script>
+    <script src="app.js?v=205" defer></script>
     <script src="dailyNews.js?v=1" defer></script>
-    <script src="dashboardAnalytics.js?v=34" defer></script>
+    <script src="dashboardAnalytics.js?v=35" defer></script>
 
     <!-- Modal: Rechazo de Solicitud de Insumos -->
 <div id="modal-insumos-rechazo" class="modal-overlay-base" style="z-index:10000;">
@@ -615,6 +618,24 @@
                 </div>
             </div>
 
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Detalle de registro de Historial -->
+    <div id="modal-detalle-historial" class="modal-overlay-base" style="z-index:10500;">
+        <div class="modal-shell modal-shell--wide">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-clock-rotate-left"></i> Historial</span>
+                    <h2 class="modal-title"><i class="fa-solid fa-file-circle-check"></i> <span id="modal-detalle-titulo">Detalle del trabajo</span></h2>
+                </div>
+                <button onclick="document.getElementById('modal-detalle-historial').style.display='none'" class="modal-close" type="button" aria-label="Cerrar modal">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-detalle-historial-body" style="max-height:70vh; overflow-y:auto;"></div>
+            <div class="modal-actions">
+                <button id="btn-modal-detalle-informe" class="btn btn-outline" type="button"><i class="fa-solid fa-file-lines"></i> Generar informe</button>
+                <button onclick="document.getElementById('modal-detalle-historial').style.display='none'" class="btn btn-primary" style="border-radius:10px;">Cerrar</button>
             </div>
         </div>
     </div>

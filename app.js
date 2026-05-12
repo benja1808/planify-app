@@ -231,6 +231,23 @@ function normalizarClaveExcel(valor) {
         .toUpperCase();
 }
 
+// Lista persistente (localStorage) de trabajadores inhabilitados (vacaciones,
+// licencia, ausencia prolongada). No requiere columna en la DB; los IDs se
+// guardan en el dispositivo.
+const PLANIFY_INHABILITADOS_KEY = 'planify_trabajadores_inhabilitados';
+function obtenerTrabajadoresInhabilitados() {
+    try {
+        const raw = localStorage.getItem(PLANIFY_INHABILITADOS_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(arr) ? arr : []);
+    } catch (e) { return new Set(); }
+}
+function guardarTrabajadoresInhabilitados(set) {
+    try {
+        localStorage.setItem(PLANIFY_INHABILITADOS_KEY, JSON.stringify([...set]));
+    } catch (e) { /* noop */ }
+}
+
 // Formatea YYYY-MM-DD → "DD-MM-YYYY" sin desplazamiento por timezone.
 function formatearFechaCortaDia(yyyymmdd) {
     if (!yyyymmdd) return '';
@@ -1713,30 +1730,9 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         return t ? t.nombre : 'Desconocido';
     });
 
-    // Si algún ayudante ya tiene tarea activa → forzar a cola (programada_semana)
-    if (estadoTarea === 'en_curso' && ayudantesIds.length > 0) {
-        const idsEnTarea = new Set(
-            estado.tareas
-                .filter(t => t.estadoTarea === 'en_curso')
-                .flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean))
-        );
-        const ocupados = ayudantesIds.filter(aid => idsEnTarea.has(aid));
-        if (ocupados.length > 0) {
-            estadoTarea = 'programada_semana';
-            estadoEjecucion = 'activo';
-            const nombres = ocupados.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
-            const toast = document.createElement('div');
-            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea enviada a cola.`;
-            Object.assign(toast.style, {
-                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
-                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
-                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
-                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
-            });
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
-    }
+    // Antes: si un trabajador ya tenía una tarea activa, esta tarea se forzaba
+    // a cola. Ahora un trabajador puede estar en varias tareas a la vez (rutas
+    // o trabajos paralelos), así que no se modifica el estado por ocupación.
 
     // UUID generado en cliente: funciona igual online y offline
     const tareaId = crypto.randomUUID();
@@ -2040,10 +2036,23 @@ async function guardarTareaFinalizada({
 }
 
 // ── Guardar una medición en Supabase + localDB ────────────────────────────────
-async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha }) {
+async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha, observaciones }) {
     const unidad = tipo === 'vibracion' ? 'mm/s' : tipo === 'termografia' ? '°C' : '';
     const id = crypto.randomUUID();
-    const payload = { id, equipo_id, tipo, valor, unidad, punto_medicion, componente: componente || null, fecha, synced: false };
+    const payload = {
+        id,
+        equipo_id,
+        tipo,
+        valor,
+        unidad,
+        punto_medicion,
+        componente: componente || null,
+        fecha,
+        observaciones: observaciones || null,
+        synced: false
+    };
+    const remotePayload = { id, equipo_id, tipo, valor, unidad, punto_medicion, fecha };
+    if (componente) remotePayload.componente = componente;
     if (window.localDB) await window.localDB.mediciones.upsert(payload).catch(() => {});
     estado.historialMediciones = [payload, ...estado.historialMediciones];
 
@@ -2052,12 +2061,12 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
         if (componente) insertData.componente = componente;
         const { error } = await supabaseClient.from(tablasDb.mediciones).insert([insertData]);
         if (error) {
-            await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', payload);
+            await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', remotePayload);
         } else {
             await window.localDB?.mediciones.upsert({ ...payload, synced: true }).catch(() => {});
         }
     } else {
-        await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', payload);
+        await window.syncQueue?.add(tablasDb.mediciones, 'INSERT', remotePayload);
     }
 }
 
@@ -2065,6 +2074,214 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
 window.completarTareaExposed = completarTarea;
 window.eliminarTareaExposed = eliminarTarea;
 window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
+
+// Abrir el modal de detalle del Historial. Muestra toda la información del
+// trabajo finalizado: cabecera, datos OT/aviso/HH, líder y técnicos, acciones,
+// observaciones, análisis, recomendación, y todas las mediciones asociadas
+// agrupadas por componente.
+window.abrirDetalleHistorial = function(registroId) {
+    const modal = document.getElementById('modal-detalle-historial');
+    if (!modal) return;
+    const body  = document.getElementById('modal-detalle-historial-body');
+    const titEl = document.getElementById('modal-detalle-titulo');
+    const btnInf = document.getElementById('btn-modal-detalle-informe');
+
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { alert('Registro no encontrado'); return; }
+
+    const tipoRaw = String(item.tipo || item.tarea || 'Registro historial').trim();
+    const nombreLimpio = tipoRaw
+        .replace(/^\[[^\]]+\]\s*/, '')
+        .replace(/\s*\([^)]+\)\s*$/, '')
+        .trim();
+    titEl.textContent = nombreLimpio || tipoRaw;
+
+    // Detectar unidad
+    let unidad = item.ubicacion || '';
+    if (!unidad) {
+        const m = `${tipoRaw} ${item.subtitulo || ''}`.match(/\bU\s?([1-9]\d?)\b/i);
+        if (m) unidad = `U${m[1]}`;
+    }
+    const fecha = new Date(item.created_at || item.fecha_med || Date.now());
+    const fechaStr = !isNaN(fecha.getTime())
+        ? fecha.toLocaleString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+        : (item.fecha_med || '—');
+
+    const ayudantes = Array.isArray(item.ayudantes_nombres)
+        ? item.ayudantes_nombres
+        : String(item.ayudantes_nombres || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
+
+    // Mediciones del registro. Para vincular se usa la fecha del registro
+    // (fecha_med o created_at) y, si está disponible, el equipo_id. Si nada
+    // de eso está, hacemos match por unidad detectada en el título.
+    const fechaMed = item.fecha_med
+        ? String(item.fecha_med).slice(0, 10)
+        : (item.created_at ? String(item.created_at).slice(0, 10) : null);
+    let medsRegistro = (estado.historialMediciones || []).filter(m =>
+        fechaMed && String(m.fecha || '').slice(0, 10) === fechaMed
+    );
+    if (item.equipo_id) {
+        const eq = estado.equipos.find(e => String(e.id) === String(item.equipo_id));
+        if (eq) {
+            const idsActivo = estado.equipos
+                .filter(e => e.activo === eq.activo)
+                .map(e => e.id);
+            medsRegistro = medsRegistro.filter(m => idsActivo.includes(m.equipo_id));
+        } else {
+            medsRegistro = medsRegistro.filter(m => m.equipo_id === item.equipo_id);
+        }
+    } else if (unidad) {
+        // Sin equipo_id: filtrar por equipos cuya ubicación coincida con la
+        // unidad (ej. "U3" matchea "U3", "U 3", "Unidad 3", "UNIDAD 3").
+        const numUnidad = String(unidad).match(/\d+/)?.[0];
+        const matcheaUnidad = (ubic) => {
+            if (!ubic) return false;
+            const u = String(ubic).toUpperCase().replace(/\s+/g, ' ').trim();
+            const target = String(unidad).toUpperCase();
+            if (u === target) return true;
+            if (numUnidad && u.match(new RegExp(`\\bU(NIDAD)?\\s*${numUnidad}\\b`))) return true;
+            return false;
+        };
+        const idsUnidad = (estado.equipos || [])
+            .filter(e => matcheaUnidad(e.ubicacion))
+            .map(e => e.id);
+        if (idsUnidad.length) {
+            medsRegistro = medsRegistro.filter(m => idsUnidad.includes(m.equipo_id));
+        }
+    }
+
+    // Agrupar mediciones por componente / punto
+    const grupos = new Map();
+    medsRegistro.forEach(m => {
+        const key = m.componente || m.punto_medicion || 'General';
+        if (!grupos.has(key)) grupos.set(key, []);
+        grupos.get(key).push(m);
+    });
+
+    const chip = (icon, label, color = '#475569', bg = '#f8fafc') =>
+        `<span style="display:inline-flex; align-items:center; gap:0.35rem; background:${bg}; color:${color}; border:1px solid ${color}33; border-radius:999px; padding:0.25rem 0.7rem; font-size:0.8rem; font-weight:600;">
+            <i class="fa-solid ${icon}"></i> ${escapeHtml(String(label))}
+        </span>`;
+
+    const seccionTexto = (titulo, contenido, icon) => contenido
+        ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:10px;">
+                <div style="font-size:0.78rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;">
+                    <i class="fa-solid ${icon}" style="color:#FF6900;"></i> ${escapeHtml(titulo)}
+                </div>
+                <div style="font-size:0.92rem; color:#1f2937; white-space:pre-wrap; line-height:1.5;">${escapeHtml(contenido)}</div>
+            </div>`
+        : '';
+
+    // Render mediciones por grupo
+    const renderGrupo = (key, lista) => {
+        const acciones = lista.find(m => m.acciones)?.acciones || ''; // por si acaso
+        const filas = lista.map(m => {
+            const u = m.unidad || (m.tipo === 'termografia' ? '°C' : (m.tipo === 'vibracion' ? 'mm/s' : ''));
+            const tipoLabel = m.tipo === 'termografia' ? 'Termografía' : (m.tipo === 'vibracion' ? 'Vibración' : (m.tipo || 'Medición'));
+            return `<tr>
+                <td style="padding:0.4rem 0.7rem; font-size:0.84rem; color:#64748b;">${escapeHtml(tipoLabel)}</td>
+                <td style="padding:0.4rem 0.7rem; font-size:0.92rem; color:#0f172a; font-weight:700; text-align:right;">${escapeHtml(String(m.valor ?? '—'))} ${escapeHtml(u || '')}</td>
+            </tr>`;
+        }).join('');
+        return `
+            <div style="margin-top:0.6rem; border:1px solid #e5e7eb; border-radius:10px; overflow:hidden;">
+                <div style="background:#fef3c7; color:#92400e; padding:0.55rem 0.85rem; font-size:0.86rem; font-weight:700; display:flex; align-items:center; gap:0.4rem;">
+                    <i class="fa-solid fa-screwdriver-wrench"></i> ${escapeHtml(String(key))}
+                    <span style="margin-left:auto; font-size:0.72rem; color:#92400e; font-weight:500;">${lista.length} medición(es)</span>
+                </div>
+                <table style="width:100%; border-collapse:collapse;">${filas}</table>
+            </div>`;
+    };
+
+    const medicionesHTML = grupos.size
+        ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fffbeb; border:1px solid #fde68a; border-radius:10px;">
+              <div style="font-size:0.78rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;">
+                  <i class="fa-solid fa-chart-line" style="color:#FF6900;"></i> Mediciones registradas (${medsRegistro.length})
+              </div>
+              ${[...grupos.entries()].map(([k, l]) => renderGrupo(k, l)).join('')}
+           </div>`
+        : '';
+
+    // Si el registro no tiene NINGÚN dato técnico (ni acciones, ni observaciones,
+    // ni mediciones, etc.), mostrar un mensaje informativo.
+    const nadaQueMostrar =
+        !item.acciones_realizadas &&
+        !item.observaciones &&
+        !item.analisis &&
+        !item.recomendacion_analista &&
+        !grupos.size;
+    const vacioHTML = nadaQueMostrar
+        ? `<div style="margin-top:0.85rem; padding:1rem 1.25rem; background:#f9fafb; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; font-size:0.9rem; text-align:center;">
+              <i class="fa-solid fa-circle-info" style="color:#94a3b8; margin-right:0.4rem;"></i>
+              Este trabajo se cerró sin registrar acciones, observaciones ni mediciones.
+            </div>`
+        : '';
+
+    const otClickable = item.ot_numero
+        ? `<button type="button" onclick="window.abrirModalOT('${String(item.ot_numero).replace(/'/g,"\\'")}','')" style="border:1px solid #fdc898; background:#fff7f0; color:#9a3412; border-radius:999px; padding:0.25rem 0.7rem; font-size:0.8rem; font-weight:700; cursor:pointer;">
+                <i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(String(item.ot_numero))}
+            </button>`
+        : '';
+
+    body.innerHTML = `
+        <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:0.7rem;">
+            ${otClickable}
+            ${item.numero_aviso ? chip('fa-bell', `Aviso ${item.numero_aviso}`, '#7c3aed', '#f5f3ff') : ''}
+            ${chip('fa-regular fa-calendar', fechaStr, '#0f172a', '#f1f5f9')}
+            ${unidad ? chip('fa-location-dot', unidad, '#047857', '#ecfdf5') : ''}
+            ${item.hh_trabajo ? chip('fa-user-clock', `${item.hh_trabajo} HH`, '#b45309', '#fffbeb') : ''}
+        </div>
+
+        ${item.seguimiento_vib_equipo_id ? `
+            <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
+                <button type="button" onclick="window.seguimientoVibAbrirMedicionesDesdeHistorial?.('${String(item.seguimiento_vib_equipo_id).replace(/'/g, "\\'")}')"
+                    style="border:1px solid #fdba74; background:#fff7ed; color:#9a3412; border-radius:10px; padding:0.45rem 0.75rem; font-size:0.84rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem;">
+                    <i class="fa-solid fa-pen"></i> Agregar lecturas VIB
+                </button>
+            </div>
+        ` : ''}
+
+        <div style="padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:10px;">
+            <div style="font-size:0.78rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;">
+                <i class="fa-solid fa-people-group" style="color:#FF6900;"></i> Equipo de trabajo
+            </div>
+            <div style="display:grid; gap:0.35rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; font-size:0.92rem;">
+                    <i class="fa-solid fa-user-tie" style="color:#FF6900;"></i>
+                    <strong>Líder:</strong> ${escapeHtml(item.lider_nombre || '—')}
+                </div>
+                ${ayudantes.length ? `<div style="display:flex; align-items:flex-start; gap:0.5rem; font-size:0.92rem;">
+                    <i class="fa-solid fa-users" style="color:#64748b; margin-top:3px;"></i>
+                    <div><strong>Técnicos:</strong> ${escapeHtml(ayudantes.join(', '))}</div>
+                </div>` : ''}
+                ${item.subtitulo ? `<div style="display:flex; align-items:center; gap:0.5rem; font-size:0.92rem; color:#64748b;">
+                    <i class="fa-solid fa-cube"></i>
+                    <span>${escapeHtml(item.subtitulo)}</span>
+                </div>` : ''}
+            </div>
+        </div>
+
+        ${seccionTexto('Acciones realizadas', item.acciones_realizadas, 'fa-list-check')}
+        ${seccionTexto('Observaciones', item.observaciones, 'fa-comment-dots')}
+        ${seccionTexto('Análisis técnico', item.analisis, 'fa-magnifying-glass-chart')}
+        ${seccionTexto('Recomendación del analista', item.recomendacion_analista, 'fa-lightbulb')}
+
+        ${medicionesHTML}
+        ${vacioHTML}
+    `;
+
+    btnInf.onclick = () => {
+        modal.style.display = 'none';
+        if (typeof window.generarInformeHistorial === 'function') {
+            window.generarInformeHistorial(registroId);
+        } else {
+            // Fallback: dispara el data-action="report" original.
+            document.querySelector(`[data-action="report"][data-id="${registroId}"]`)?.click();
+        }
+    };
+
+    modal.style.display = 'flex';
+};
 
 // Editar fecha de inicio del permiso o de término (vencimiento) de una tarea
 window.editarFechaTarea = function(tareaId, campo) {
@@ -5631,7 +5848,7 @@ function renderHistorialView() {
             tipos.join(' ')
         ].filter(Boolean).join(' '));
 
-        if (texto.includes('vibrac')) return 'vibraciones';
+        if (item.seguimiento_vib_equipo_id || texto.includes('vib') || texto.includes('vibrac')) return 'vibraciones';
         if (texto.includes('termog')) return 'termografia';
         if (texto.includes('lubric') || texto.includes('aceite')) return 'lubricacion';
         if (texto.includes('tintas') || texto.includes('penetrantes') || texto.includes(' end')) return 'end';
@@ -5932,7 +6149,10 @@ function renderHistorialView() {
             : '';
 
         return `
-            <article class="history-record" data-record-id="${registro.id}">
+            <article class="history-record" data-record-id="${registro.id}"
+                onclick="if(!event.target.closest('button')) window.abrirDetalleHistorial('${registro.id}')"
+                style="cursor:pointer;"
+                title="Click para ver el detalle del trabajo">
                 <div class="history-record-top">
                     <div class="history-record-main">
                         <div class="history-record-title-row">
@@ -6608,9 +6828,12 @@ async function renderHorasExtraAdminView() {
 function renderTrabajadoresView() {
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)));
-    const ocupados = estado.trabajadores.filter(t => t.disponible && idsEnTarea.has(t.id));
-    const disponibles = estado.trabajadores.filter(t => t.disponible && !idsEnTarea.has(t.id));
-    const ausentes = estado.trabajadores.filter(t => !t.disponible);
+    const inhabilitadosSet = obtenerTrabajadoresInhabilitados();
+    const trabActivos = estado.trabajadores.filter(t => !inhabilitadosSet.has(t.id));
+    const ocupados    = trabActivos.filter(t => t.disponible && idsEnTarea.has(t.id));
+    const disponibles = trabActivos.filter(t => t.disponible && !idsEnTarea.has(t.id));
+    const ausentes    = trabActivos.filter(t => !t.disponible);
+    const inhabilitados = estado.trabajadores.filter(t => inhabilitadosSet.has(t.id));
 
     const normalizar = (valor) => String(valor || '')
         .normalize('NFD')
@@ -6657,6 +6880,7 @@ function renderTrabajadoresView() {
     const renderEstado = (tipo) => {
         if (tipo === 'disponible') return { label: 'Disponible', color: 'var(--success-color)', bg: 'var(--success-color)' };
         if (tipo === 'ocupado') return { label: 'Trabajando', color: 'var(--warning-color)', bg: 'var(--warning-color)' };
+        if (tipo === 'inhabilitado') return { label: 'Inhabilitado', color: '#dc2626', bg: '#dc2626' };
         return { label: 'Sin check-in', color: '#64748b', bg: '#64748b' };
     };
 
@@ -6710,12 +6934,21 @@ function renderTrabajadoresView() {
                         : `<span class="crew-chip">Sin habilidades cargadas</span>`}
                 </div>
                 <div class="crew-card-actions" style="margin-top:0.9rem; justify-content:flex-end;">
-                    <button type="button" class="btn btn-outline btn-icon" title="Editar trabajador" data-worker-edit="${trabajador.id}">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button type="button" class="btn btn-outline btn-icon" title="Eliminar trabajador" data-worker-delete="${trabajador.id}" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
+                    ${estadoTipo === 'inhabilitado' ? `
+                        <button type="button" class="btn btn-success" data-worker-rehabilitar="${trabajador.id}" style="font-size:0.82rem;">
+                            <i class="fa-solid fa-rotate-left"></i> Habilitar
+                        </button>
+                    ` : `
+                        <button type="button" class="btn btn-outline btn-icon" title="Editar trabajador" data-worker-edit="${trabajador.id}">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline btn-icon" title="Inhabilitar (vacaciones / licencia)" data-worker-inhabilitar="${trabajador.id}" style="border-color:#fde68a;color:#b45309;background:#fffbeb;">
+                            <i class="fa-solid fa-user-slash"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline btn-icon" title="Eliminar trabajador" data-worker-delete="${trabajador.id}" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    `}
                 </div>
             </article>
         `;
@@ -6758,6 +6991,11 @@ function renderTrabajadoresView() {
                         <div class="crew-kpi-meta">Fuera de jornada</div>
                     </article>
                     <article class="crew-kpi-card">
+                        <span class="crew-kpi-label"><i class="fa-solid fa-user-slash" style="color:#dc2626;"></i> Inhabilitados</span>
+                        <div class="crew-kpi-value">${inhabilitados.length}</div>
+                        <div class="crew-kpi-meta">Vacaciones / licencia</div>
+                    </article>
+                    <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-star"></i> Habilidad dominante</span>
                         <div class="crew-kpi-value">${topHabilidad ? topHabilidad[0] : 'Sin dato'}</div>
                         <div class="crew-kpi-meta">${topHabilidad ? `${topHabilidad[1]} persona(s)` : 'Sin registros'}</div>
@@ -6769,6 +7007,7 @@ function renderTrabajadoresView() {
                         <button type="button" class="crew-tab is-active" data-crew-tab="disponible" style="background:var(--success-color);">Disponibles (${disponibles.length})</button>
                         <button type="button" class="crew-tab" data-crew-tab="ocupado">Trabajando (${ocupados.length})</button>
                         <button type="button" class="crew-tab" data-crew-tab="ausente">Sin check-in (${ausentes.length})</button>
+                        <button type="button" class="crew-tab" data-crew-tab="inhabilitado">Inhabilitados (${inhabilitados.length})</button>
                     </div>
                     <div style="display:flex; gap:0.65rem; align-items:center; flex-wrap:wrap;">
                         <div class="crew-toolbar-note">
@@ -6789,6 +7028,9 @@ function renderTrabajadoresView() {
                 </div>
                 <div id="crew-panel-ausente" class="crew-grid" data-crew-container="ausente" style="display:none;">
                     ${ausentes.length ? ausentes.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'ausente')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin ausencias</strong><p>Todo el personal ya marco check-in hoy.</p></div></div>`}
+                </div>
+                <div id="crew-panel-inhabilitado" class="crew-grid" data-crew-container="inhabilitado" style="display:none;">
+                    ${inhabilitados.length ? inhabilitados.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'inhabilitado')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin trabajadores inhabilitados</strong><p>Inhabilita a un trabajador desde su tarjeta cuando salga por vacaciones, licencia o ausencia prolongada. Aparecerá aquí para volver a habilitarlo cuando regrese.</p></div></div>`}
                 </div>
             </section>
 
@@ -6847,9 +7089,11 @@ function renderTrabajadoresView() {
         document.querySelectorAll('[data-crew-tab]').forEach((button) => {
             const active = button.dataset.crewTab === tab;
             button.classList.toggle('is-active', active);
-            button.style.background = active
-                ? (tab === 'disponible' ? 'var(--success-color)' : tab === 'ocupado' ? 'var(--warning-color)' : '#64748b')
-                : '#ffffff';
+            const colorActivo = tab === 'disponible' ? 'var(--success-color)'
+                : tab === 'ocupado' ? 'var(--warning-color)'
+                : tab === 'inhabilitado' ? '#dc2626'
+                : '#64748b';
+            button.style.background = active ? colorActivo : '#ffffff';
             button.style.color = active ? '#ffffff' : '#475569';
         });
         document.querySelectorAll('[data-crew-container]').forEach((panel) => {
@@ -7128,6 +7372,21 @@ function renderTrabajadoresView() {
         }
     });
 
+    const inhabilitarTrabajador = (trabajadorId) => {
+        const set = obtenerTrabajadoresInhabilitados();
+        set.add(trabajadorId);
+        guardarTrabajadoresInhabilitados(set);
+        const t = estado.trabajadores.find(x => x.id === trabajadorId);
+        if (t) mostrarToastTrabajadores(`${t.nombre} fue marcado como inhabilitado.`);
+    };
+    const rehabilitarTrabajador = (trabajadorId) => {
+        const set = obtenerTrabajadoresInhabilitados();
+        set.delete(trabajadorId);
+        guardarTrabajadoresInhabilitados(set);
+        const t = estado.trabajadores.find(x => x.id === trabajadorId);
+        if (t) mostrarToastTrabajadores(`${t.nombre} vuelve a estar habilitado.`);
+    };
+
     const eliminarTrabajador = async (trabajadorId) => {
         const trabajador = estado.trabajadores.find((item) => item.id === trabajadorId);
         if (!trabajador) return;
@@ -7158,6 +7417,23 @@ function renderTrabajadoresView() {
     });
     document.querySelectorAll('[data-worker-delete]').forEach((button) => {
         button.addEventListener('click', () => eliminarTrabajador(button.dataset.workerDelete));
+    });
+    document.querySelectorAll('[data-worker-inhabilitar]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const id = button.dataset.workerInhabilitar;
+            const t = estado.trabajadores.find(x => x.id === id);
+            if (!t) return;
+            if (!confirm(`¿Inhabilitar a ${t.nombre}?\nDejará de aparecer al asignar líder o técnicos hasta que lo vuelvas a habilitar (Vacaciones, licencia, ausencia prolongada, etc.).`)) return;
+            inhabilitarTrabajador(id);
+            renderTrabajadoresView();
+        });
+    });
+    document.querySelectorAll('[data-worker-rehabilitar]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const id = button.dataset.workerRehabilitar;
+            rehabilitarTrabajador(id);
+            renderTrabajadoresView();
+        });
     });
 }
 
@@ -11088,7 +11364,8 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     }
 
     // ── LÍDER Y AYUDANTES ─────────────────────────────────────────────────────
-    const todos = estado.trabajadores.filter(t => t.disponible);
+    const inhabilitadosSetModal = obtenerTrabajadoresInhabilitados();
+    const todos = estado.trabajadores.filter(t => t.disponible && !inhabilitadosSetModal.has(t.id));
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t =>
         [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
@@ -11105,7 +11382,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         opcionesLider.map(t => {
             const enTarea = idsEnTarea.has(t.id);
             const sel = tarea.liderId && tarea.liderId === t.id ? ' selected' : '';
-            return `<option value="${t.id}"${sel}>${t.nombre} — ${t.cargo || ''}${enTarea ? ' ⚡ trabajando' : ''}</option>`;
+            return `<option value="${t.id}"${sel}>${t.nombre} — ${t.cargo || ''}${enTarea ? ' • en otro trabajo' : ''}</option>`;
         }).join('');
 
     const ayudContainer = document.getElementById('modal-iniciar-ayudantes');
@@ -11130,7 +11407,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
                     onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
                     <input type="checkbox" value="${t.id}"${checked} style="width:15px; height:15px; accent-color:#FF6900; cursor:pointer;">
                     ${t.nombre}${t.cargo ? ` <span style="color:#9ca3af; font-size:0.78rem;">— ${t.cargo}</span>` : ''}
-                    ${enTarea ? `<span style="font-size:0.72rem; color:#f59e0b; font-weight:600; margin-left:auto;">⚡ trabajando → cola</span>` : ''}
+                    ${enTarea ? `<span style="font-size:0.72rem; color:#94a3b8; font-weight:500; margin-left:auto;">• en otro trabajo</span>` : ''}
                 </label>`;
         }).join('');
         if (!lista.length)
@@ -11164,30 +11441,12 @@ function _abrirModalIniciar(id, cambiarADashboard) {
         const eqId = document.getElementById('modal-iniciar-equipo-id').value || null;
         const ubicacionElegida = document.getElementById('modal-iniciar-ubicacion').value || null;
 
-        // Cola: si algún ayudante ya tiene tarea activa → forzar cola
-        const tareasActivasActual = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
-        const idsEnTareaActual = new Set(tareasActivasActual.flatMap(t =>
-            [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
-        ));
-        const ayudantesOcupados = ayudantesIds.filter(aid => idsEnTareaActual.has(aid));
-        const hayOcupados = ayudantesOcupados.length > 0;
-        let iniciarAhora = cambiarADashboard && !hayOcupados;
+        // Antes se forzaba a cola si algún ayudante ya tenía una tarea activa.
+        // Ahora un trabajador puede estar en múltiples tareas a la vez, por eso
+        // sólo respetamos el flag `cambiarADashboard` para decidir si arranca.
+        let iniciarAhora = !!cambiarADashboard;
 
         modal.style.display = 'none';
-
-        if (hayOcupados && cambiarADashboard) {
-            const nombres = ayudantesOcupados.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre).join(', ');
-            const toast = document.createElement('div');
-            toast.textContent = `⚡ ${nombres} ya tiene trabajo activo. Tarea asignada en cola para todos.`;
-            Object.assign(toast.style, {
-                position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
-                background:'#92400e', color:'white', padding:'0.75rem 1.25rem',
-                borderRadius:'10px', fontSize:'0.88rem', zIndex:'9999',
-                boxShadow:'0 4px 16px rgba(0,0,0,0.2)', maxWidth:'90vw', textAlign:'center'
-            });
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
 
         // Construir nuevo título incorporando todos los tipos seleccionados
         const tiposStr  = tiposSeleccionados.join(', ');
@@ -11223,6 +11482,820 @@ function _abrirModalIniciar(id, cambiarADashboard) {
     };
 }
 
+
+
+const RUTAS_VIBRACION_SEED = [{"nombre":"MP MM MONITOREO BOMBAS U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083260","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -1A","ubicacion_tecnica":"2893-12-LAC01-AP101-MG01","unidad":"U1"},{"nombre":"BOMBA AGUA ALIMENTACION -1B","ubicacion_tecnica":"2893-12-LAC01-AP102-MG01","unidad":"U1"},{"nombre":"BOMBA AGUA ALIMENTACION -1C","ubicacion_tecnica":"2893-12-LAC01-AP103-MG01","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1A","ubicacion_tecnica":"2893-12-LAC01-AP101-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1B","ubicacion_tecnica":"2893-12-LAC01-AP102-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1C","ubicacion_tecnica":"2893-12-LAC01-AP103-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 1C","ubicacion_tecnica":"2893-12-LAC01-AP103-KP02","unidad":"U1"},{"nombre":"BOMBA AGUA CONDENSADA -1A","ubicacion_tecnica":"2893-12-LCB01-AP101-KP01","unidad":"U1"},{"nombre":"BOMBA AGUA CONDENSADA -1B","ubicacion_tecnica":"2893-12-LCB01-AP102-KP01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1A","ubicacion_tecnica":"2893-13-PAC01-AP101-KP01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1B","ubicacion_tecnica":"2893-13-PAC01-AP102-KP01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO TURBINA U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083261","equipos":[{"nombre":"SISTEMA TURBINA U1","ubicacion_tecnica":"2893-11-MAB","unidad":"U1"},{"nombre":"DESCANSOS GENERADOR U1","ubicacion_tecnica":"2893-11-MAK20-AE401","unidad":"U1"}]},{"nombre":"MP MM MONITOREO VENTILADORES U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083262","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U1","ubicacion_tecnica":"2893-15-HLB40-AN101-KN01","unidad":"U1"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U1","ubicacion_tecnica":"2893-15-HLB20-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U1","ubicacion_tecnica":"2893-15-HNF01-AN101--M01","unidad":"U1"},{"nombre":"UNIDAD VENTILADOR VTI U1","ubicacion_tecnica":"2893-15-HTC02-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR TIRO FORZADO VTF U1","ubicacion_tecnica":"2893-15-HLB10-AN101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO BOMBAS U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083269","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -2A","ubicacion_tecnica":"2893-22-LAC01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA ALIMENTACION -2B","ubicacion_tecnica":"2893-22-LAC01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA ALIMENTACION -2C","ubicacion_tecnica":"2893-22-LAC01-AP103-KP01","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2A","ubicacion_tecnica":"2893-22-LAC01-AP101-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2B","ubicacion_tecnica":"2893-22-LAC01-AP102-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2C","ubicacion_tecnica":"2893-22-LAC01-AP103-KP02","unidad":"U2"},{"nombre":"BOMBA AGUA CONDENSADA -2A","ubicacion_tecnica":"2893-22-LCB01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA CONDENSADA -2B","ubicacion_tecnica":"2893-22-LCB01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2A","ubicacion_tecnica":"2893-23-PAC01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2B","ubicacion_tecnica":"2893-23-PAC01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION AUXILIAR -2A","ubicacion_tecnica":"2893-23-PAD01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION AUXILIAR -2B","ubicacion_tecnica":"2893-23-PAD01-AP102-KP01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO TURBINA U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083270","equipos":[{"nombre":"SISTEMA TURBINA U2","ubicacion_tecnica":"2893-21-MAB","unidad":"U2"},{"nombre":"DESCANSOS GENERADOR U2","ubicacion_tecnica":"2893-21-MAK20-AE401","unidad":"U2"}]},{"nombre":"MP MM MONITOREO VENTILADORES U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083271","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U2","ubicacion_tecnica":"2893-25-HLB40-AN101-MU02","unidad":"U2"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U2","ubicacion_tecnica":"2893-25-HLB20-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U2","ubicacion_tecnica":"2893-25-HNF01-AN101--M01","unidad":"U2"},{"nombre":"UNIDAD VENTILADOR VTI U2","ubicacion_tecnica":"2893-25-HTC02-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR TIRO FORZADO VTF U2","ubicacion_tecnica":"2893-25-HLB10-AN101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO BOMBAS U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083278","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA ALIMENTACION -3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA ALIMENTACION -3C","ubicacion_tecnica":"2893-32-LAC01-AP103-KP01","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A B.A.A 3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B B.A.A 3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP03","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A B.A.A 3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B B.A.A 3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP03","unidad":"U3"},{"nombre":"BOMBA AGUA CONDENSADA -3A","ubicacion_tecnica":"2893-32-LCB01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA CONDENSADA -3B","ubicacion_tecnica":"2893-32-LCB01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3A","ubicacion_tecnica":"2893-33-PAC01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3B","ubicacion_tecnica":"2893-33-PAC01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION AUXILIAR -3A","ubicacion_tecnica":"2893-33-PAD01-AP101-KP02","unidad":"U3"},{"nombre":"BOMBA CIRCULACION AUXILIAR -3B","ubicacion_tecnica":"2893-33-PAD01-AP102-KP02","unidad":"U3"}]},{"nombre":"MP MM MONITOREO TURBINA U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083279","equipos":[{"nombre":"SISTEMA TURBINA U3","ubicacion_tecnica":"2893-31-MAB","unidad":"U3"},{"nombre":"DESCANSOS GENERADOR U3","ubicacion_tecnica":"2893-31-MAK20-AE401","unidad":"U3"}]},{"nombre":"MP MM MONITOREO VENTILADORES U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083280","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U3","ubicacion_tecnica":"2893-35-HLB40-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U3","ubicacion_tecnica":"2893-35-HLB20-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U3","ubicacion_tecnica":"2893-35-HNF01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U3","ubicacion_tecnica":"2893-35-HNC01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR TIRO FORZADO VTF U3","ubicacion_tecnica":"2893-35-HLB10-AN101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO BOMBAS U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083287","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -4A","ubicacion_tecnica":"2893-42-LAC01-AP101-MU01","unidad":"U4"},{"nombre":"BOMBA AGUA ALIMENTACION -4B","ubicacion_tecnica":"2893-42-LAC01-AP102-MU01","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -A (B.A.A 4A)","ubicacion_tecnica":"2893-42-LAC01-AP101-KP02","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B (B.A.A 4A)","ubicacion_tecnica":"2893-42-LAC01-AP101-KP03","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B (B.A.A 4B)","ubicacion_tecnica":"2893-42-LAC01-AP102-KP03","unidad":"U4"},{"nombre":"BOMBA AGUA CONDENSADA -4A","ubicacion_tecnica":"2893-42-LCB01-AP101-KP01","unidad":"U4"},{"nombre":"BOMBA AGUA CONDENSADA -4B","ubicacion_tecnica":"2893-42-LCB01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4A","ubicacion_tecnica":"2893-43-PAC01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4B","ubicacion_tecnica":"2893-43-PAC01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION AUXILIAR -4A","ubicacion_tecnica":"2893-43-PAD01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION AUXILIAR -4B","ubicacion_tecnica":"2893-43-PAD01-AP102--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO TURBINA U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083288","equipos":[{"nombre":"SISTEMA TURBINA U4","ubicacion_tecnica":"2893-41-MAB","unidad":"U4"},{"nombre":"DESCANSOS GENERADOR U4","ubicacion_tecnica":"2893-41-MAK20-AE401","unidad":"U4"}]},{"nombre":"MP MM MONITOREO VENTILADORES U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083289","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U4","ubicacion_tecnica":"2893-45-HLB40-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U4","ubicacion_tecnica":"2893-45-HLB20-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U4","ubicacion_tecnica":"2893-45-HNF01-AN101--M01","unidad":"U4"},{"nombre":"UNIDAD VENTILADOR VTI U4","ubicacion_tecnica":"2893-45-HTC02-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR TIRO FORZADO VTF U4","ubicacion_tecnica":"2893-45-HLB10-AN101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO BOMBAS U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083296","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -5A","ubicacion_tecnica":"2893-52-LAC01-AP101--M03","unidad":"U5"},{"nombre":"BOMBA AGUA ALIMENTACION -5B","ubicacion_tecnica":"2893-52-LAC01-AP102--M03","unidad":"U5"},{"nombre":"BOMBA AGUA ALIMENTACION -5C","ubicacion_tecnica":"2893-52-LAC01-AP103--M03","unidad":"U5"},{"nombre":"BOMBA AGUA CONDENSADA -5A","ubicacion_tecnica":"2893-52-LCB01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA AGUA CONDENSADA -5B","ubicacion_tecnica":"2893-52-LCB01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5A","ubicacion_tecnica":"2893-53-PAC01-AP101-KP01","unidad":"U5"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5B","ubicacion_tecnica":"2893-53-PAC01-AP102-KP01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO TURBINA U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083297","equipos":[{"nombre":"SISTEMA TURBINA U5","ubicacion_tecnica":"2893-51-MAB","unidad":"U5"},{"nombre":"DESCANSOS GENERADOR U5","ubicacion_tecnica":"2893-51-MAK20-AE401","unidad":"U5"}]},{"nombre":"MP MM MONITOREO VENTILADORES U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083298","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U5","ubicacion_tecnica":"2893-55-HLB20-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U5","ubicacion_tecnica":"2893-55-HNF01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR TIRO FORZADO VTF U5","ubicacion_tecnica":"2893-55-HLB10-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U5","ubicacion_tecnica":"2893-55-HNC01-AN101--M01","unidad":"U5"},{"nombre":"MOTOR VAI U5","ubicacion_tecnica":"2893-55-HLB40-AN101--M01","unidad":"U5"}]},{"nombre":"MP MM SISTEMAS COMUNES  BOMBAS PRETRA 90D","unidad":"SC","frecuencia":"3M","plan":"5000083306","equipos":[{"nombre":"BOMBA AGUA PRETRATADA -A U1-2","ubicacion_tecnica":"2893-01-GAD12-AP101--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PRETRATADA -B U1-2","ubicacion_tecnica":"2893-01-GAD12-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PRETRATADA -C U1-2","ubicacion_tecnica":"2893-01-GAD12-AP103-KP01","unidad":"SC"}]},{"nombre":"MM MONITOREO BOMBAS RETROFIT 90D","unidad":"SC","frecuencia":"3M","plan":"5000083308","equipos":[{"nombre":"BOMBA HUMECTACION -1 HTQ41AP001","ubicacion_tecnica":"2893-01-GDL12-AP101--M01","unidad":"SC"},{"nombre":"BOMBA HUMECTACION -2 HTQ42AP001","ubicacion_tecnica":"2893-01-GDL12-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U1 01HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP101--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U2 02HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U4 04HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP104--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","ubicacion_tecnica":"2893-01-HTJ02-AP001--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","ubicacion_tecnica":"2893-01-HTJ02-AP002--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO -1 HTP13AP001","ubicacion_tecnica":"2893-15-HTL02-AP102--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO -2 HTP23AP001","ubicacion_tecnica":"2893-25-HTL02-AP103--M01","unidad":"SC"}]},{"nombre":"MP MM MONITOREO BOMBAS U1  90 D","unidad":"U1","frecuencia":"3M","plan":"5000083264","equipos":[{"nombre":"BOMBA CIRCULACION AUXILIAR -1A","ubicacion_tecnica":"2893-13-PAD01-AP101--M01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION AUXILIAR -1B","ubicacion_tecnica":"2893-13-PAD01-AP102--M01","unidad":"U1"},{"nombre":"BOMBA BOOSTER -1A","ubicacion_tecnica":"2893-13-PAD04-AP101--M01","unidad":"U1"},{"nombre":"BOMBA BOOSTER -1B","ubicacion_tecnica":"2893-13-PAD04-AP102--M01","unidad":"U1"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1A","ubicacion_tecnica":"2893-13-PGH01-AP101--M01","unidad":"U1"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1B","ubicacion_tecnica":"2893-13-PGH01-AP102--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO BOMBAS U2  90 D","unidad":"U2","frecuencia":"3M","plan":"5000083273","equipos":[{"nombre":"BOMBA BOOSTER -2A","ubicacion_tecnica":"2893-23-PAD04-AP101--M01","unidad":"U2"},{"nombre":"BOMBA BOOSTER -2B","ubicacion_tecnica":"2893-23-PAD04-AP102--M01","unidad":"U2"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2A","ubicacion_tecnica":"2893-23-PGH01-AP101--M01","unidad":"U2"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2B","ubicacion_tecnica":"2893-23-PGH01-AP102--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO BOMBAS U4  90 D","unidad":"U4","frecuencia":"3M","plan":"5000083291","equipos":[{"nombre":"BOMBA BOOSTER -4A","ubicacion_tecnica":"2893-43-PAD04-AP101--M01","unidad":"U4"},{"nombre":"BOMBA BOOSTER -4B","ubicacion_tecnica":"2893-43-PAD04-AP102--M01","unidad":"U4"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4A","ubicacion_tecnica":"2893-43-PGH01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4B","ubicacion_tecnica":"2893-43-PGH01-AP102--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO CAR U1  90D","unidad":"U1","frecuencia":"3M","plan":"5000083266","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U1","ubicacion_tecnica":"2893-15-HLD20-AC101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO CAR U2  90D","unidad":"U2","frecuencia":"3M","plan":"5000083275","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U2","ubicacion_tecnica":"2893-25-HLD20-AC101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO CAR U3  90D","unidad":"U3","frecuencia":"3M","plan":"5000083284","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U3","ubicacion_tecnica":"2893-35-HLD20-AC101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO CAR U4  90D","unidad":"U4","frecuencia":"3M","plan":"5000083293","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U4","ubicacion_tecnica":"2893-45-HLD20-AC101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO CAR U5  90D","unidad":"U5","frecuencia":"3M","plan":"5000083303","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U4","ubicacion_tecnica":"2893-55-HLD20-AC101--M02","unidad":"U5"}]},{"nombre":"MP MM MONITOREO BOMBAS U3  180D","unidad":"U1-2","frecuencia":"6M","plan":"5000083282","equipos":[{"nombre":"BOMBA PETROLEO DIESEL -A U1-2","ubicacion_tecnica":"2893-01-EGE03-AP101--M01","unidad":"U1-2"},{"nombre":"BOMBA PETROLEO DIESEL -B U1-2","ubicacion_tecnica":"2893-01-EGE03-AP102--M01","unidad":"U1-2"},{"nombre":"BOMBA PETROLEO DIESEL -A U3-4-5","ubicacion_tecnica":"2893-01-EGE04-AP101--M01","unidad":"U3-4-5"},{"nombre":"BOMBA PETROLEO DIESEL -B U3-4-5","ubicacion_tecnica":"2893-01-EGE04-AP102--M01","unidad":"U3-4-5"},{"nombre":"BOMBA BOOSTER -4A","ubicacion_tecnica":"2893-33-PAD04-AP101--M01","unidad":"U3"},{"nombre":"BOMBA BOOSTER -3B","ubicacion_tecnica":"2893-33-PAD04-AP102--M01","unidad":"U3"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -A","ubicacion_tecnica":"2893-33-PGH01-AP101--M01","unidad":"U3"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -B","ubicacion_tecnica":"2893-33-PGH01-AP102--M01","unidad":"U3"},{"nombre":"BOMBA YESO (CEBADO) A","ubicacion_tecnica":"2893-35-HRA01-AP101--M01","unidad":"U3"},{"nombre":"BOMBA YESO (CEBADO) B","ubicacion_tecnica":"2893-35-HRA01-AP102--M01","unidad":"U3"},{"nombre":"BOMBA RECIRCULACION ABSORBER -B","ubicacion_tecnica":"2893-35-HRA05-AP102--M01","unidad":"U3"},{"nombre":"BOMBA ELIMINADOR NIEBLA -A","ubicacion_tecnica":"2893-35-HRA07-AP101--M01","unidad":"U3"},{"nombre":"BOMBA ELIMINADOR NIEBLA -B","ubicacion_tecnica":"2893-35-HRA07-AP102--M01","unidad":"U3"},{"nombre":"BOMBA DE VACIO FILTRO BANDA A","ubicacion_tecnica":"2893-35-HRB02-AP101--M01","unidad":"U3"},{"nombre":"BOMBA DE VACIO FILTRO BANDA B","ubicacion_tecnica":"2893-35-HRB03-AP101--M01","unidad":"U3"},{"nombre":"BOMBA FILTRADO -A","ubicacion_tecnica":"2893-35-HRB04-AP102--M01","unidad":"U3"},{"nombre":"BOMBA FILTRADO -B","ubicacion_tecnica":"2893-35-HRB04-AP202--M01","unidad":"U3"},{"nombre":"BOMBAS RECICLADO -B","ubicacion_tecnica":"2893-35-HRD02-AP102--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO BOMBAS U5  180D","unidad":"U5","frecuencia":"6M","plan":"5000083300","equipos":[{"nombre":"BOMBA BOOSTER -5A","ubicacion_tecnica":"2893-53-PAD04-AP101--M01","unidad":"U5"},{"nombre":"BOMBA BOOSTER -5B","ubicacion_tecnica":"2893-53-PAD04-AP102--M01","unidad":"U5"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5A","ubicacion_tecnica":"2893-53-PGH01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5B","ubicacion_tecnica":"2893-53-PGH01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA YESO (CEBADO) 5A","ubicacion_tecnica":"2893-55-HRA01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA YESO (CEBADO) 5B","ubicacion_tecnica":"2893-55-HRA01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA ELIMINADOR NIEBLA -5A","ubicacion_tecnica":"2893-55-HRA07-AP101--M01","unidad":"U5"},{"nombre":"BOMBA ELIMINADOR NIEBLA -5B","ubicacion_tecnica":"2893-55-HRA07-AP102--M01","unidad":"U5"},{"nombre":"BOMBA ALIMENTACION LECHADA 5A","ubicacion_tecnica":"2893-55-HRD03-AP101--M01","unidad":"U5"},{"nombre":"BOMBA ALIMENTACION LECHADA 5B","ubicacion_tecnica":"2893-55-HRD03-AP102--M01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO ESCORIA U1  180 D","unidad":"U1","frecuencia":"U1","plan":"5000083265","equipos":[{"nombre":"CADENA SUMERGIDA U1","ubicacion_tecnica":"2893-16-ETA01-AT101--M01","unidad":"U1"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U1","ubicacion_tecnica":"2893-16-ETA02-AF101--M01","unidad":"U1"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U1","ubicacion_tecnica":"2893-16-ETA02-AF102--M01","unidad":"U1"},{"nombre":"TRITURADOR DE ESCORIA U1","ubicacion_tecnica":"2893-16-ETA01-AJ101--M01","unidad":"U1"},{"nombre":"BOMBA VACIO -1B","ubicacion_tecnica":"2893-16-ETG08-AP202","unidad":"U1"}]},{"nombre":"MP MM MONITOREO ESCORIA U2  180 D","unidad":"U2","frecuencia":"6M","plan":"5000083274","equipos":[{"nombre":"CADENA SUMERGIDA U2","ubicacion_tecnica":"2893-26-ETA01-AT101--M01","unidad":"U2"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U2","ubicacion_tecnica":"2893-26-ETA02-AF101--M01","unidad":"U2"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U2","ubicacion_tecnica":"2893-26-ETA02-AF102--M01","unidad":"U2"},{"nombre":"TRITURADOR DE ESCORIA U2","ubicacion_tecnica":"2893-26-ETA01-AJ101--M01","unidad":"U2"},{"nombre":"BOMBA VACIO 2B","ubicacion_tecnica":"2893-26-ETG08-AP202","unidad":"U2"}]},{"nombre":"MP MM MONITOREO ESCORIA U3  180 D","unidad":"U3","frecuencia":"6M","plan":"5000083283","equipos":[{"nombre":"CADENA SUMERGIDA U3","ubicacion_tecnica":"2893-36-ETA01-AT101--M01","unidad":"U3"},{"nombre":"CORREA ALIM CALIZA AL MOLINO DE MARTILLO U3","ubicacion_tecnica":"2893-35-HRD01-AF101--M01","unidad":"U3"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U3","ubicacion_tecnica":"2893-36-ETA02-AF101--M01","unidad":"U3"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U3","ubicacion_tecnica":"2893-36-ETA02-AF102--M01","unidad":"U3"},{"nombre":"TRITURADOR DE ESCORIA U3","ubicacion_tecnica":"2893-36-ETA01-AJ101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO ESCORIA U4  180 D","unidad":"U4","frecuencia":"6M","plan":"5000083292","equipos":[{"nombre":"CADENA SUMERGIDA U4","ubicacion_tecnica":"2893-46-ETA01-AT101--M01","unidad":"U4"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U4","ubicacion_tecnica":"2893-46-ETA02-AF101--M01","unidad":"U4"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U4","ubicacion_tecnica":"2893-46-ETA02-AF102--M01","unidad":"U4"},{"nombre":"TRITURADOR DE ESCORIA U4","ubicacion_tecnica":"2893-46-ETA01-AJ101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO ESCORIA U5  180 D","unidad":"U5","frecuencia":"6M","plan":"5000083302","equipos":[{"nombre":"CADENA SUMERGIDA U5","ubicacion_tecnica":"2893-56-ETA01-AT101--M01","unidad":"U5"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U5","ubicacion_tecnica":"2893-56-ETA02-AF101--M01","unidad":"U5"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U5","ubicacion_tecnica":"2893-56-ETA02-AF102--M01","unidad":"U5"},{"nombre":"TRITURADOR DE ESCORIA U5","ubicacion_tecnica":"2893-56-ETA01-AJ101--M01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO CONDICIONES LLENADO SILO","unidad":"SMC","frecuencia":"1M","plan":"5000083307","equipos":[{"nombre":"CORREA TRANSPORTADORA C4/5","ubicacion_tecnica":"2893-01-ECA02-AF003--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C6B","ubicacion_tecnica":"2893-01-ECA03-AF004--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C7","ubicacion_tecnica":"2893-01-ECA04-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C8","ubicacion_tecnica":"2893-01-ECA05-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C9","ubicacion_tecnica":"2893-01-ECA06-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C10","ubicacion_tecnica":"2893-01-ECA08-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C11","ubicacion_tecnica":"2893-01-ECA09-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C12","ubicacion_tecnica":"2893-01-ECA10-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C13","ubicacion_tecnica":"2893-01-ECA11-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U1U2","ubicacion_tecnica":"2893-01-ECA17-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U3U4","ubicacion_tecnica":"2893-01-ECA17-AF002--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U5","ubicacion_tecnica":"2893-01-ECA17-AF003--M01","unidad":"SMC"}]},{"nombre":"MP MM MONITOREO CONDICIONES PUERTO 30D","unidad":"SMC","frecuencia":"1M","plan":"5000083310","equipos":[{"nombre":"MECANISMO ELEVACION GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU001--M01","unidad":"SMC"},{"nombre":"MECANISMO CIERRE  GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU002--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -A GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU003--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -B GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU003--M02","unidad":"SMC"},{"nombre":"MECANISMO PLUMA GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU004--M01","unidad":"SMC"},{"nombre":"MECANISMO ELEVACION GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU001--M01","unidad":"SMC"},{"nombre":"MECANISMO CIERRE GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU002--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -A GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU003--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -B GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU003--M02","unidad":"SMC"},{"nombre":"MECANISMO PLUMA GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU004--M01","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-1","ubicacion_tecnica":"2893-01-EAA06-AF001--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-1","ubicacion_tecnica":"2893-01-EAA06-AF001--M02","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-2","ubicacion_tecnica":"2893-01-EAA06-AF002--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-2","ubicacion_tecnica":"2893-01-EAA06-AF002--M02","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-3","ubicacion_tecnica":"2893-01-EAA06-AF003--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-3","ubicacion_tecnica":"2893-01-EAA06-AF003--M02","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-1","ubicacion_tecnica":"2893-01-EAA07-AF001--M01","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-2","ubicacion_tecnica":"2893-01-EAA07-AF002--M01","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-3","ubicacion_tecnica":"2893-01-EAA07-AF003--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C1","ubicacion_tecnica":"2893-01-EAA08-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C2","ubicacion_tecnica":"2893-01-EAA09-AF001--M02","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C3","ubicacion_tecnica":"2893-01-EAA10-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA APILADOR RADIAL","ubicacion_tecnica":"2893-01-EAD01-AF001--M01","unidad":"SMC"}]},{"nombre":"MP MM  PLANTA DE AGUAS COMPRESORES 30D","unidad":"DESAL","frecuencia":"1M","plan":"5000083312","equipos":[{"nombre":"COMPRESOR VAPOR DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES8","ubicacion_tecnica":"2893-01-GDB01-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES9","ubicacion_tecnica":"2893-01-GDB02-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES10","ubicacion_tecnica":"2893-01-GDB03-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES11","ubicacion_tecnica":"2893-01-GDB04-AN101--M01","unidad":"DESAL"},{"nombre":"BOMBA ELECTRICA -A SCI","ubicacion_tecnica":"2893-01-SGX01-AP101--M01","unidad":"DESAL"},{"nombre":"BOMBA ELECTRICA -B SCI","ubicacion_tecnica":"2893-01-SGX01-AP102--M01","unidad":"DESAL"},{"nombre":"BOMBA DIESEL SCI","ubicacion_tecnica":"2893-01-SGX01-AP201--M01","unidad":"DESAL"},{"nombre":"BOMBA JOCKEY","ubicacion_tecnica":"2893-01-SGX01-AP202--M01","unidad":"DESAL"}]},{"nombre":"MP MM MONITOREO VENTILADORES U1  60 D","unidad":"U1","frecuencia":"2M","plan":"5000083263","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -1A","ubicacion_tecnica":"2893-15-HLB30-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR AIRE SELLO VAS -1B","ubicacion_tecnica":"2893-15-HLB31-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -1 QEH05AN001 U1","ubicacion_tecnica":"2893-15-HSD01-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -2 QEH08AN001 U1","ubicacion_tecnica":"2893-15-HSD01-AN102--M01","unidad":"U1"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1A","ubicacion_tecnica":"2893-15-HLB50-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1B","ubicacion_tecnica":"2893-15-HLB51-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR AIRE IGNITORES U1","ubicacion_tecnica":"2893-15-HLB40-AN101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO VENTILADORES U2  60 D","unidad":"U2","frecuencia":"2M","plan":"5000083272","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -2A","ubicacion_tecnica":"2893-25-HLB30-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR AIRE SELLO VAS -2B","ubicacion_tecnica":"2893-25-HLB31-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2A","ubicacion_tecnica":"2893-25-HLB50-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2B","ubicacion_tecnica":"2893-25-HLB51-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR AIRE IGNITORES U2","ubicacion_tecnica":"2893-25-HLB40-AN101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO VENTILADORES U3  60 D","unidad":"U3","frecuencia":"2M","plan":"5000083281","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -3A","ubicacion_tecnica":"2893-35-HLB30-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3B","ubicacion_tecnica":"2893-35-HLB31-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3A","ubicacion_tecnica":"2893-35-HLB50-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3B","ubicacion_tecnica":"2893-35-HLB51-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3A FGD","ubicacion_tecnica":"2893-35-HNC02-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3B FGD","ubicacion_tecnica":"2893-35-HNC03-AN101--M01","unidad":"U3"},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3A","ubicacion_tecnica":"2893-35-HNF02-BB101-KN01","unidad":"U3"},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3B","ubicacion_tecnica":"2893-35-HNF02-BB102-KN01","unidad":"U3"},{"nombre":"VENTILADOR AIRE IGNITORES U3","ubicacion_tecnica":"2893-35-HLB40-AN101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO VENTILADORES U4  60 D","unidad":"U4","frecuencia":"2M","plan":"5000083290","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -4A","ubicacion_tecnica":"2893-45-HLB30-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE SELLO VAS -4B","ubicacion_tecnica":"2893-45-HLB31-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DILUCION AMON -4A HSA02AN101","ubicacion_tecnica":"2893-45-HSD01-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DILUCION AMON -4B HSA02AN102","ubicacion_tecnica":"2893-45-HSD01-AN102--M01","unidad":"U4"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4A","ubicacion_tecnica":"2893-45-HLB50-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4B","ubicacion_tecnica":"2893-45-HLB51-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE IGNITORES U4","ubicacion_tecnica":"2893-45-HLB40-AN101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO VENTILADORES U5  60 D","unidad":"U5","frecuencia":"2M","plan":"5000083299","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -5A","ubicacion_tecnica":"2893-55-HLB30-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5B","ubicacion_tecnica":"2893-55-HLB31-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5A","ubicacion_tecnica":"2893-55-HLB50-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5B","ubicacion_tecnica":"2893-55-HLB51-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5A FGD","ubicacion_tecnica":"2893-55-HNC02-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5B FGD","ubicacion_tecnica":"2893-55-HNC03-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE PURGA 5A","ubicacion_tecnica":"2893-55-HNF02-BB101-KN01","unidad":"U5"},{"nombre":"VENTILADOR AIRE PURGA 5B","ubicacion_tecnica":"2893-55-HNF02-BB102-KN01","unidad":"U5"},{"nombre":"VENTILADOR DILUCION AMON -5A HSA02AN101","ubicacion_tecnica":"2893-55-HSD01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DILUCION AMON -5B HSA02AN102","ubicacion_tecnica":"2893-55-HSD01-AN102--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE IGNITORES U5","ubicacion_tecnica":"2893-55-HLB40-AN101--M01","unidad":"U5"}]}];
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO RUTAS DE VIBRACIÓN
+// Datos de seed embebidos para que el módulo funcione sin DB.
+// Las ejecuciones (avance por equipo) se guardan en localStorage para no
+// requerir migración de la base de datos remota.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const RUTAS_COLOR_UNIDAD = {
+    'U1':   '#3B82F6',
+    'U2':   '#10B981',
+    'U3':   '#F59E0B',
+    'U4':   '#EF4444',
+    'U5':   '#8B5CF6',
+    'U1-2': '#0EA5E9',
+    'U3-4-5': '#A855F7',
+    'SC':   '#6B7280',
+    'SMC':  '#475569',
+    'DESAL':'#06B6D4'
+};
+
+const RUTAS_FRECUENCIA_LABEL = {
+    '2S': 'Quincenal',
+    '1M': 'Mensual',
+    '2M': 'Bimestral',
+    '3M': 'Trimestral',
+    '6M': 'Semestral',
+    'U1': 'Semestral'  // Caso especial en la planilla
+};
+
+const vistaRutasEstado = {
+    seccionActiva: '',
+    rutaActivaIdx: null,
+    filtroUnidad: '',
+    filtroFrecuencia: '',
+    busqueda: ''
+};
+
+// ── Persistencia localStorage ─────────────────────────────────────────────
+const RUTAS_EJECUCIONES_KEY = 'planify_rutas_ejecuciones';
+function getRutasEjecuciones() {
+    try {
+        const raw = localStorage.getItem(RUTAS_EJECUCIONES_KEY);
+        return raw ? JSON.parse(raw) : {};
+    } catch (e) { return {}; }
+}
+function saveRutasEjecuciones(data) {
+    try { localStorage.setItem(RUTAS_EJECUCIONES_KEY, JSON.stringify(data)); }
+    catch (e) { /* noop */ }
+}
+function getEjecucionActiva(rutaIdx) {
+    const all = getRutasEjecuciones();
+    return all[rutaIdx] || null;
+}
+function setEjecucionActiva(rutaIdx, ejecucion) {
+    const all = getRutasEjecuciones();
+    if (ejecucion === null) delete all[rutaIdx];
+    else all[rutaIdx] = ejecucion;
+    saveRutasEjecuciones(all);
+}
+
+// ── Color helper ──────────────────────────────────────────────────────────
+function colorUnidad(unidad) {
+    return RUTAS_COLOR_UNIDAD[unidad] || '#64748b';
+}
+
+// ── Match con equipos existentes por ubicación técnica ────────────────────
+// Construye y cachea un índice por UT para resolver rápido.
+let _rutasEquiposIndex = null;
+function normalizarRutaUT(valor) {
+    return String(valor || '')
+        .toUpperCase()
+        .replace(/\s+/g, '')
+        .replace(/--+/g, '-')
+        .trim();
+}
+function obtenerBaseRutaUT(valor) {
+    const ut = normalizarRutaUT(valor);
+    const match = ut.match(/^(.+-AP\d+)/);
+    return match ? match[1] : '';
+}
+function _construirIndiceEquiposPorUT() {
+    const exacto = new Map();
+    const base = new Map();
+    (estado.equipos || []).forEach(e => {
+        [e.ubicacion_tecnica, e.kks].forEach(valor => {
+            const ut = normalizarRutaUT(valor);
+            if (ut && !exacto.has(ut)) exacto.set(ut, e);
+            const baseUT = obtenerBaseRutaUT(ut);
+            if (baseUT && !base.has(baseUT)) base.set(baseUT, e);
+        });
+    });
+    return { exacto, base };
+}
+function obtenerEquipoPorUT(ubicacionTecnica) {
+    if (!ubicacionTecnica) return null;
+    if (!_rutasEquiposIndex) _rutasEquiposIndex = _construirIndiceEquiposPorUT();
+    const ut = normalizarRutaUT(ubicacionTecnica);
+    const exacto = _rutasEquiposIndex.exacto.get(ut);
+    if (exacto) return exacto;
+    const baseUT = obtenerBaseRutaUT(ut);
+    return baseUT ? (_rutasEquiposIndex.base.get(baseUT) || null) : null;
+}
+function normalizarRutasTexto(valor) {
+    return String(valor || '').trim().toLowerCase();
+}
+function obtenerPartesEquipoVinculado(equipo) {
+    if (!equipo) return [];
+    return (estado.equipos || []).filter(item =>
+        normalizarRutasTexto(item.activo) === normalizarRutasTexto(equipo.activo) &&
+        normalizarRutasTexto(item.ubicacion) === normalizarRutasTexto(equipo.ubicacion)
+    );
+}
+function invalidarIndiceEquipos() { _rutasEquiposIndex = null; }
+function labelFrecuencia(frec) {
+    return RUTAS_FRECUENCIA_LABEL[frec] || frec;
+}
+
+// ── Vista principal ───────────────────────────────────────────────────────
+function renderRutasView() {
+    if (!vistaRutasEstado.seccionActiva) {
+        renderVibracionesHub();
+        return;
+    }
+
+    if (vistaRutasEstado.seccionActiva === 'seguimiento') {
+        window.seguimientoVibVolverHub = function() {
+            vistaRutasEstado.seccionActiva = '';
+            vistaRutasEstado.rutaActivaIdx = null;
+            renderRutasView();
+        };
+        if (typeof window.renderSeguimientoVibView === 'function') {
+            window.renderSeguimientoVibView({ onBack: window.seguimientoVibVolverHub });
+        } else {
+            mainContent.innerHTML = `
+                <div class="fade-in" style="padding:1rem;">
+                    <button onclick="window.seguimientoVibVolverHub()" style="background:none; border:none; color:#FF6900; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                        <i class="fa-solid fa-arrow-left"></i> Volver a Vibraciones
+                    </button>
+                    <section class="panel" style="padding:1.1rem;">
+                        <h2 style="margin:0 0 0.35rem 0;">Seguimiento VIB no disponible</h2>
+                        <p style="margin:0; color:#64748b;">No se pudo cargar el modulo de seguimiento. Recarga la pagina e intentalo otra vez.</p>
+                    </section>
+                </div>
+            `;
+        }
+        return;
+    }
+
+    if (vistaRutasEstado.rutaActivaIdx !== null) {
+        renderRutasDetalle(vistaRutasEstado.rutaActivaIdx);
+    } else {
+        renderRutasLista();
+    }
+}
+
+function renderVibracionesHub() {
+    const ejecuciones = getRutasEjecuciones();
+    const totalRutas = RUTAS_VIBRACION_SEED.length;
+    const totalEquipos = RUTAS_VIBRACION_SEED.reduce((acc, ruta) => acc + ruta.equipos.length, 0);
+    const enCurso = Object.keys(ejecuciones).length;
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <section class="panel" style="background:linear-gradient(135deg,#fff7ed 0%,#ffffff 58%,#eff6ff 100%); border-color:rgba(249,115,22,0.2); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#9a3412; text-transform:uppercase; letter-spacing:0.05em;">Programa predictivo</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;"><i class="fa-solid fa-wave-square" style="color:#FF6900;"></i> Vibraciones</h1>
+                        <p style="color:#64748b; margin:0;">Elige si quieres ejecutar rutas de medicion o revisar el seguimiento de equipos no monitoreados.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-route" style="color:#FF6900;"></i> ${totalRutas} rutas</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-gears" style="color:#0ea5e9;"></i> ${totalEquipos} equipos</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-circle-play" style="color:#10b981;"></i> ${enCurso} rutas en curso</span>
+                    </div>
+                </div>
+            </section>
+
+            <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.9rem;">
+                <button type="button" onclick="window.vibracionesAbrir('rutas')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(249,115,22,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#fff7ed; color:#FF6900; margin-bottom:0.75rem;"><i class="fa-solid fa-route"></i></span>
+                    <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Rutas VIB</h2>
+                    <p style="margin:0; color:#64748b; font-size:0.9rem;">Ejecuta rutas, marca equipos medidos y guarda puntos de medicion por parte del equipo.</p>
+                </button>
+
+                <button type="button" onclick="window.vibracionesAbrir('seguimiento')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(14,165,233,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#eff6ff; color:#0ea5e9; margin-bottom:0.75rem;"><i class="fa-solid fa-chart-line"></i></span>
+                    <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Seguimiento VIB</h2>
+                    <p style="margin:0; color:#64748b; font-size:0.9rem;">Importa la planilla mensual y actualiza el estado del backlog no monitoreado.</p>
+                </button>
+            </section>
+        </div>
+    `;
+}
+
+function renderRutasLista() {
+    const isAdmin = estado.usuarioActual === 'admin';
+    const ejecuciones = getRutasEjecuciones();
+
+    const unidadesUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.unidad))];
+    const frecuenciasUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.frecuencia))];
+
+    const filtradas = RUTAS_VIBRACION_SEED
+        .map((r, idx) => ({ ...r, idx }))
+        .filter(r => {
+            if (vistaRutasEstado.filtroUnidad && r.unidad !== vistaRutasEstado.filtroUnidad) return false;
+            if (vistaRutasEstado.filtroFrecuencia && r.frecuencia !== vistaRutasEstado.filtroFrecuencia) return false;
+            if (vistaRutasEstado.busqueda) {
+                const q = vistaRutasEstado.busqueda.toLowerCase();
+                if (!r.nombre.toLowerCase().includes(q) && !(r.plan || '').toLowerCase().includes(q)) return false;
+            }
+            return true;
+        });
+
+    const totalRutas = RUTAS_VIBRACION_SEED.length;
+    const totalEquipos = RUTAS_VIBRACION_SEED.reduce((acc, r) => acc + r.equipos.length, 0);
+    const enProgreso = Object.keys(ejecuciones).length;
+
+    const renderCard = (r) => {
+        const ej = ejecuciones[r.idx];
+        const total = r.equipos.length;
+        const completados = ej?.equiposCompletados?.length || 0;
+        const pct = total ? Math.round((completados / total) * 100) : 0;
+        const color = colorUnidad(r.unidad);
+        const tieneEjecucion = !!ej;
+
+        return `<article class="rutas-card" data-ruta-idx="${r.idx}"
+            onclick="window.rutasAbrirDetalle(${r.idx})"
+            style="cursor:pointer; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.06); transition:transform 150ms, box-shadow 150ms;"
+            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 22px rgba(15,23,42,0.1)'"
+            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(15,23,42,0.06)'">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
+                <span style="background:${color}; color:#fff; font-size:0.74rem; font-weight:800; padding:0.25rem 0.6rem; border-radius:999px;">${r.unidad}</span>
+                <span style="background:#f1f5f9; color:#475569; font-size:0.74rem; font-weight:600; padding:0.25rem 0.6rem; border-radius:999px;">${labelFrecuencia(r.frecuencia)}</span>
+                ${tieneEjecucion ? `<span style="background:#dbeafe; color:#1e40af; font-size:0.7rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px;"><i class="fa-solid fa-circle-play"></i> En progreso</span>` : ''}
+            </div>
+            <div style="font-size:0.94rem; font-weight:700; color:#0f172a; line-height:1.3; margin-bottom:0.35rem;">${escapeHtml(r.nombre)}</div>
+            <div style="font-size:0.78rem; color:#64748b; margin-bottom:0.6rem;">
+                <i class="fa-solid fa-clipboard-check"></i> Plan ${escapeHtml(r.plan || '—')} · ${total} equipo${total !== 1 ? 's' : ''}
+            </div>
+            ${tieneEjecucion ? `
+                <div style="margin-top:0.45rem;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.74rem; color:#64748b; margin-bottom:0.2rem;">
+                        <span><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(ej.ot || '—')}</span>
+                        <span><strong style="color:${color};">${completados}/${total}</strong> (${pct}%)</span>
+                    </div>
+                    <div style="height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden;">
+                        <div style="height:100%; width:${pct}%; background:${color}; transition:width 250ms;"></div>
+                    </div>
+                </div>
+            ` : `
+                <div style="font-size:0.76rem; color:#94a3b8;"><i class="fa-regular fa-circle-pause"></i> Sin ejecución activa</div>
+            `}
+        </article>`;
+    };
+
+    const filtroBtn = (label, value, key) => {
+        const activo = vistaRutasEstado[key] === value;
+        return `<button type="button" data-ruta-filtro-key="${key}" data-ruta-filtro-value="${value}"
+            style="border:1px solid ${activo ? '#FF6900' : '#e5e7eb'}; background:${activo ? '#fff7f0' : '#fff'}; color:${activo ? '#9a3412' : '#475569'}; padding:0.4rem 0.85rem; border-radius:999px; font-size:0.8rem; font-weight:600; cursor:pointer;">
+            ${escapeHtml(label)}
+        </button>`;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.vibracionesVolver()" style="background:none; border:none; color:#FF6900; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a Vibraciones
+            </button>
+
+            <section class="panel" style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border-color: rgba(251,191,36,0.4); margin-bottom:1.2rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:700; color:#92400e; text-transform:uppercase; letter-spacing:0.05em;">Programa de vibración</div>
+                        <h1 style="margin:0.3rem 0 0.4rem 0; color:#0f172a;"><i class="fa-solid fa-route" style="color:#FF6900;"></i> Rutas VIB</h1>
+                        <p style="color:#64748b; margin:0;">Recorre cada ruta marcando los equipos que ya fueron medidos. El avance se guarda automáticamente.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-route" style="color:#FF6900;"></i> ${totalRutas} rutas</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-gears" style="color:#0ea5e9;"></i> ${totalEquipos} equipos</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-circle-play" style="color:#10b981;"></i> ${enProgreso} en curso</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="panel" style="margin-bottom:1.2rem; padding:1rem;">
+                <div style="display:flex; flex-direction:column; gap:0.7rem;">
+                    <input id="rutas-search" type="text" class="form-control" placeholder="Buscar por nombre o plan SAP…" value="${escapeHtml(vistaRutasEstado.busqueda)}" style="font-size:0.9rem;">
+                    <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                        <div>
+                            <div style="font-size:0.74rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem;">Unidad</div>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                                ${filtroBtn('Todas', '', 'filtroUnidad')}
+                                ${unidadesUnicas.map(u => filtroBtn(u, u, 'filtroUnidad')).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.74rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem;">Frecuencia</div>
+                            <div style="display:flex; flex-wrap:wrap; gap:0.4rem;">
+                                ${filtroBtn('Todas', '', 'filtroFrecuencia')}
+                                ${frecuenciasUnicas.map(f => filtroBtn(labelFrecuencia(f), f, 'filtroFrecuencia')).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section>
+                <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.7rem;">
+                    Mostrando <strong style="color:#0f172a;">${filtradas.length}</strong> de ${totalRutas} ruta${totalRutas !== 1 ? 's' : ''}
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:0.85rem;">
+                    ${filtradas.length
+                        ? filtradas.map(renderCard).join('')
+                        : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin rutas</strong><p>Ajusta los filtros para ver más resultados.</p></div></div>`}
+                </div>
+            </section>
+        </div>
+    `;
+
+    // Wire filtros
+    document.querySelectorAll('[data-ruta-filtro-key]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const k = btn.dataset.rutaFiltroKey;
+            const v = btn.dataset.rutaFiltroValue;
+            vistaRutasEstado[k] = vistaRutasEstado[k] === v ? '' : v;
+            renderRutasView();
+        });
+    });
+    const search = document.getElementById('rutas-search');
+    if (search) {
+        search.addEventListener('input', (e) => {
+            vistaRutasEstado.busqueda = e.target.value;
+            renderRutasView();
+            setTimeout(() => document.getElementById('rutas-search')?.focus(), 0);
+        });
+    }
+}
+
+function renderRutasDetalle(idx) {
+    const r = RUTAS_VIBRACION_SEED[idx];
+    if (!r) { vistaRutasEstado.rutaActivaIdx = null; renderRutasView(); return; }
+    const isAdmin = estado.usuarioActual === 'admin';
+    const ej = getEjecucionActiva(idx);
+    const completadosSet = new Set(ej?.equiposCompletados || []);
+    const total = r.equipos.length;
+    const completados = completadosSet.size;
+    const pct = total ? Math.round((completados / total) * 100) : 0;
+    const color = colorUnidad(r.unidad);
+    const observaciones = ej?.observaciones || {};
+
+    const renderEquipo = (eq, eqIdx) => {
+        const done = completadosSet.has(eqIdx);
+        const obs = observaciones[eqIdx] || '';
+        const equipoVinculado = obtenerEquipoPorUT(eq.ubicacion_tecnica);
+        const tieneFicha = !!equipoVinculado?.id;
+        const partesEquipo = obtenerPartesEquipoVinculado(equipoVinculado);
+        const totalPartes = partesEquipo.length;
+        const fichaTitle = totalPartes > 1 ? 'Elegir parte del equipo para abrir su ficha' : 'Click para abrir la ficha del equipo';
+        const fichaLabel = totalPartes > 1 ? `Ver partes (${totalPartes})` : 'Ver ficha';
+        const datosGuardados = Array.isArray(ej?.mediciones?.[eqIdx]) ? ej.mediciones[eqIdx] : [];
+        return `<article class="ruta-equipo" style="border:1px solid ${done ? '#bbf7d0' : '#e5e7eb'}; background:${done ? '#f0fdf4' : '#fff'}; border-radius:10px; padding:0.7rem 0.9rem; margin-bottom:0.5rem; transition:all 150ms;">
+            <div style="display:flex; align-items:flex-start; gap:0.65rem;">
+                <input type="checkbox" ${done ? 'checked' : ''} ${!ej ? 'disabled' : ''}
+                    onchange="window.rutasToggleEquipo(${idx}, ${eqIdx}, this.checked)"
+                    style="width:18px; height:18px; accent-color:#10b981; margin-top:2px; flex-shrink:0; cursor:${ej ? 'pointer' : 'not-allowed'};">
+                <div style="flex:1; min-width:0; ${tieneFicha ? 'cursor:pointer;' : ''}"
+                    ${tieneFicha ? `onclick="window.rutasAbrirFichaEquipo('${equipoVinculado.id}')" title="${fichaTitle}"` : ''}>
+                    <div style="font-weight:600; color:#0f172a; font-size:0.92rem; line-height:1.35; ${done ? 'text-decoration:line-through; color:#64748b;' : ''} display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+                        <span>${escapeHtml(eq.nombre)}</span>
+                        ${tieneFicha
+                            ? `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#dbeafe; color:#1e40af; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;"><i class="fa-solid fa-link"></i> ${fichaLabel}</span>`
+                            : `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#fef3c7; color:#92400e; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;" title="Equipo no encontrado en el maestro"><i class="fa-solid fa-circle-question"></i> Sin vincular</span>`
+                        }
+                        ${datosGuardados.length ? `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#dcfce7; color:#047857; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;"><i class="fa-solid fa-floppy-disk"></i> Datos ${datosGuardados.length}</span>` : ''}
+                    </div>
+                    <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.75rem; color:#64748b; margin-top:0.15rem;">
+                        <i class="fa-solid fa-diagram-project"></i> ${escapeHtml(eq.ubicacion_tecnica || '—')}
+                    </div>
+                </div>
+                ${done ? `<i class="fa-solid fa-check-circle" style="color:#10b981; font-size:1.1rem; flex-shrink:0;"></i>` : ''}
+            </div>
+            ${ej ? `
+                <input type="text" class="form-control" placeholder="Observación (opcional)"
+                    value="${escapeHtml(obs)}"
+                    oninput="window.rutasSetObservacion(${idx}, ${eqIdx}, this.value)"
+                    style="margin-top:0.5rem; font-size:0.82rem; padding:0.4rem 0.6rem;">
+            ` : ''}
+        </article>`;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.rutasVolver()" style="background:none; border:none; color:#FF6900; font-size:0.88rem; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.7rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a rutas
+            </button>
+
+            <section class="panel" style="background: linear-gradient(135deg, #fff7f0 0%, #fef3c7 100%); border-color: ${color}55; margin-bottom:1.1rem;">
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.45rem;">
+                    <span style="background:${color}; color:#fff; font-size:0.78rem; font-weight:800; padding:0.3rem 0.75rem; border-radius:999px;">${r.unidad}</span>
+                    <span style="background:#fff; color:#475569; font-size:0.78rem; font-weight:600; padding:0.3rem 0.75rem; border-radius:999px; border:1px solid #e5e7eb;">${labelFrecuencia(r.frecuencia)}</span>
+                    <span style="background:#fff; color:#475569; font-size:0.78rem; font-weight:600; padding:0.3rem 0.75rem; border-radius:999px; border:1px solid #e5e7eb;"><i class="fa-solid fa-clipboard-check"></i> Plan ${escapeHtml(r.plan || '—')}</span>
+                </div>
+                <h1 style="margin:0 0 0.4rem 0; color:#0f172a; font-size:1.3rem;">${escapeHtml(r.nombre)}</h1>
+                <p style="color:#64748b; margin:0;">${total} equipo${total !== 1 ? 's' : ''} en esta ruta.</p>
+            </section>
+
+            ${ej ? `
+                <section class="panel" style="margin-bottom:1.1rem; padding:1rem 1.1rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                        <div>
+                            <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">Ejecución activa</div>
+                            <div style="font-size:1rem; font-weight:700; color:#0f172a; margin-top:0.15rem;">
+                                <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> OT ${escapeHtml(ej.ot || '—')}
+                            </div>
+                            <div style="font-size:0.78rem; color:#64748b; margin-top:0.15rem;">
+                                Iniciada el ${ej.fechaInicio || '—'}
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:1.6rem; font-weight:800; color:${color};">${pct}%</div>
+                            <div style="font-size:0.78rem; color:#64748b;">${completados} de ${total}</div>
+                        </div>
+                    </div>
+                    <div style="height:10px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.7rem;">
+                        <div style="height:100%; width:${pct}%; background:${color}; transition:width 250ms;"></div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        ${isAdmin && completados === total ? `
+                            <button onclick="window.rutasCerrarEjecucion(${idx})" class="btn btn-success" style="font-size:0.85rem;">
+                                <i class="fa-solid fa-flag-checkered"></i> Cerrar ruta
+                            </button>
+                        ` : ''}
+                        ${isAdmin ? `
+                            <button onclick="window.rutasCancelarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#fecaca; color:#dc2626;">
+                                <i class="fa-solid fa-xmark"></i> Cancelar
+                            </button>
+                        ` : ''}
+                    </div>
+                </section>
+            ` : `
+                <section class="panel" style="margin-bottom:1.1rem; padding:1rem 1.1rem; background:#f8fafc; text-align:center;">
+                    <p style="color:#64748b; margin:0 0 0.7rem 0;">Esta ruta no tiene una ejecución activa.</p>
+                    ${isAdmin ? `
+                        <button onclick="window.rutasIniciarEjecucion(${idx})" class="btn btn-primary">
+                            <i class="fa-solid fa-circle-play"></i> Iniciar Ejecución
+                        </button>
+                    ` : '<p style="color:#94a3b8; font-size:0.82rem;">Espera a que un planificador inicie una ejecución.</p>'}
+                </section>
+            `}
+
+            <section>
+                <div style="font-size:0.85rem; font-weight:700; color:#0f172a; margin-bottom:0.5rem;">
+                    <i class="fa-solid fa-list-check" style="color:#FF6900;"></i> Equipos de la ruta
+                </div>
+                ${r.equipos.map(renderEquipo).join('')}
+            </section>
+        </div>
+    `;
+}
+
+// ── Acciones expuestas en window ──────────────────────────────────────────
+window.rutasAbrirDetalle = function(idx) {
+    invalidarIndiceEquipos(); // refrescar match cada vez que entras a un detalle
+    vistaRutasEstado.rutaActivaIdx = idx;
+    renderRutasView();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+window.rutasAbrirFichaEquipo = function(equipoId) {
+    if (!equipoId) return;
+    const equipo = (estado.equipos || []).find(item => String(item.id) === String(equipoId));
+    if (typeof window.elegirComponenteYAbrirFicha === 'function') {
+        window.elegirComponenteYAbrirFicha(equipoId, equipo?.ubicacion || '');
+        return;
+    }
+    if (typeof window.abrirFichaTecnica === 'function') {
+        window.abrirFichaTecnica(equipoId);
+    } else {
+        alert('La ficha técnica no está disponible.');
+    }
+};
+window.rutasAbrirCapturaEquipo = function(idx, eqIdx) {
+    const ruta = RUTAS_VIBRACION_SEED[idx];
+    const equipoRuta = ruta?.equipos?.[eqIdx];
+    if (!ruta || !equipoRuta) return;
+
+    const equipoVinculado = obtenerEquipoPorUT(equipoRuta.ubicacion_tecnica);
+    const partes = equipoVinculado
+        ? (obtenerPartesEquipoVinculado(equipoVinculado).length
+            ? obtenerPartesEquipoVinculado(equipoVinculado)
+            : [equipoVinculado])
+        : [];
+
+    document.getElementById('modal-ruta-captura-equipo')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-ruta-captura-equipo';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; z-index:11000;';
+    overlay.innerHTML = `
+        <div class="modal-shell modal-shell--medium" style="width:min(100%, 620px);">
+            <div class="modal-head">
+                <div class="modal-title-wrap">
+                    <span class="modal-eyebrow"><i class="fa-solid fa-route"></i> Datos de ruta</span>
+                    <h2 class="modal-title" id="ruta-captura-titulo">Equipo listo</h2>
+                    <p class="modal-subtitle" id="ruta-captura-subtitulo"></p>
+                </div>
+                <button id="ruta-captura-cerrar" class="modal-close" type="button" aria-label="Cerrar">&times;</button>
+            </div>
+            <div id="ruta-captura-body" class="modal-body"></div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const body = overlay.querySelector('#ruta-captura-body');
+    const titulo = overlay.querySelector('#ruta-captura-titulo');
+    const subtitulo = overlay.querySelector('#ruta-captura-subtitulo');
+    const cerrar = () => overlay.remove();
+    overlay.querySelector('#ruta-captura-cerrar')?.addEventListener('click', cerrar);
+    overlay.addEventListener('click', event => { if (event.target === overlay) cerrar(); });
+
+    const renderPregunta = () => {
+        titulo.textContent = 'Equipo marcado como listo';
+        subtitulo.textContent = `${equipoRuta.nombre} · ${equipoRuta.ubicacion_tecnica || ruta.nombre}`;
+        body.innerHTML = `
+            <div class="modal-callout" style="margin:0;">
+                ¿Necesitas guardar datos de vibración o temperatura para este equipo?
+            </div>
+            <div class="modal-actions" style="padding:0; border-top:0; background:transparent;">
+                <button id="ruta-captura-no" class="btn btn-outline" type="button">
+                    <i class="fa-solid fa-check"></i> No, solo dejar listo
+                </button>
+                <button id="ruta-captura-si" class="btn btn-primary" type="button">
+                    <i class="fa-solid fa-floppy-disk"></i> Sí, guardar datos
+                </button>
+            </div>
+        `;
+        body.querySelector('#ruta-captura-no')?.addEventListener('click', cerrar);
+        body.querySelector('#ruta-captura-si')?.addEventListener('click', renderPartes);
+    };
+
+    const renderPartes = () => {
+        titulo.textContent = 'Seleccionar parte';
+        subtitulo.textContent = `${equipoRuta.nombre} · ${partes.length || 0} parte(s) disponibles`;
+        if (!partes.length) {
+            body.innerHTML = `
+                <div class="modal-callout" style="background:#fef2f2; border-color:#fecaca; color:#991b1b;">
+                    Este equipo no tiene partes vinculadas en el maestro. Puedes dejarlo listo sin guardar mediciones.
+                </div>
+                <div class="modal-actions" style="padding:0; border-top:0; background:transparent;">
+                    <button id="ruta-captura-volver" class="btn btn-outline" type="button">Volver</button>
+                    <button id="ruta-captura-cerrar2" class="btn btn-primary" type="button">Cerrar</button>
+                </div>
+            `;
+            body.querySelector('#ruta-captura-volver')?.addEventListener('click', renderPregunta);
+            body.querySelector('#ruta-captura-cerrar2')?.addEventListener('click', cerrar);
+            return;
+        }
+
+        body.innerHTML = `
+            <div style="display:grid; gap:0.55rem;">
+                ${partes.map(parte => `
+                    <button class="ruta-parte-btn" type="button" data-parte-id="${escapeHtml(parte.id)}"
+                        style="display:flex; align-items:center; gap:0.7rem; width:100%; text-align:left; cursor:pointer; border:1.5px solid #e2e8f0; background:#f8fafc; border-radius:12px; padding:0.75rem 0.9rem;">
+                        <i class="fa-solid fa-gears" style="color:#FF6900;"></i>
+                        <span style="flex:1; min-width:0;">
+                            <strong style="display:block; color:#0f172a;">${escapeHtml(parte.componente || parte.activo || 'Sin componente')}</strong>
+                            <span style="display:block; color:#64748b; font-size:0.78rem; margin-top:0.12rem;">${escapeHtml(parte.kks || parte.ubicacion_tecnica || 'Sin KKS')}</span>
+                        </span>
+                        <i class="fa-solid fa-angle-right" style="color:#94a3b8;"></i>
+                    </button>
+                `).join('')}
+            </div>
+            <div class="modal-actions" style="padding:0; border-top:0; background:transparent;">
+                <button id="ruta-captura-volver" class="btn btn-outline" type="button">Volver</button>
+            </div>
+        `;
+        body.querySelector('#ruta-captura-volver')?.addEventListener('click', renderPregunta);
+        body.querySelectorAll('.ruta-parte-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const parte = partes.find(item => String(item.id) === String(btn.dataset.parteId));
+                if (parte) renderFormulario(parte);
+            });
+        });
+    };
+
+    const renderContinuar = ({ parteNombre, vibracion, temperatura, totalRegistros }) => {
+        titulo.textContent = 'Medición guardada';
+        subtitulo.textContent = `${equipoRuta.nombre} · ${totalRegistros || 1} punto(s) registrado(s)`;
+        body.innerHTML = `
+            <div class="modal-callout" style="margin:0; background:#ecfdf5; border-color:#a7f3d0; color:#065f46;">
+                Se guardó ${escapeHtml(parteNombre)}: ${escapeHtml(vibracion)} mm/s · ${escapeHtml(temperatura)} °C.
+            </div>
+            <div style="font-size:0.95rem; color:#334155; line-height:1.55;">
+                ¿Quieres guardar datos de otro punto de este equipo?
+            </div>
+            <div class="modal-actions" style="padding:0; border-top:0; background:transparent;">
+                <button id="ruta-med-terminar" class="btn btn-outline" type="button">
+                    <i class="fa-solid fa-check"></i> No, terminar
+                </button>
+                <button id="ruta-med-otro" class="btn btn-primary" type="button">
+                    <i class="fa-solid fa-plus"></i> Sí, agregar otro punto
+                </button>
+            </div>
+        `;
+        body.querySelector('#ruta-med-terminar')?.addEventListener('click', cerrar);
+        body.querySelector('#ruta-med-otro')?.addEventListener('click', renderPartes);
+    };
+
+    const renderFormulario = (parte) => {
+        const parteNombre = parte.componente || parte.activo || 'Parte seleccionada';
+        titulo.textContent = 'Guardar medición';
+        subtitulo.textContent = `${parteNombre} · ${parte.kks || equipoRuta.ubicacion_tecnica || ''}`;
+        body.innerHTML = `
+            <div style="display:grid; gap:1rem;">
+                <div style="display:grid; grid-template-columns:minmax(0, 1fr) minmax(0, 1fr); gap:0.75rem;">
+                    <div class="form-group" style="margin:0;">
+                        <label>Vibración más alta (mm/s)</label>
+                        <input id="ruta-med-vibracion" class="form-control" type="number" min="0" step="0.01" placeholder="Ej: 4.50">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label>Punto</label>
+                        <input id="ruta-med-punto" class="form-control" type="text" placeholder="Ej: Lado acople">
+                    </div>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Temperatura (°C)</label>
+                    <input id="ruta-med-temperatura" class="form-control" type="number" step="0.1" placeholder="Ej: 64.5">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>Observación <span style="font-weight:400; color:#64748b;">(opcional)</span></label>
+                    <textarea id="ruta-med-observacion" class="form-control" rows="3" placeholder="Ej: leve ruido, condición normal, revisar tendencia..." style="resize:vertical;"></textarea>
+                </div>
+                <p id="ruta-med-error" class="form-helper" style="display:none; color:#dc2626; margin:0;"></p>
+            </div>
+            <div class="modal-actions" style="padding:0; border-top:0; background:transparent;">
+                <button id="ruta-med-volver" class="btn btn-outline" type="button">Cambiar parte</button>
+                <button id="ruta-med-guardar" class="btn btn-primary" type="button">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar medición
+                </button>
+            </div>
+        `;
+        body.querySelector('#ruta-med-volver')?.addEventListener('click', renderPartes);
+        body.querySelector('#ruta-med-guardar')?.addEventListener('click', async () => {
+            const errorEl = body.querySelector('#ruta-med-error');
+            const btn = body.querySelector('#ruta-med-guardar');
+            const vibracion = Number(String(body.querySelector('#ruta-med-vibracion')?.value || '').replace(',', '.'));
+            const punto = String(body.querySelector('#ruta-med-punto')?.value || '').trim();
+            const temperatura = Number(String(body.querySelector('#ruta-med-temperatura')?.value || '').replace(',', '.'));
+            const observacion = String(body.querySelector('#ruta-med-observacion')?.value || '').trim();
+
+            const mostrarError = (mensaje) => {
+                if (!errorEl) return;
+                errorEl.textContent = mensaje;
+                errorEl.style.display = 'block';
+            };
+            if (!Number.isFinite(vibracion) || vibracion < 0) return mostrarError('Ingresa la vibración más alta.');
+            if (!punto) return mostrarError('Ingresa el punto donde se tomó la vibración.');
+            if (!Number.isFinite(temperatura)) return mostrarError('Ingresa la temperatura.');
+
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+            try {
+                const fecha = new Date().toISOString().slice(0, 10);
+                await guardarMedicion({
+                    equipo_id: parte.id,
+                    tipo: 'vibracion',
+                    valor: vibracion,
+                    punto_medicion: punto,
+                    componente: parte.componente || null,
+                    fecha,
+                    observaciones: observacion
+                });
+                await guardarMedicion({
+                    equipo_id: parte.id,
+                    tipo: 'termografia',
+                    valor: temperatura,
+                    punto_medicion: punto,
+                    componente: parte.componente || null,
+                    fecha,
+                    observaciones: observacion
+                });
+
+                const ej = getEjecucionActiva(idx);
+                if (ej) {
+                    ej.mediciones = ej.mediciones || {};
+                    const registros = Array.isArray(ej.mediciones[eqIdx]) ? ej.mediciones[eqIdx] : [];
+                    registros.unshift({
+                        fecha: new Date().toISOString(),
+                        equipo: equipoRuta.nombre,
+                        ubicacionTecnica: equipoRuta.ubicacion_tecnica || '',
+                        parteId: parte.id,
+                        parte: parteNombre,
+                        kks: parte.kks || '',
+                        vibracion,
+                        punto,
+                        temperatura,
+                        observacion
+                    });
+                    ej.mediciones[eqIdx] = registros;
+                    setEjecucionActiva(idx, ej);
+                }
+
+                mostrarToastNotificacion('Medición guardada', `${parteNombre}: ${vibracion} mm/s · ${temperatura} °C`, { type: 'success', duration: 2600 });
+                renderRutasView();
+                const ejActualizado = getEjecucionActiva(idx);
+                const totalRegistros = Array.isArray(ejActualizado?.mediciones?.[eqIdx]) ? ejActualizado.mediciones[eqIdx].length : 1;
+                renderContinuar({ parteNombre, vibracion, temperatura, totalRegistros });
+            } catch (error) {
+                console.warn('[Rutas] No se pudo guardar medición:', error);
+                mostrarError(error?.message || 'No se pudo guardar la medición.');
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        });
+        setTimeout(() => body.querySelector('#ruta-med-vibracion')?.focus(), 0);
+    };
+
+    renderPregunta();
+};
+window.rutasVolver = function() {
+    vistaRutasEstado.rutaActivaIdx = null;
+    renderRutasView();
+};
+window.vibracionesAbrir = function(seccion) {
+    vistaRutasEstado.seccionActiva = seccion === 'seguimiento' ? 'seguimiento' : 'rutas';
+    vistaRutasEstado.rutaActivaIdx = null;
+    renderRutasView();
+};
+window.vibracionesVolver = function() {
+    vistaRutasEstado.seccionActiva = '';
+    vistaRutasEstado.rutaActivaIdx = null;
+    renderRutasView();
+};
+window.rutasIniciarEjecucion = function(idx) {
+    const r = RUTAS_VIBRACION_SEED[idx];
+    if (!r) return;
+    const ot = prompt(`Iniciar ejecución de:
+${r.nombre}
+
+Ingresa el número de OT (Orden de Trabajo):`, '');
+    if (ot === null) return; // cancelado
+    const otTrim = String(ot).trim();
+    if (!otTrim) {
+        alert('El número de OT es obligatorio para iniciar la ejecución.');
+        return;
+    }
+    setEjecucionActiva(idx, {
+        ot: otTrim,
+        fechaInicio: new Date().toISOString().slice(0, 10),
+        equiposCompletados: [],
+        observaciones: {}
+    });
+    renderRutasView();
+};
+window.rutasToggleEquipo = function(idx, eqIdx, checked) {
+    const ej = getEjecucionActiva(idx);
+    if (!ej) return;
+    const set = new Set(ej.equiposCompletados || []);
+    const yaEstabaListo = set.has(eqIdx);
+    if (checked) set.add(eqIdx); else set.delete(eqIdx);
+    ej.equiposCompletados = [...set];
+    setEjecucionActiva(idx, ej);
+    renderRutasView();
+    if (checked && !yaEstabaListo) {
+        setTimeout(() => window.rutasAbrirCapturaEquipo?.(idx, eqIdx), 0);
+    }
+};
+window.rutasSetObservacion = function(idx, eqIdx, valor) {
+    const ej = getEjecucionActiva(idx);
+    if (!ej) return;
+    ej.observaciones = ej.observaciones || {};
+    if (valor) ej.observaciones[eqIdx] = valor;
+    else delete ej.observaciones[eqIdx];
+    setEjecucionActiva(idx, ej);
+    // No re-render para no perder el foco del input
+};
+window.rutasCerrarEjecucion = function(idx) {
+    const r = RUTAS_VIBRACION_SEED[idx];
+    const ej = getEjecucionActiva(idx);
+    if (!ej || !r) return;
+    if (!confirm(`¿Cerrar la ruta "${r.nombre}"?
+
+Esto archivará la ejecución actual (OT ${ej.ot}). Podrás iniciar una nueva.`)) return;
+    // Guardar al historial local (simple: appendear a "planify_rutas_historial")
+    try {
+        const histRaw = localStorage.getItem('planify_rutas_historial');
+        const hist = histRaw ? JSON.parse(histRaw) : [];
+        hist.push({
+            rutaIdx: idx,
+            rutaNombre: r.nombre,
+            ot: ej.ot,
+            fechaInicio: ej.fechaInicio,
+            fechaCierre: new Date().toISOString().slice(0, 10),
+            totalEquipos: r.equipos.length,
+            completados: ej.equiposCompletados.length,
+            observaciones: ej.observaciones || {}
+        });
+        localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
+    } catch (e) { /* noop */ }
+    setEjecucionActiva(idx, null);
+    renderRutasView();
+};
+window.rutasCancelarEjecucion = function(idx) {
+    if (!confirm('¿Cancelar la ejecución actual?\nSe perderá el avance registrado.')) return;
+    setEjecucionActiva(idx, null);
+    renderRutasView();
+};
+
+
 // --- SISTEMA DE NAVEGACIÓN Y RENDER ---
 
 // Eventos de Navegación
@@ -11231,6 +12304,7 @@ const navConfig = {
     'nav-dashboard': 'dashboard',
     'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
+    'nav-rutas': 'rutas',
     'nav-historial': 'historial',
     'nav-equipos': 'equipos',
     'nav-trabajadores': 'trabajadores',
@@ -11293,6 +12367,9 @@ function renderizarVistaActual() {
         case 'semanal':
             renderSemanalView();
             break;
+        case 'rutas':
+            renderRutasView();
+            break;
         case 'mis_horas':
             renderMisHorasView();
             break;
@@ -11315,6 +12392,10 @@ Object.keys(navConfig).forEach(id => {
     if (btn) {
         btn.addEventListener('click', () => {
             vistaActual = navConfig[id];
+            if (vistaActual === 'rutas') {
+                vistaRutasEstado.seccionActiva = '';
+                vistaRutasEstado.rutaActivaIdx = null;
+            }
             renderizarVistaActual();
         });
     }
@@ -12102,12 +13183,38 @@ if (btnConfirmarFinalizar) {
         btnConfirmarFinalizar.disabled = true;
         btnConfirmarFinalizar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
 
+        // Construir resumen estructurado de los datos por componente para que
+        // queden visibles en el Historial. Los datos no graficables (Elemento,
+        // Corriente, Voltaje, Nivel, etc.) viven en m.acciones; las temperaturas
+        // se persisten aparte como mediciones.
+        const lineasResumen = [];
+        medicionesData.forEach(m => {
+            if (m.activo === false) return;
+            const partes = [];
+            if (Array.isArray(m.temperaturas) && m.temperaturas.length) {
+                partes.push(`Temp: ${m.temperaturas.join(', ')} °C`);
+            } else if (m.temperatura !== null && m.temperatura !== '') {
+                partes.push(`Temp: ${m.temperatura} °C`);
+            }
+            if (m.vibracion !== null && m.vibracion !== '') {
+                partes.push(`Vibr: ${m.vibracion} mm/s`);
+            }
+            if (m.acciones) partes.push(m.acciones);
+            if (partes.length) {
+                const titulo = m.componente ? `• ${m.componente}` : '•';
+                lineasResumen.push(`${titulo} → ${partes.join(' | ')}`);
+            }
+        });
+        const accionesFinal = lineasResumen.length
+            ? (acciones ? `${acciones}\n\n${lineasResumen.join('\n')}` : lineasResumen.join('\n'))
+            : acciones;
+
         try {
             await guardarTareaFinalizada({
                 id: document.getElementById('modal-tarea-id').value,
                 liderId: document.getElementById('modal-lider-id').value,
                 ayudantesIdsStr: document.getElementById('modal-ayudantes-ids').value,
-                accionesRealizadas: acciones,
+                accionesRealizadas: accionesFinal,
                 observaciones: document.getElementById('modal-observaciones').value.trim(),
                 numeroAviso: document.getElementById('modal-numero-aviso').value.trim(),
                 hhTrabajo: document.getElementById('modal-hh-trabajo').value.trim(),
@@ -12125,12 +13232,24 @@ if (btnConfirmarFinalizar) {
 
 // Muestra un selector de componentes del mismo equipo antes de abrir la ficha
 window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
-    const equipo = estado.equipos.find(e => e.id === eqId);
+    const equipo = estado.equipos.find(e => String(e.id) === String(eqId));
     if (!equipo) return;
-    // Usar la ubicación de la tarea si fue pasada, si no la del equipo
+
+    const normalizarSelector = (value) => String(value || '').trim().toLowerCase();
+    const jsString = (value) => String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+    // Usar la ubicacion de la tarea si fue pasada, si no la del equipo
     const ubicFiltro = ubicacionForzada || equipo.ubicacion;
-    // Buscar todos los componentes del mismo activo y misma ubicación
-    const componentes = estado.equipos.filter(e => e.activo === equipo.activo && e.ubicacion === ubicFiltro);
+    // Buscar todos los componentes del mismo activo y misma ubicacion
+    const componentes = (estado.equipos || [])
+        .filter(e =>
+            normalizarSelector(e.activo) === normalizarSelector(equipo.activo) &&
+            normalizarSelector(e.ubicacion) === normalizarSelector(ubicFiltro)
+        )
+        .sort((a, b) =>
+            String(a.componente || a.kks || '').localeCompare(String(b.componente || b.kks || ''), 'es', { numeric: true })
+        );
+
     if (componentes.length <= 1) {
         window.abrirFichaTecnica(eqId);
         return;
@@ -12140,24 +13259,31 @@ window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
     if (existente) existente.remove();
     const overlay = document.createElement('div');
     overlay.id = 'modal-selector-componente';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
     overlay.innerHTML = `
-        <div style="background:#fff;border-radius:16px;padding:1.5rem 1.6rem;max-width:360px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+        <div style="background:#fff;border-radius:16px;padding:1.5rem 1.6rem;max-width:460px;width:100%;max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                <span style="font-weight:700;font-size:1rem;color:#1e293b;">Seleccionar componente</span>
-                <button onclick="document.getElementById('modal-selector-componente').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;line-height:1;">✕</button>
+                <div style="min-width:0;">
+                    <div style="font-weight:800;font-size:1rem;color:#1e293b;">Seleccionar parte del equipo</div>
+                    <div style="font-size:0.78rem;color:#64748b;margin-top:0.18rem;">${componentes.length} partes disponibles</div>
+                </div>
+                <button onclick="document.getElementById('modal-selector-componente').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#64748b;line-height:1;">&times;</button>
             </div>
-            <p style="font-size:0.85rem;color:#64748b;margin:0 0 1rem;">${equipo.activo} · ${ubicFiltro}</p>
-            <div style="display:flex;flex-direction:column;gap:0.5rem;">
-                ${componentes.map(c => `
-                <button onclick="document.getElementById('modal-selector-componente').remove(); window.abrirFichaTecnica('${c.id}')"
-                    style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:0.7rem 1rem;text-align:left;cursor:pointer;font-size:0.92rem;font-weight:600;color:#1e293b;display:flex;align-items:center;gap:0.6rem;transition:border-color 0.15s;"
+            <p style="font-size:0.85rem;color:#64748b;margin:0 0 1rem;line-height:1.45;">${escapeHtml(equipo.activo)} · ${escapeHtml(ubicFiltro || 'Sin ubicacion')}</p>
+            <div style="overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem;padding-right:2px;">
+                ${componentes.map(c => {
+                    const actual = String(c.id) === String(equipo.id);
+                    return `
+                <button onclick="document.getElementById('modal-selector-componente').remove(); window.abrirFichaTecnica('${jsString(c.id)}')"
+                    style="background:${actual ? '#fff7f0' : '#f8fafc'};border:1.5px solid ${actual ? '#fdba74' : '#e2e8f0'};border-radius:10px;padding:0.7rem 1rem;text-align:left;cursor:pointer;font-size:0.92rem;font-weight:600;color:#1e293b;display:flex;align-items:center;gap:0.6rem;transition:border-color 0.15s;"
                     onmouseover="this.style.borderColor='#FF6900';this.style.background='#fff7f0'"
-                    onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
+                    onmouseout="this.style.borderColor='${actual ? '#fdba74' : '#e2e8f0'}';this.style.background='${actual ? '#fff7f0' : '#f8fafc'}'">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-                    ${c.componente || 'Sin componente'}
-                    ${c.kks ? `<span style="margin-left:auto;font-size:0.75rem;color:#94a3b8;font-weight:400;">${c.kks}</span>` : ''}
-                </button>`).join('')}
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.componente || 'Sin componente')}</span>
+                    ${actual ? `<span style="font-size:0.68rem;color:#9a3412;background:#ffedd5;border-radius:999px;padding:0.12rem 0.45rem;font-weight:800;">Actual</span>` : ''}
+                    ${c.kks ? `<span style="margin-left:auto;font-size:0.75rem;color:#94a3b8;font-weight:400;white-space:nowrap;">${escapeHtml(c.kks)}</span>` : ''}
+                </button>`;
+                }).join('')}
             </div>
         </div>`;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -13939,6 +15065,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mis-horas':          ['trabajador'],
         'nav-control':            ['admin'],
         'nav-semanal':            ['admin'],
+        'nav-rutas':              ['admin', 'trabajador'],
         'nav-historial':          ['admin'],
         'nav-trabajadores':       ['admin'],
         'nav-checkin':            ['admin'],
@@ -13998,8 +15125,8 @@ function accederApp(rol, trabajadorObj = null) {
     try {
         const vistaGuardada = localStorage.getItem('planify_vista');
         if (vistaGuardada) {
-            const permitidoAdmin = ['control','dashboard','semanal','historial','trabajadores','checkin','equipos','horas-extra-admin','insumos','perfil','mis_horas'];
-            const permitidoTrabajador = ['dashboard','semanal','perfil','mis_horas','insumos'];
+            const permitidoAdmin = ['control','dashboard','semanal','rutas','historial','trabajadores','checkin','equipos','horas-extra-admin','insumos','perfil','mis_horas'];
+            const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos'];
             const permitidoVisita = ['dashboard','semanal','historial','equipos'];
             const lista = rol === 'admin' ? permitidoAdmin : (rol === 'trabajador' ? permitidoTrabajador : permitidoVisita);
             if (lista.includes(vistaGuardada)) vistaInicial = vistaGuardada;

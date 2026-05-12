@@ -562,6 +562,51 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // POST /api/seguimiento-vib/importar
+    if (req.method === 'POST' && pathname === '/api/seguimiento-vib/importar') {
+        try {
+            const body = await readBody(req);
+            const { nombrePeriodo, archivoOrigen, totalEquipos, creado_por, equipos } = body || {};
+
+            if (!nombrePeriodo || !Array.isArray(equipos) || !equipos.length) {
+                writeJson(res, 400, { ok: false, error: 'Faltan datos: nombrePeriodo y equipos son requeridos.' });
+                return;
+            }
+
+            // 1. Insertar el periodo
+            const periodoPayload = {
+                nombre: nombrePeriodo,
+                archivo_origen: archivoOrigen || null,
+                total_equipos: totalEquipos || equipos.length
+            };
+            if (creado_por) periodoPayload.creado_por = creado_por;
+
+            const { data: periodo, error: periodoError } = await supabaseServer
+                .from('seguimiento_vib_periodos')
+                .insert([periodoPayload])
+                .select()
+                .single();
+
+            if (periodoError) throw periodoError;
+
+            // 2. Insertar equipos en chunks de 500
+            const payload = equipos.map((eq) => ({ ...eq, periodo_id: periodo.id }));
+            for (let i = 0; i < payload.length; i += 500) {
+                const chunk = payload.slice(i, i + 500);
+                const { error: equiposError } = await supabaseServer
+                    .from('seguimiento_vib_equipos')
+                    .insert(chunk);
+                if (equiposError) throw equiposError;
+            }
+
+            writeJson(res, 200, { ok: true, periodo });
+        } catch (error) {
+            console.error('[server] /api/seguimiento-vib/importar error:', error.message);
+            writeJson(res, 500, { ok: false, error: error.message });
+        }
+        return;
+    }
+
     // POST /generar-pdf
     if (req.method === 'POST' && pathname === '/generar-pdf') {
         const ts = Date.now();
