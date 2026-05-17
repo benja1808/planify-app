@@ -1618,5 +1618,920 @@
         "unidad": "U5"
       }
     ]
+  },
+  {
+    "nombre": "MONITOREO COND LAVADO U1-5 1M",
+    "unidad": "U1",
+    "frecuencia": "1M",
+    "plan": "5000083812",
+    "equipos": [
+      {
+        "nombre": "BOMBA -A LAVADO REJA MOVIL U1",
+        "ubicacion_tecnica": "2893-13-PUA02-AP101--M01",
+        "unidad": "U1"
+      },
+      {
+        "nombre": "BOMBA -B LAVADO REJA MOVIL U1",
+        "ubicacion_tecnica": "2893-13-PUA02-AP102--M01",
+        "unidad": "U1"
+      },
+      {
+        "nombre": "BOMBA -A LAVADO REJA MOVIL U2",
+        "ubicacion_tecnica": "2893-23-PUA02-AP101--M01",
+        "unidad": "U2"
+      },
+      {
+        "nombre": "BOMBA -B LAVADO REJA MOVIL U2",
+        "ubicacion_tecnica": "2893-23-PUA02-AP102--M01",
+        "unidad": "U2"
+      },
+      {
+        "nombre": "BOMBA -A LAVADO REJA MOVIL U3",
+        "ubicacion_tecnica": "2893-33-PUA02-AP101--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "BOMBA -B LAVADO REJA MOVIL U3",
+        "ubicacion_tecnica": "2893-33-PUA02-AP102--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "BOMBA -A LAVADO REJA MOVIL U4",
+        "ubicacion_tecnica": "2893-43-PUA02-AP101--M01",
+        "unidad": "U4"
+      },
+      {
+        "nombre": "BOMBA -B LAVADO REJA MOVIL U4",
+        "ubicacion_tecnica": "2893-43-PUA02-AP102--M01",
+        "unidad": "U4"
+      },
+      {
+        "nombre": "BOMBA -A LAVADO REJA MOVIL U5",
+        "ubicacion_tecnica": "2893-53-PUA02-AP101--M01",
+        "unidad": "U5"
+      },
+      {
+        "nombre": "BOMBA -B LAVADO REJA MOVIL U5",
+        "ubicacion_tecnica": "2893-53-PUA02-AP102--M01",
+        "unidad": "U5"
+      }
+    ]
+  },
+  {
+    "nombre": "MP MM MONITOREO CONDIC TRANSP RETRO  90",
+    "unidad": "SC",
+    "frecuencia": "3M",
+    "plan": "5000083330",
+    "equipos": [
+      {
+        "nombre": "ALIMENTADOR ROTATORIO SILO 1 HTJ11AF001",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF001-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTJ11AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTJ11AN001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF001--M02",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR ENFRIAMIENTO HTJ31AN001",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF002-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTJ31AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTJ31AN001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ01-AF002--M02",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRASPORTADOR HTK13AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AF001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRANSPORTADOR HTK33AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AF002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRANSPORTADOR HTK19AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AF003--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TORNILLO HTK15AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AF011--M03",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TORNILLO HTK35AF001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AF012--M03",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR FILTRO AIRE SALIDA HTK17AN001",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM000-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENT FILTRO SALIDA HTK17AN001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM000--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK17AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK17AM002-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK17AM003-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM003--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR FILTRO HTK37AN001",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM010-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTK37AN001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM010--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK37AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM011--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK37AM002-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM012--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR HIDRATADOR HTK37AM003-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AM013--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "BOMBA HIDRATACION -1 HTQ37AP001",
+        "ubicacion_tecnica": "2893-01-HTJ02-AP001-KP01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR BOMBA HTQ37AP001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AP001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "BOMBA HIDRATACION -2 HTQ38AP001",
+        "ubicacion_tecnica": "2893-01-HTJ02-AP002-KP01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR BOMBA HTQ38AP001-M01",
+        "ubicacion_tecnica": "2893-01-HTJ02-AP002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTP33AF002-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AF001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTP43AF002-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AF002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTP63AF002-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AF003--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTP73AF002-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AF004--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR DESCARGADOR HTP35AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AM001--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR DESCARGADOR HTP45AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AM002--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR DESCARGADOR HTP65AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AM003--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR DESCARGADOR HTP75AM001-M01",
+        "ubicacion_tecnica": "2893-01-HTP03-AM004--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion_tecnica": "2893-15-HTP11-AF101-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion_tecnica": "2893-15-HTP11-AF101--M03",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK52AF001-M01",
+        "ubicacion_tecnica": "2893-15-HTP11-AF102--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRANSPORTADOR HTK55AF001-M01",
+        "ubicacion_tecnica": "2893-15-HTP11-AF103--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK55AF002-M01",
+        "ubicacion_tecnica": "2893-15-HTP11-AF104--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR FILTRO VENTILADOR HTK50AN001-M01",
+        "ubicacion_tecnica": "2893-15-HTP11-AT101--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion_tecnica": "2893-25-HTP11-AF101-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AF101--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AF101--M03",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK52AF001-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AF102--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRANSPORTADOR HTK55AF001-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AF103--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK55AF002-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AF104--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR FILTRO VENTILADOR HTK50AN001-M01",
+        "ubicacion_tecnica": "2893-25-HTP11-AT101--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion_tecnica": "2893-45-HTP11-AF101-KN01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AF101--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AF101--M03",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK52AF001-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AF102--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR TRANSPORTADOR HTK55AF001-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AF103--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR ALIMENTADOR HTK55AF002-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AF104--M01",
+        "unidad": "SC"
+      },
+      {
+        "nombre": "MOTOR FILTRO VENTILADOR HTK50AN001-M01",
+        "ubicacion_tecnica": "2893-45-HTP11-AT101--M01",
+        "unidad": "SC"
+      }
+    ]
+  },
+  {
+    "nombre": "MP MM  PLANTA DE AGUAS BOMBAS 180D",
+    "unidad": "PA",
+    "frecuencia": "6M",
+    "plan": "5000083311",
+    "equipos": [
+      {
+        "nombre": "BOMBA DE AGUA POTABLE -A",
+        "ubicacion_tecnica": "2893-01-GKB01-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE AGUA POTABLE -B",
+        "ubicacion_tecnica": "2893-01-GKB01-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE AGUA POTABLE -C",
+        "ubicacion_tecnica": "2893-01-GKB01-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -A (PARA U 1-2)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -B (PARA U 1-2)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -A (DE GBB01BB101)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -B (DE GBB01BB101)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -A (PARA U5)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP108--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA SERV. -B (PARA U5)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP109--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -A DESALADORA 1-2",
+        "ubicacion_tecnica": "2893-01-GAF11-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -B DESALADORA 1-2",
+        "ubicacion_tecnica": "2893-01-GAF11-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -A DESALADORA 3-4",
+        "ubicacion_tecnica": "2893-01-GAF12-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -B DESALADORA 3-4",
+        "ubicacion_tecnica": "2893-01-GAF12-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -B DESALADORA 5",
+        "ubicacion_tecnica": "2893-01-GAF13-AP102-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -A DESALADORA 6-7",
+        "ubicacion_tecnica": "2893-01-GAF14-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA BOOSTER -B DESALADORA 6-7",
+        "ubicacion_tecnica": "2893-01-GAF14-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA RECIRCULACION DESALADORA -1 (U1)",
+        "ubicacion_tecnica": "2893-01-GAA01-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA RECIRCULACION DESALADORA -2 (U2)",
+        "ubicacion_tecnica": "2893-01-GAA02-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA CIRCULACION GBG20AP001 DESA 8",
+        "ubicacion_tecnica": "2893-01-GDB01-AP112--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA CIRCULACION GBG20AP001 DES9",
+        "ubicacion_tecnica": "2893-01-GDB02-AP112--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA CIRCULACION GBG20AP001 DES10",
+        "ubicacion_tecnica": "2893-01-GDB03-AP112--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA CIRCULACION GBG20AP001 DES11",
+        "ubicacion_tecnica": "2893-01-GDB04-AP112--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -1 (U1)",
+        "ubicacion_tecnica": "2893-01-GAA01-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -2 (U2)",
+        "ubicacion_tecnica": "2893-01-GAA02-AP103-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -6 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA06-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO DESALADORA -7 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO GBG25AP001 DES 8",
+        "ubicacion_tecnica": "2893-01-GDB01-AP113--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO GBG25AP001 DES9",
+        "ubicacion_tecnica": "2893-01-GDB02-AP113--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO GBG25AP001 DES10",
+        "ubicacion_tecnica": "2893-01-GDB03-AP113--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA PRODUCTO GBG25AP001 DES11",
+        "ubicacion_tecnica": "2893-01-GDB04-AP113--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -1 (U1)",
+        "ubicacion_tecnica": "2893-01-GAA01-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -2 (U2)",
+        "ubicacion_tecnica": "2893-01-GAA02-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -6 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA06-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA DESALADORA -7 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP104--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA GBG35AP001 DESA 8",
+        "ubicacion_tecnica": "2893-01-GDB01-AP111--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA GBG35AP001 DES9",
+        "ubicacion_tecnica": "2893-01-GDB02-AP111--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA GBG35AP001 DES10",
+        "ubicacion_tecnica": "2893-01-GDB03-AP111-M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA SALMUERA GBG35AP001 DES11",
+        "ubicacion_tecnica": "2893-01-GDB04-AP111--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -1 (U1)",
+        "ubicacion_tecnica": "2893-01-GAA01-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -2 (U2)",
+        "ubicacion_tecnica": "2893-01-GAA02-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -6 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA06-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO DESALADORA -7 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -1 DES8",
+        "ubicacion_tecnica": "2893-01-GDB01-AP301--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -2 DES8",
+        "ubicacion_tecnica": "2893-01-GDB01-AP302--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -1 DES9",
+        "ubicacion_tecnica": "2893-01-GDB02-AP301--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -2 DES9",
+        "ubicacion_tecnica": "2893-01-GDB02-AP302-M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -1 DES10",
+        "ubicacion_tecnica": "2893-01-GDB03-AP301--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -2 DES10",
+        "ubicacion_tecnica": "2893-01-GDB03-AP302--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -1 DES11",
+        "ubicacion_tecnica": "2893-01-GDB04-AP301--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DE VACIO -2 DES11",
+        "ubicacion_tecnica": "2893-01-GDB04-AP302--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA VACIO 2 GBG08AP001",
+        "ubicacion_tecnica": "2893-01-GDQ12-AP103-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA FGD MAKE-UP -A (DE GBB01BB101)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP105--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA FGD MAKE-UP -B (DE GBB01BB101)",
+        "ubicacion_tecnica": "2893-01-GAD33-AP106--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA FGD MAKE-UP -C",
+        "ubicacion_tecnica": "2893-01-GAD33-AP107--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA -A MAKEUP 1-2",
+        "ubicacion_tecnica": "2893-01-GCL12-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA -B MAKEUP 1-2",
+        "ubicacion_tecnica": "2893-01-GCL12-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA -C MAKEUP 1-2",
+        "ubicacion_tecnica": "2893-01-GCL12-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA MAKEUP-A U3-4",
+        "ubicacion_tecnica": "2893-01-GCL14-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA MAKEUP-B U3-4",
+        "ubicacion_tecnica": "2893-01-GCL14-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA MAKEUP-C U3-4",
+        "ubicacion_tecnica": "2893-01-GCL14-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA MAKEUP-B U5",
+        "ubicacion_tecnica": "2893-01-GCL17-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA FGD MAKEUP-A U5",
+        "ubicacion_tecnica": "2893-01-GCL15-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA FGD MAKEUP-B U5",
+        "ubicacion_tecnica": "2893-01-GCL15-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA PRETRATADA -A 3-4",
+        "ubicacion_tecnica": "2893-01-GAD14-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA PRETRATADA -B 3-4",
+        "ubicacion_tecnica": "2893-01-GAD14-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA PRETRATADA -C 3-4",
+        "ubicacion_tecnica": "2893-01-GAD14-AP103--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA PRETRATADA -A 5",
+        "ubicacion_tecnica": "2893-01-GAD16-AP101--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA AGUA PRETRATADA -B 5",
+        "ubicacion_tecnica": "2893-01-GAD16-AP102--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "COMPRESOR VAPOR DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AN101",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "COMPRESOR VAPOR DESALADORA -6 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA06-AN101",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA LUBRICACION DESALADORA -3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP201--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA LUBRICACION DESALADORA -4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP201--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA LUBRICACION DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP201--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA LUBRICACION DESALADORA -6 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA06-AP201--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA LUBRICACION DESALADORA -7 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP201--M01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-A DESALA 3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP301",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-B DESALA 3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP302",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-A DESALA 4(U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP301",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-B DESALA 4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP302",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-A DESALA 5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP301-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-B DESALA 5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP302-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI ESPUMANTE-B DESALA 7 (U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP302",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-A DESALA 3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP303",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-B DESALA 3 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA03-AP304",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-A DESALA 4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP303",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-B DESALA 4 (U3)",
+        "ubicacion_tecnica": "2893-01-GAA04-AP304",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-A DESALA 5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP303-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-B DESALA 5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05-AP304-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-A DESALA 7(U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP303",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA DOSIF ANTI INCRUSTAN-B DESALA 7(U5)",
+        "ubicacion_tecnica": "2893-01-GAA07-AP304",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "DESALADORA -5 (U4)",
+        "ubicacion_tecnica": "2893-01-GAA05",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA ALIM. AGUA MAR -3 GBG35AP001",
+        "ubicacion_tecnica": "2893-01-GDA01-AP103-KP01",
+        "unidad": "PA"
+      },
+      {
+        "nombre": "BOMBA ALIM. AGUA INTAKE -2 GBG02AP001",
+        "ubicacion_tecnica": "2893-01-GDQ11-AP102-KP01",
+        "unidad": "PA"
+      }
+    ]
+  },
+  {
+    "nombre": "MP MM MONITOREO FGD U3  90 D",
+    "unidad": "U3",
+    "frecuencia": "3M",
+    "plan": "5000083314",
+    "equipos": [
+      {
+        "nombre": "MOTOR BOMBA RECIRCULACION -A",
+        "ubicacion_tecnica": "2893-35-HRA05-AP101-KP01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "MOTOR BOMBA RECIRCULACION -B",
+        "ubicacion_tecnica": "2893-35-HRA05-AP102--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "MOTOR FILTRO BANDA -A",
+        "ubicacion_tecnica": "2893-35-HRB02-AT101--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "MOTOR FILTRO BANDA -B",
+        "ubicacion_tecnica": "2893-35-HRB03-AT101--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "MOTOR SOPLADOR OXIDACION -A",
+        "ubicacion_tecnica": "2893-35-HRA08-AN201--M01",
+        "unidad": "U3"
+      },
+      {
+        "nombre": "MOTOR SOPLADOR OXIDACION -B",
+        "ubicacion_tecnica": "2893-35-HRA08-AN202--M01",
+        "unidad": "U3"
+      }
+    ]
+  },
+  {
+    "nombre": "MP MM MONITOREO FGD U5  90 D",
+    "unidad": "U5",
+    "frecuencia": "3M",
+    "plan": "5000083316",
+    "equipos": [
+      {
+        "nombre": "BOMBA RECIRCULACION ABSORBER -A",
+        "ubicacion_tecnica": "2893-55-HRA05-AP101--M01",
+        "unidad": "U5"
+      },
+      {
+        "nombre": "BOMBA RECIRCULACION ABSORBER -B",
+        "ubicacion_tecnica": "2893-55-HRA05-AP102--M01",
+        "unidad": "U5"
+      },
+      {
+        "nombre": "SOPLADOR DE OXIDACION -A",
+        "ubicacion_tecnica": "2893-55-HRA08-AN201--M01",
+        "unidad": "U5"
+      },
+      {
+        "nombre": "SOPLADOR DE OXIDACION -B",
+        "ubicacion_tecnica": "2893-55-HRA08-AN202--M01",
+        "unidad": "U5"
+      }
+    ]
   }
 ]
