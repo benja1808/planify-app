@@ -779,6 +779,8 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
     function classify(text) {
         const t = String(text || '').toLowerCase();
         if (t.includes('vibrac')) return 'Vibraciones';
+        // Trabajos de Seguimiento VIB → se asimilan al área de Vibraciones
+        if (t.includes('seguimiento vib')) return 'Vibraciones';
         if (t.includes('termog')) return 'Termografia';
         if (t.includes('lubric') || t.includes('aceite')) return 'Lubricacion';
         if (t.includes('end') || t.includes('tintas')) return 'END';
@@ -860,14 +862,27 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             const eqDirect = record.equipo_id ? equipos.find(item => String(item.id) === String(record.equipo_id)) || null : null;
             const unit = getRecordUnit(record, eqDirect);
             const eq = resolveEquipment(equipment, unit, record.equipo_id);
+            // Especialidad: si queda como "Otros" pero el trabajo no tiene
+            // líder real (trabajos masivos / Seguimiento VIB), se asimila a
+            // Vibraciones, que es el área típica de esos trabajos.
+            const liderNombreRaw = String(record.lider_nombre || '').trim();
+            const sinLiderReal = !liderNombreRaw || /^(planify|sin l[ií]der|admin)$/i.test(liderNombreRaw);
+            let specialtyName = classify(types[0] || title);
+            if (specialtyName === 'Otros' && (sinLiderReal || /seguimiento\s*vib/i.test(title))) {
+                specialtyName = 'Vibraciones';
+            }
+            // Líder: el placeholder "Planify" (trabajos cerrados por el
+            // planificador sin líder asignado) se atribuye a Cristian Olivares.
+            let leaderName = liderNombreRaw || 'Sin lider';
+            if (/^planify$/i.test(leaderName)) leaderName = 'Cristian Olivares';
             return {
                 id: record.id,
                 date,
                 unit,
                 equipment,
-                specialty: classify(types[0] || title),
-                typesText: types.length ? types.join(', ') : classify(title),
-                leader: record.lider_nombre || 'Sin lider',
+                specialty: specialtyName,
+                typesText: types.length ? types.join(', ') : specialtyName,
+                leader: leaderName,
                 helpers: techs,
                 hh: parseNum(record.hh_trabajo),
                 ot: record.ot_numero || '',
