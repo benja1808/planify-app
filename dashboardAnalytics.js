@@ -46,9 +46,16 @@
         style.textContent = `
 .analytics-dashboard{display:grid;gap:1rem;padding-bottom:.35rem}
 .analytics-panel{padding:1.15rem;position:relative;overflow:hidden}
-.analytics-panel--hero{padding:1.35rem;background:linear-gradient(145deg,#fff8ef 0%,#ffffff 56%,#f8fafc 100%);border-color:rgba(249,115,22,.14);box-shadow:0 22px 50px rgba(249,115,22,.08)}
+.analytics-panel--hero{padding:1.35rem;background:linear-gradient(145deg,#fff8ef 0%,#ffffff 56%,#f8fafc 100%);border-color:rgba(249,115,22,.14);box-shadow:0 10px 24px rgba(249,115,22,.05)}
 .analytics-panel--hero:before{content:"";position:absolute;inset:auto auto -100px -80px;width:240px;height:240px;border-radius:999px;background:radial-gradient(circle,rgba(249,115,22,.14),rgba(249,115,22,0));pointer-events:none}
 .analytics-panel--hero:after{content:"";position:absolute;top:-80px;right:-40px;width:220px;height:220px;border-radius:999px;background:radial-gradient(circle,rgba(148,163,184,.14),rgba(148,163,184,0));pointer-events:none}
+.analytics-panel--controls{padding:1rem 1.1rem;background:#fff;border-color:rgba(148,163,184,.18);box-shadow:0 8px 20px rgba(15,23,42,.04)}
+.analytics-panel--controls:before,.analytics-panel--controls:after{display:none}
+.analytics-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:.7rem;position:relative;z-index:1}
+.analytics-titlebar-kicker{display:block;font-size:.74rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#ea580c;margin-bottom:.25rem}
+.analytics-titlebar h1{margin:0;display:flex;align-items:center;gap:.58rem;font-size:clamp(1.35rem,2.4vw,1.8rem);line-height:1.1;font-weight:950;color:#0f172a;letter-spacing:-.03em}
+.analytics-titlebar h1 i{color:#f97316}
+.analytics-titlebar-copy{margin:.35rem 0 0;color:#64748b;font-size:.9rem;line-height:1.45}
 .analytics-hero-top,.analytics-toolbar,.analytics-hero-strip,.analytics-specialty-row{position:relative;z-index:1}
 .analytics-hero-top{display:flex;justify-content:space-between;gap:1rem;align-items:flex-start;margin-bottom:1rem}
 .analytics-eyebrow{font-size:.74rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#ea580c;margin-bottom:.45rem}
@@ -58,21 +65,24 @@
 .analytics-range-summary{display:flex;flex-direction:column;align-items:flex-end;gap:.15rem;padding:1rem 1.1rem;border-radius:18px;background:rgba(255,255,255,.84);border:1px solid rgba(15,23,42,.08);font-size:.86rem;color:var(--text-muted);min-width:220px;box-shadow:0 12px 26px rgba(15,23,42,.06)}
 .analytics-range-summary strong{font-size:1.3rem;line-height:1;color:var(--text-main)}
 .analytics-toolbar{display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap}
-.analytics-presets{display:flex;gap:.55rem;flex-wrap:wrap}
-.analytics-preset{border:1px solid rgba(148,163,184,.35);background:#fff;color:#475569;border-radius:999px;padding:.6rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .2s ease;box-shadow:0 4px 18px rgba(15,23,42,.04)}
-.analytics-preset:hover{transform:translateY(-1px);border-color:rgba(249,115,22,.35);color:#9a3412;background:#fff7ed}
+.analytics-toolbar--primary{align-items:flex-end;gap:.8rem}
+.analytics-toolbar--primary .analytics-range-summary{align-items:flex-start;min-width:185px;padding:.68rem .85rem;box-shadow:none;background:#f8fafc}
+.analytics-toolbar--primary .analytics-range-summary strong{font-size:1.08rem}
+.analytics-presets{display:flex;gap:.45rem;flex-wrap:wrap}
+.analytics-preset{border:1px solid rgba(148,163,184,.35);background:#fff;color:#475569;border-radius:999px;padding:.6rem 1rem;font-size:.82rem;font-weight:700;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease;box-shadow:none}
+.analytics-preset:hover{border-color:rgba(249,115,22,.35);color:#9a3412;background:#fff7ed}
 .analytics-preset.is-active{background:#f97316;color:#fff;border-color:#f97316;box-shadow:0 12px 30px rgba(249,115,22,.22)}
-.analytics-date-fields{display:flex;gap:.75rem;flex-wrap:wrap}
+.analytics-date-fields{display:flex;gap:.6rem;flex-wrap:wrap}
 .analytics-date-fields label{display:flex;flex-direction:column;gap:.3rem;font-size:.78rem;font-weight:700;color:#64748b}
 .analytics-date-fields input{min-width:150px}
-.analytics-toolbar-actions{display:flex;gap:.6rem;flex-wrap:wrap}
-.analytics-toolbar-btn{border:1px solid rgba(148,163,184,.28);background:#fff;color:#334155;border-radius:999px;padding:.6rem .95rem;font-size:.8rem;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;box-shadow:0 8px 20px rgba(15,23,42,.05);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease,color .18s ease}
-.analytics-toolbar-btn:hover{transform:translateY(-1px);box-shadow:0 14px 24px rgba(15,23,42,.08);border-color:rgba(249,115,22,.34);color:#9a3412;background:#fff7ed}
+.analytics-toolbar-actions{display:flex;gap:.45rem;flex-wrap:wrap;justify-content:flex-end}
+.analytics-toolbar-btn{border:1px solid rgba(148,163,184,.28);background:#fff;color:#334155;border-radius:999px;padding:.6rem .95rem;font-size:.8rem;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:.5rem;box-shadow:none;transition:border-color .16s ease,background-color .16s ease,color .16s ease}
+.analytics-toolbar-btn:hover{border-color:rgba(249,115,22,.34);color:#9a3412;background:#fff7ed}
 .analytics-range-compare{display:inline-flex;align-items:center;gap:.42rem;padding:.38rem .65rem;border-radius:999px;background:#eff6ff;border:1px solid rgba(59,130,246,.14);color:#1d4ed8;font-size:.76rem;font-weight:800;line-height:1.2;max-width:100%;text-align:right}
 .analytics-range-compare.is-positive{background:#ecfdf5;border-color:rgba(5,150,105,.18);color:#047857}
 .analytics-range-compare.is-negative{background:#fff7ed;border-color:rgba(217,119,6,.22);color:#b45309}
 .analytics-range-compare.is-neutral{background:#f8fafc;border-color:rgba(148,163,184,.18);color:#475569}
-.analytics-specialty-row{display:flex;gap:.55rem;flex-wrap:wrap;margin-top:1rem}
+.analytics-specialty-row{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;padding-top:.75rem;border-top:1px solid rgba(226,232,240,.9)}
 .analytics-specialty-pill{--analytics-accent:#64748b;--analytics-accent-soft:rgba(148,163,184,.14);--analytics-accent-border:rgba(148,163,184,.24);display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .7rem;border-radius:999px;background:linear-gradient(135deg,var(--analytics-accent-soft),rgba(255,255,255,.96));border:1px solid var(--analytics-accent-border);font-size:.78rem;font-weight:700;color:#334155;font-family:inherit;appearance:none}
 .analytics-specialty-pill strong{font-size:.76rem;color:var(--analytics-accent)}
 .analytics-specialty-pill.is-muted{color:#64748b}
@@ -95,7 +105,7 @@
 .analytics-section-headline h3{margin:0;font-size:1rem;font-weight:900;color:#0f172a;letter-spacing:-.02em}
 .analytics-section-headline span{font-size:.82rem;color:#64748b;line-height:1.45}
 .analytics-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
-.analytics-kpi-card{--kpi-accent:#94a3b8;--kpi-accent-soft:rgba(148,163,184,.12);--kpi-accent-border:rgba(148,163,184,.2);background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:20px;padding:1rem 1.05rem;display:flex;flex-direction:column;gap:.55rem;min-height:156px;box-shadow:0 12px 30px rgba(15,23,42,.04)}
+.analytics-kpi-card{--kpi-accent:#94a3b8;--kpi-accent-soft:rgba(148,163,184,.12);--kpi-accent-border:rgba(148,163,184,.2);background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:20px;padding:1rem 1.05rem;display:flex;flex-direction:column;gap:.55rem;min-height:156px;box-shadow:0 6px 16px rgba(15,23,42,.03)}
 .analytics-kpi-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
 .analytics-kpi-icon{width:42px;height:42px;border-radius:14px;display:inline-flex;align-items:center;justify-content:center;background:#fff7ed;color:#c2410c;box-shadow:inset 0 0 0 1px rgba(249,115,22,.08)}
 .analytics-kpi-card.tone-orange{background:linear-gradient(135deg,#ff9b31,#f97316);color:#fff;border-color:transparent}
@@ -121,7 +131,7 @@
 .analytics-kpi-card.tone-orange .analytics-compare-badge,.analytics-kpi-card.tone-teal .analytics-compare-badge,.analytics-kpi-card.tone-slate .analytics-compare-badge{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.22);color:#fff}
 .analytics-kpi-card.tone-emerald .analytics-compare-badge{background:rgba(255,255,255,.24);border-color:rgba(6,40,31,.12);color:#06281f}
 .analytics-alert-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
-.analytics-alert-card{display:flex;flex-direction:column;gap:.55rem;padding:1rem 1.05rem;border-radius:20px;border:1px solid rgba(148,163,184,.18);background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.95));box-shadow:0 12px 28px rgba(15,23,42,.04)}
+.analytics-alert-card{display:flex;flex-direction:column;gap:.55rem;padding:1rem 1.05rem;border-radius:20px;border:1px solid rgba(148,163,184,.18);background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.95));box-shadow:0 6px 16px rgba(15,23,42,.03)}
 .analytics-alert-card.is-normal{background:linear-gradient(180deg,rgba(236,253,245,.98),rgba(255,255,255,.94));border-color:rgba(5,150,105,.18)}
 .analytics-alert-card.is-watch{background:linear-gradient(180deg,rgba(255,247,237,.98),rgba(255,255,255,.94));border-color:rgba(217,119,6,.2)}
 .analytics-alert-card.is-critical{background:linear-gradient(180deg,rgba(254,242,242,.98),rgba(255,255,255,.94));border-color:rgba(220,38,38,.2)}
@@ -242,7 +252,6 @@ body.analytics-print-mode .analytics-toolbar,
 body.analytics-print-mode .analytics-specialty-row,
 body.analytics-print-mode .analytics-hero-strip,
 body.analytics-print-mode .analytics-kpi-grid,
-body.analytics-print-mode .analytics-story-grid,
 body.analytics-print-mode .analytics-grid,
 body.analytics-print-mode .analytics-mini-grid,
 body.analytics-print-mode .analytics-alert-grid,
@@ -312,14 +321,6 @@ body.analytics-print-equipment-mode .analytics-equipment-print-card,
 body.analytics-print-equipment-mode .analytics-equipment-print-table,
 body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside:avoid}
 }
-.analytics-story-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
-.analytics-story-card{display:flex;flex-direction:column;gap:.55rem;min-height:168px}
-.analytics-story-card--accent{background:linear-gradient(135deg,#fff7ed,#ffffff);border-color:rgba(249,115,22,.16)}
-.analytics-story-label{font-size:.74rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b}
-.analytics-story-value{font-size:clamp(1.2rem,2.7vw,1.7rem);line-height:1.12;font-weight:900;color:#0f172a;letter-spacing:-.03em;overflow-wrap:anywhere}
-.analytics-story-sub{font-size:.9rem;color:#475569;line-height:1.55}
-.analytics-story-meta{margin-top:auto;display:flex;gap:.55rem;flex-wrap:wrap}
-.analytics-story-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .65rem;border-radius:999px;background:#f8fafc;border:1px solid rgba(148,163,184,.18);font-size:.77rem;font-weight:700;color:#475569}
 .analytics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}
 .analytics-grid--charts{grid-template-columns:repeat(2,minmax(0,1fr))}
 .analytics-grid--bottom{align-items:start}
@@ -334,9 +335,40 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 .analytics-chart-wrap--small{height:250px}
 .analytics-chart-note{display:flex;justify-content:space-between;gap:.7rem;flex-wrap:wrap;margin-top:.9rem;padding-top:.8rem;border-top:1px solid rgba(226,232,240,.92);font-size:.78rem;color:#64748b}
 .analytics-chart-note strong{color:#0f172a}
+.analytics-route-panel{display:grid;gap:1rem;padding:1.15rem;background:linear-gradient(135deg,#fff7ed 0%,#ffffff 56%,#f8fafc 100%);border-color:rgba(249,115,22,.18)}
+.analytics-route-head{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem}
+.analytics-route-head h3{margin:0;font-size:1.15rem;font-weight:900;color:#0f172a;letter-spacing:-.02em}
+.analytics-route-head span{display:block;font-size:.82rem;color:#64748b;line-height:1.45}
+.analytics-route-tools{display:flex;align-items:flex-start;gap:.55rem;flex-wrap:wrap;justify-content:flex-end}
+.analytics-route-toggle{display:inline-flex;gap:.22rem;padding:.22rem;border-radius:999px;background:#fff;border:1px solid rgba(148,163,184,.2);box-shadow:0 8px 18px rgba(15,23,42,.04)}
+.analytics-route-toggle button{border:0;background:transparent;border-radius:999px;padding:.48rem .72rem;font-size:.76rem;font-weight:900;color:#64748b;cursor:pointer;line-height:1}
+.analytics-route-toggle button.is-active{background:#f97316;color:#fff;box-shadow:0 8px 16px rgba(249,115,22,.18)}
+.analytics-route-summary{display:grid;grid-template-columns:1.15fr repeat(3,minmax(0,.7fr));gap:.75rem}
+.analytics-route-main,.analytics-route-stat{border:1px solid rgba(148,163,184,.18);background:#fff;border-radius:18px;padding:.95rem 1rem;box-shadow:0 12px 24px rgba(15,23,42,.04)}
+.analytics-route-main{display:grid;gap:.7rem}
+.analytics-route-main-top,.analytics-route-stat-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
+.analytics-route-label{font-size:.72rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#c2410c}
+.analytics-route-value{display:block;font-size:2rem;font-weight:950;color:#0f172a;line-height:1;letter-spacing:-.05em}
+.analytics-route-stat strong{display:block;margin-top:.45rem;font-size:1.45rem;color:#0f172a;line-height:1.08}
+.analytics-route-stat span,.analytics-route-main small{font-size:.8rem;color:#64748b;line-height:1.45}
+.analytics-route-bar{height:11px;border-radius:999px;background:#e2e8f0;overflow:hidden}
+.analytics-route-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#f97316,#fb923c);min-width:0}
+.analytics-route-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}
+.analytics-route-card{--route-accent:#f97316;display:grid;gap:.7rem;padding:.9rem .95rem;border-radius:18px;background:#fff;border:1px solid rgba(148,163,184,.18);box-shadow:0 4px 12px rgba(15,23,42,.03);transition:border-color .16s ease,background-color .16s ease}
+.analytics-route-card:hover{background:#fffaf5;border-color:color-mix(in srgb,var(--route-accent) 34%,#e2e8f0)}
+.analytics-route-card-top{display:flex;justify-content:space-between;gap:.65rem;align-items:flex-start}
+.analytics-route-card h4{margin:0;font-size:.92rem;color:#0f172a;line-height:1.25}
+.analytics-route-meta{display:flex;flex-wrap:wrap;gap:.35rem}
+.analytics-route-chip{display:inline-flex;align-items:center;gap:.32rem;padding:.32rem .55rem;border-radius:999px;background:#f8fafc;border:1px solid rgba(148,163,184,.18);font-size:.7rem;font-weight:800;color:#475569;line-height:1.1}
+.analytics-route-chip.is-active{background:#ecfdf5;border-color:#a7f3d0;color:#047857}
+.analytics-route-card-foot{display:flex;justify-content:space-between;gap:.65rem;align-items:center;font-size:.76rem;color:#64748b}
+.analytics-route-units{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.55rem}
+.analytics-route-unit{display:grid;gap:.35rem;padding:.62rem .68rem;border-radius:14px;background:#f8fafc;border:1px solid rgba(148,163,184,.16)}
+.analytics-route-unit strong{font-size:.82rem;color:#0f172a}
+.analytics-route-unit span{font-size:.72rem;color:#64748b}
 .analytics-reading-list,.analytics-ranking-list{display:grid;gap:.7rem}
-.analytics-reading-item,.analytics-ranking-item{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start;padding:.85rem .95rem;border-radius:16px;background:#f8fafc;border:1px solid rgba(148,163,184,.18);transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.analytics-reading-item:hover,.analytics-ranking-item:hover{transform:translateY(-1px);box-shadow:0 14px 28px rgba(15,23,42,.08);border-color:rgba(249,115,22,.18)}
+.analytics-reading-item,.analytics-ranking-item{display:flex;justify-content:space-between;gap:.8rem;align-items:flex-start;padding:.85rem .95rem;border-radius:16px;background:#f8fafc;border:1px solid rgba(148,163,184,.18);transition:border-color .16s ease,background-color .16s ease}
+.analytics-reading-item:hover,.analytics-ranking-item:hover{background:#fff;border-color:rgba(249,115,22,.18)}
 .analytics-reading-item strong,.analytics-ranking-item strong{display:block;font-size:.92rem}
 .analytics-reading-item span,.analytics-ranking-item span{display:block;font-size:.76rem;color:var(--text-muted)}
 .analytics-reading-item > div:first-child,.analytics-ranking-item > div:last-child{min-width:0;flex:1}
@@ -375,7 +407,8 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 .analytics-type-badge{--analytics-accent:#64748b;--analytics-accent-soft:rgba(148,163,184,.12);--analytics-accent-border:rgba(148,163,184,.24);display:inline-flex;align-items:center;padding:.34rem .62rem;border-radius:999px;font-size:.72rem;font-weight:800;border:1px solid var(--analytics-accent-border);background:var(--analytics-accent-soft);color:var(--analytics-accent)}
 .analytics-ranking-pos{width:28px;height:28px;border-radius:999px;background:#fff7ed;color:#c2410c;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;flex-shrink:0}
 .analytics-clickable{cursor:pointer}
-.analytics-clickable:hover{transform:translateY(-1px);box-shadow:0 16px 28px rgba(15,23,42,.08);border-color:rgba(249,115,22,.22)}
+.analytics-clickable:hover{background:#fffaf5;border-color:rgba(249,115,22,.22)}
+.analytics-kpi-sections,.analytics-mini-grid{content-visibility:auto;contain-intrinsic-size:520px}
 .analytics-detail-root{position:fixed;inset:0;z-index:1400;pointer-events:none;height:100dvh}
 .analytics-detail-root.is-open{pointer-events:none}
 .analytics-detail-backdrop{position:absolute;inset:0;background:rgba(15,23,42,.42);opacity:0;transition:opacity .22s ease;pointer-events:none}
@@ -444,8 +477,8 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 .analytics-equipment-print-table th,.analytics-equipment-print-table td{padding:.62rem .68rem;border-bottom:1px solid rgba(226,232,240,.9);text-align:left;vertical-align:top;font-size:.77rem;line-height:1.45}
 .analytics-equipment-print-table th{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:#64748b;background:#f8fafc}
 .analytics-equipment-print-foot{display:flex;justify-content:space-between;gap:1rem;align-items:center;padding-top:.8rem;border-top:1px solid rgba(226,232,240,.9);font-size:.76rem;color:#64748b}
-@media (max-width: 1200px){.analytics-hero-strip{grid-template-columns:1fr 1fr}.analytics-hero-callout{grid-column:span 2}.analytics-story-grid,.analytics-alert-grid{grid-template-columns:1fr 1fr}.analytics-kpi-grid,.analytics-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-grid{grid-template-columns:1fr 1fr}.analytics-span-2{grid-column:span 2}.analytics-print-brand{grid-template-columns:1fr}.analytics-print-hero-grid,.analytics-print-brief-grid{grid-template-columns:1fr 1fr}.analytics-print-bar-grid{grid-template-columns:1fr 1fr}}
-@media (max-width: 780px){.analytics-hero-top{flex-direction:column}.analytics-range-summary{align-items:flex-start;min-width:unset;width:100%}.analytics-toolbar{align-items:stretch}.analytics-date-fields,.analytics-toolbar-actions{width:100%}.analytics-date-fields label{flex:1}.analytics-date-fields input{min-width:0}.analytics-toolbar-actions .analytics-toolbar-btn{flex:1}.analytics-hero-strip,.analytics-kpi-grid,.analytics-story-grid,.analytics-grid,.analytics-mini-grid,.analytics-alert-grid,.analytics-print-kpis,.analytics-print-grid,.analytics-print-donut-grid,.analytics-print-hero-grid,.analytics-print-brief-grid,.analytics-print-bar-grid,.analytics-equipment-print-kpis,.analytics-equipment-print-grid{grid-template-columns:1fr}.analytics-hero-callout,.analytics-span-2{grid-column:span 1}.analytics-section-headline,.analytics-chart-note{flex-direction:column;align-items:flex-start}.analytics-chart-wrap,.analytics-chart-wrap--small,.analytics-chart-wrap--wide{height:240px}.analytics-detail-drawer{top:0!important;width:100vw;height:100dvh;min-height:100dvh;max-height:100dvh;border-radius:0;padding-bottom:5.5rem;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 5.5rem)}.analytics-detail-body{padding-bottom:6rem;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 6rem)}.analytics-detail-card-top,.analytics-detail-stat,.analytics-reading-item,.analytics-ranking-item,.analytics-print-foot,.analytics-equipment-print-foot,.analytics-equipment-print-brand{gap:.6rem;flex-direction:column;align-items:flex-start}.analytics-reading-head,.analytics-reading-badges,.analytics-kpi-foot{flex-direction:column;align-items:flex-start}.analytics-kpi-spark{width:100%;flex-basis:auto}.analytics-reading-value{white-space:normal;text-align:left}.analytics-type-badge,.analytics-range-compare{max-width:100%;white-space:normal;line-height:1.3}.analytics-print-meta,.analytics-equipment-print-meta{text-align:left;min-width:unset;width:100%}}
+@media (max-width: 1200px){.analytics-toolbar-actions{justify-content:flex-start}.analytics-hero-strip{grid-template-columns:1fr 1fr}.analytics-hero-callout{grid-column:span 2}.analytics-alert-grid{grid-template-columns:1fr 1fr}.analytics-kpi-grid,.analytics-mini-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-grid{grid-template-columns:1fr 1fr}.analytics-route-summary{grid-template-columns:1fr 1fr}.analytics-route-grid{grid-template-columns:1fr 1fr}.analytics-route-units{grid-template-columns:repeat(3,minmax(0,1fr))}.analytics-span-2{grid-column:span 2}.analytics-print-brand{grid-template-columns:1fr}.analytics-print-hero-grid,.analytics-print-brief-grid{grid-template-columns:1fr 1fr}.analytics-print-bar-grid{grid-template-columns:1fr 1fr}}
+@media (max-width: 780px){.analytics-titlebar,.analytics-hero-top,.analytics-route-head{flex-direction:column}.analytics-range-summary{align-items:flex-start;min-width:unset;width:100%}.analytics-toolbar{align-items:stretch}.analytics-date-fields,.analytics-toolbar-actions{width:100%}.analytics-date-fields label{flex:1}.analytics-date-fields input{min-width:0}.analytics-toolbar-actions .analytics-toolbar-btn{flex:1}.analytics-hero-strip,.analytics-kpi-grid,.analytics-grid,.analytics-mini-grid,.analytics-alert-grid,.analytics-route-summary,.analytics-route-grid,.analytics-route-units,.analytics-print-kpis,.analytics-print-grid,.analytics-print-donut-grid,.analytics-print-hero-grid,.analytics-print-brief-grid,.analytics-print-bar-grid,.analytics-equipment-print-kpis,.analytics-equipment-print-grid{grid-template-columns:1fr}.analytics-hero-callout,.analytics-span-2{grid-column:span 1}.analytics-section-headline,.analytics-chart-note{flex-direction:column;align-items:flex-start}.analytics-chart-wrap,.analytics-chart-wrap--small,.analytics-chart-wrap--wide{height:240px}.analytics-detail-drawer{top:0!important;width:100vw;height:100dvh;min-height:100dvh;max-height:100dvh;border-radius:0;padding-bottom:5.5rem;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 5.5rem)}.analytics-detail-body{padding-bottom:6rem;padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 6rem)}.analytics-detail-card-top,.analytics-detail-stat,.analytics-reading-item,.analytics-ranking-item,.analytics-print-foot,.analytics-equipment-print-foot,.analytics-equipment-print-brand{gap:.6rem;flex-direction:column;align-items:flex-start}.analytics-reading-head,.analytics-reading-badges,.analytics-kpi-foot{flex-direction:column;align-items:flex-start}.analytics-kpi-spark{width:100%;flex-basis:auto}.analytics-reading-value{white-space:normal;text-align:left}.analytics-type-badge,.analytics-range-compare{max-width:100%;white-space:normal;line-height:1.3}.analytics-print-meta,.analytics-equipment-print-meta{text-align:left;min-width:unset;width:100%}}
         `;
         document.head.appendChild(style);
     }
@@ -743,24 +776,98 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         return Number.isFinite(n) ? n : 0;
     }
 
+    function parseTaskHours(value) {
+        const n = parseFloat(String(value ?? '').replace(',', '.'));
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    }
+
     function parseDate(record) {
         const raw = record.created_at || record.fecha_creacion || record.fecha_completada || record.fecha_termino || record.fecha;
         const d = raw ? new Date(raw) : null;
         return d && !Number.isNaN(d.getTime()) ? d : null;
     }
 
+    function getRouteCatalog() {
+        try {
+            if (typeof RUTAS_VIBRACION_SEED !== 'undefined' && Array.isArray(RUTAS_VIBRACION_SEED)) return RUTAS_VIBRACION_SEED;
+        } catch (_) {}
+        return Array.isArray(window.RUTAS_VIBRACION_SEED) ? window.RUTAS_VIBRACION_SEED : [];
+    }
+
+    function getRouteExecutions() {
+        try {
+            const raw = localStorage.getItem('planify_rutas_ejecuciones');
+            const parsed = raw ? JSON.parse(raw) : {};
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    function getRouteHistory() {
+        try {
+            const raw = localStorage.getItem('planify_rutas_historial');
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function getRouteColor(unit) {
+        const palette = {
+            U1: '#3b82f6',
+            U2: '#10b981',
+            U3: '#f59e0b',
+            U4: '#ef4444',
+            U5: '#8b5cf6',
+            'U1-2': '#0ea5e9',
+            'U3-4-5': '#a855f7',
+            SC: '#64748b',
+            SMC: '#475569',
+            DESAL: '#06b6d4'
+        };
+        return palette[String(unit || '').toUpperCase()] || '#f97316';
+    }
+
+    function getRouteFrequencyLabel(value) {
+        const labels = {
+            '2S': 'Quincenal',
+            '1M': 'Mensual',
+            '2M': 'Bimestral',
+            '3M': 'Trimestral',
+            '6M': 'Semestral'
+        };
+        return labels[String(value || '').toUpperCase()] || value || 'Sin frecuencia';
+    }
+
+    function normalizeUnitLabel(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const clean = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+        const singleUnit = clean.match(/^(?:u|unidad)\s*0*([1-9]\d?)$/i);
+        if (singleUnit) return `Unidad ${Number(singleUnit[1])}`;
+        const namedUnit = clean.match(/^(DESAL|SMC|SC)$/i);
+        if (namedUnit) return namedUnit[1].toUpperCase();
+        return raw;
+    }
+
+    function unitKey(value) {
+        return normalizeUnitLabel(value).toLowerCase();
+    }
+
     function getUnitFromTitle(text) {
         const value = String(text || '').trim();
         const bracket = value.match(/^\[([^\]]+)\]/);
-        if (bracket) return bracket[1].trim();
+        if (bracket) return normalizeUnitLabel(bracket[1]);
         const multiUnit = value.match(/\bU\s?([1-9]\d?(?:\s*-\s*\d+)*)\b/i);
-        if (multiUnit) return `U${multiUnit[1].replace(/\s+/g, '')}`;
+        if (multiUnit) return normalizeUnitLabel(`U${multiUnit[1].replace(/\s+/g, '')}`);
         const namedUnit = value.match(/\b(DESAL|SMC|SC)\b/i);
-        return namedUnit ? namedUnit[1].toUpperCase() : '';
+        return namedUnit ? normalizeUnitLabel(namedUnit[1]) : '';
     }
 
     function getRecordUnit(record, equipment) {
-        return record.ubicacion ||
+        return normalizeUnitLabel(record.ubicacion ||
             record.unidad ||
             equipment?.ubicacion ||
             getUnitFromTitle([
@@ -769,7 +876,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 record.subtitulo,
                 record.ubicacion_tecnica
             ].filter(Boolean).join(' ')) ||
-            '';
+            '');
     }
 
     function getEquipmentFromTitle(text) {
@@ -805,10 +912,10 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             if (direct) return direct;
         }
         const n = String(name || '').trim().toLowerCase();
-        const u = String(unit || '').trim().toLowerCase();
+        const u = unitKey(unit);
         const sameUnit = equipos.filter(eq =>
             String(eq.activo || '').trim().toLowerCase() === n &&
-            (!u || String(eq.ubicacion || '').trim().toLowerCase() === u)
+            (!u || unitKey(eq.ubicacion) === u)
         );
         return sameUnit[0] || equipos.find(eq => String(eq.activo || '').trim().toLowerCase() === n) || null;
     }
@@ -884,7 +991,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 typesText: types.length ? types.join(', ') : specialtyName,
                 leader: leaderName,
                 helpers: techs,
-                hh: parseNum(record.hh_trabajo),
+                hh: parseTaskHours(record.hh_trabajo),
                 ot: record.ot_numero || '',
                 aviso: record.numero_aviso || '',
                 equipmentId: eq ? eq.id : record.equipo_id || '',
@@ -908,7 +1015,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 point: record.punto_medicion || record.componente || 'General',
                 tech: record.tecnico_nombre || '',
                 equipment: eq ? eq.activo : (record.equipo_nombre || 'Equipo'),
-                unit: eq ? eq.ubicacion : '',
+                unit: normalizeUnitLabel(eq ? eq.ubicacion : (record.ubicacion || getUnitFromTitle(record.equipo_nombre || ''))),
                 equipmentId: eq ? eq.id : record.equipo_id || '',
                 observation: record.observaciones || record.notas || '',
                 unitLabel: record.unidad || (record.tipo === 'termografia' ? 'C' : 'mm/s')
@@ -924,9 +1031,10 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         const state = getState();
         const sameUnit = ((state && state.equipos) || []).filter(item =>
             String(item.activo || '').trim().toLowerCase() === String(name || '').trim().toLowerCase() &&
-            String(item.ubicacion || '').trim().toLowerCase() === String(unit || '').trim().toLowerCase()
+            unitKey(item.ubicacion) === unitKey(unit)
         );
-        if (sameUnit.length > 1 && window.elegirComponenteYAbrirFicha) window.elegirComponenteYAbrirFicha(eq.id, unit);
+        const unitForFicha = eq.ubicacion || sameUnit[0]?.ubicacion || unit;
+        if (sameUnit.length > 1 && window.elegirComponenteYAbrirFicha) window.elegirComponenteYAbrirFicha(eq.id, unitForFicha);
         else if (window.abrirFichaTecnica) window.abrirFichaTecnica(eq.id);
     }
 
@@ -945,6 +1053,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         from.setDate(from.getDate() - 29);
         let to = new Date(today);
         let preset = 'mensual';
+        let routeProgressMode = 'range';
 
         function setPreset(nextPreset) {
             preset = nextPreset;
@@ -1382,10 +1491,8 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 .sort((a, b) => b.value - a.value);
             const specialtyTop = specialtyEntries.slice(0, 4);
             const specialtyOther = specialtyEntries.slice(4).reduce((acc, [, value]) => acc + value, 0);
-            const specialtyBarOther = specialtyEntries.slice(5).reduce((acc, [, value]) => acc + value, 0);
             const unitTop = unitEntries.slice(0, 4);
             const unitOther = unitEntries.slice(4).reduce((acc, [, value]) => acc + value, 0);
-            const unitBarOther = unitEntries.slice(5).reduce((acc, [, value]) => acc + value, 0);
             const topTypePercent = tasks.length ? Math.round(((topType ? topType[1] : 0) / tasks.length) * 100) : 0;
             const topUnitPercent = tasks.length ? Math.round(((topUnit ? topUnit[1] : 0) / tasks.length) * 100) : 0;
             const topHhType = hhTypeEntries[0];
@@ -1436,7 +1543,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                         metaAccessor: (_entry, value) => `${formatNumber(value, 1)} HH`
                     }),
                     className: 'analytics-clickable',
-                    attrs: topHhType ? `data-drill="specialty" data-specialty="${esc(topHhType[0])}"` : 'data-drill="hh-all"'
+                    attrs: 'data-drill="picker-hh-specialty"'
                 }),
                 buildPrintDonutCard({
                     title: 'HH por unidad',
@@ -1449,7 +1556,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                         metaAccessor: (_entry, value) => `${formatNumber(value, 1)} HH`
                     }),
                     className: 'analytics-clickable',
-                    attrs: topHhUnit ? `data-drill="unit" data-unit="${esc(topHhUnit[0])}"` : 'data-drill="hh-all"'
+                    attrs: 'data-drill="picker-hh-unit"'
                 }),
                 buildPrintDonutCard({
                     title: 'Trabajos por unidad',
@@ -1464,7 +1571,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                         otherMeta: value => `${formatNumber(value)} trabajo(s)`
                     }),
                     className: 'analytics-clickable',
-                    attrs: topUnit ? `data-drill="unit" data-unit="${esc(topUnit[0])}"` : 'data-drill="tasks-all"'
+                    attrs: 'data-drill="picker-tasks-unit"'
                 }),
                 buildPrintDonutCard({
                     title: 'Tipos de trabajo',
@@ -1479,7 +1586,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                         otherMeta: value => `${formatNumber(value)} trabajo(s)`
                     }),
                     className: 'analytics-clickable',
-                    attrs: topType ? `data-drill="specialty" data-specialty="${esc(topType[0])}"` : 'data-drill="tasks-all"'
+                    attrs: 'data-drill="picker-tasks-specialty"'
                 })
             ].join('');
             const operationKpiCards = [
@@ -1562,6 +1669,206 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
   <strong>${esc(item.value)}</strong>
 </div>`).join('')
                 : '<p class="analytics-empty">Sin alertas prioritarias en el rango seleccionado.</p>';
+            const routeCatalog = getRouteCatalog();
+            const routeExecutions = getRouteExecutions();
+            const routeHistory = getRouteHistory();
+            const routeProgramTotalEquipment = routeCatalog.reduce((acc, route) => acc + ((route.equipos || []).length), 0);
+            const parseRouteDateValue = (value) => {
+                const raw = String(value || '').trim();
+                if (!raw) return null;
+                const date = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T12:00:00`) : new Date(raw);
+                return Number.isNaN(date.getTime()) ? null : date;
+            };
+            const getRouteCompletionDate = (source, eqIdx) => {
+                const completedAt = source?.equiposCompletadosAt || {};
+                const measurements = source?.mediciones || {};
+                const candidates = [completedAt[eqIdx]];
+                const measurementRows = Array.isArray(measurements[eqIdx]) ? measurements[eqIdx] : [];
+                measurementRows.forEach(row => candidates.push(row?.fecha));
+                candidates.push(source?.fechaCierre, source?.fechaInicio);
+                return candidates.map(parseRouteDateValue).find(Boolean) || null;
+            };
+            const getRouteEquipmentKey = (route, eq, routeIdx, eqIdx) => `${route?.plan || route?.nombre || routeIdx}::${eq?.ubicacion_tecnica || eq?.nombre || eqIdx}`;
+            const routeActivity = [];
+            Object.entries(routeExecutions).forEach(([routeIdxRaw, execution]) => {
+                const routeIdx = Number(routeIdxRaw);
+                const route = routeCatalog[routeIdx];
+                if (!route || !execution) return;
+                (execution.equiposCompletados || []).forEach(eqIdxRaw => {
+                    const eqIdx = Number(eqIdxRaw);
+                    const eq = route.equipos?.[eqIdx] || {};
+                    const date = getRouteCompletionDate(execution, eqIdx);
+                    if (!date) return;
+                    routeActivity.push({
+                        key: getRouteEquipmentKey(route, eq, routeIdx, eqIdx),
+                        date,
+                        routeIdx,
+                        eqIdx,
+                        routeName: route.nombre || 'Ruta sin nombre',
+                        unit: route.unidad || eq.unidad || 'Sin unidad',
+                        source: 'active'
+                    });
+                });
+            });
+            routeHistory.forEach((item, histIdx) => {
+                const routeIdx = Number(item.rutaIdx);
+                const route = routeCatalog[routeIdx] || {};
+                const completed = Array.isArray(item.equiposCompletados) ? item.equiposCompletados : [];
+                if (completed.length) {
+                    completed.forEach(eqIdxRaw => {
+                        const eqIdx = Number(eqIdxRaw);
+                        const eq = route.equipos?.[eqIdx] || {};
+                        const date = getRouteCompletionDate(item, eqIdx);
+                        if (!date) return;
+                        routeActivity.push({
+                            key: getRouteEquipmentKey(route, eq, routeIdx, eqIdx),
+                            date,
+                            routeIdx,
+                            eqIdx,
+                            routeName: item.rutaNombre || route.nombre || 'Ruta cerrada',
+                            unit: route.unidad || eq.unidad || 'Sin unidad',
+                            source: 'history'
+                        });
+                    });
+                } else {
+                    const date = parseRouteDateValue(item.fechaCierre);
+                    const count = Number(item.completados || 0);
+                    for (let i = 0; date && i < count; i += 1) {
+                        routeActivity.push({
+                            key: `hist:${histIdx}:${i}`,
+                            date,
+                            routeIdx,
+                            eqIdx: i,
+                            routeName: item.rutaNombre || route.nombre || 'Ruta cerrada',
+                            unit: route.unidad || 'Sin unidad',
+                            source: 'history'
+                        });
+                    }
+                }
+            });
+            const routeMetricStart = routeProgressMode === 'today' ? startOfDay(today) : rangeStart;
+            const routeMetricEnd = routeProgressMode === 'today' ? endOfDay(today) : rangeEnd;
+            const routeMetricLabel = routeProgressMode === 'today'
+                ? `Hoy ${formatDate(today)}`
+                : `${formatDate(rangeStart)} - ${formatDate(rangeEnd)}`;
+            const routeActivityInRange = routeActivity.filter(item => item.date >= routeMetricStart && item.date <= routeMetricEnd);
+            const routeActivityToday = routeActivity.filter(item => item.date >= startOfDay(today) && item.date <= endOfDay(today));
+            const routeEquipmentProgressPct = routeProgramTotalEquipment
+                ? Math.min(100, Math.round((routeActivityInRange.length / routeProgramTotalEquipment) * 100))
+                : 0;
+            const routeStats = routeCatalog.map((route, index) => {
+                const execution = routeExecutions[index] || null;
+                const total = Array.isArray(route.equipos) ? route.equipos.length : 0;
+                const done = execution ? new Set(execution.equiposCompletados || []).size : 0;
+                const pct = total ? Math.round((done / total) * 100) : 0;
+                return {
+                    index,
+                    route,
+                    execution,
+                    total,
+                    done,
+                    pct,
+                    active: !!execution,
+                    color: getRouteColor(route.unidad)
+                };
+            });
+            const activeRouteStats = routeStats.filter(item => item.active);
+            const routesByUnit = [...activeRouteStats.reduce((acc, item) => {
+                const unit = item.route.unidad || 'Sin unidad';
+                if (!acc.has(unit)) acc.set(unit, { unit, routes: 0, active: 0, total: 0, done: 0, color: getRouteColor(unit) });
+                const stat = acc.get(unit);
+                stat.routes += 1;
+                stat.total += item.total;
+                stat.done += item.done;
+                if (item.active) stat.active += 1;
+                return acc;
+            }, new Map()).values()].sort((a, b) => (b.active - a.active) || (b.done - a.done) || a.unit.localeCompare(b.unit, 'es', { numeric: true }));
+            const routeTotalEquipment = activeRouteStats.reduce((acc, item) => acc + item.total, 0);
+            const routeDoneEquipment = activeRouteStats.reduce((acc, item) => acc + item.done, 0);
+            const routeOverallPct = routeTotalEquipment ? Math.round((routeDoneEquipment / routeTotalEquipment) * 100) : 0;
+            const routeFocusStats = activeRouteStats
+                .slice()
+                .sort((a, b) => (Number(b.active) - Number(a.active)) || (b.pct - a.pct) || (b.total - a.total))
+                .slice(0, 6);
+            const routeCardsHtml = routeFocusStats.length
+                ? routeFocusStats.map(item => `
+<article class="analytics-route-card" style="--route-accent:${item.color};" data-route-index="${item.index}">
+  <div class="analytics-route-card-top">
+    <div>
+      <div class="analytics-route-meta">
+        <span class="analytics-route-chip" style="color:${item.color};border-color:${hexToRgba(item.color, 0.24)};background:${hexToRgba(item.color, 0.1)}">${esc(item.route.unidad || 'Unidad')}</span>
+        <span class="analytics-route-chip">${esc(getRouteFrequencyLabel(item.route.frecuencia))}</span>
+        ${item.active ? '<span class="analytics-route-chip is-active"><i class="fa-solid fa-circle-play"></i> En curso</span>' : '<span class="analytics-route-chip"><i class="fa-regular fa-circle-pause"></i> Sin iniciar</span>'}
+      </div>
+      <h4>${esc(item.route.nombre || 'Ruta sin nombre')}</h4>
+    </div>
+    <span class="analytics-route-value" style="font-size:1.35rem;color:${item.color};">${item.pct}%</span>
+  </div>
+  <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${item.pct}%;background:${item.color};"></div></div>
+  <div class="analytics-route-card-foot">
+    <span>${formatNumber(item.done)} / ${formatNumber(item.total)} equipo(s)</span>
+    <span>${item.execution?.ot ? `OT ${esc(item.execution.ot)}` : esc(item.route.plan || 'Sin OT activa')}</span>
+  </div>
+</article>`).join('')
+                : '<p class="analytics-empty">No hay rutas activas en este momento. Cuando se inicie una ruta, aparecera aqui automaticamente.</p>';
+            const routeUnitsHtml = routesByUnit.length
+                ? routesByUnit.slice(0, 5).map(item => {
+                    const pct = item.total ? Math.round((item.done / item.total) * 100) : 0;
+                    return `
+<article class="analytics-route-unit">
+  <strong style="color:${item.color};">${esc(item.unit)}</strong>
+  <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${pct}%;background:${item.color};"></div></div>
+  <span>${formatNumber(item.active)} en curso · ${formatNumber(item.done)}/${formatNumber(item.total)} equipos</span>
+</article>`;
+                }).join('')
+                : '<p class="analytics-empty">Sin unidades de ruta disponibles.</p>';
+            const routeProgressHtml = `
+  <section class="panel analytics-route-panel">
+    <div class="analytics-route-head">
+      <div>
+        <span class="analytics-panel-kicker">Rutas VIB</span>
+        <h3>Avance de rutas</h3>
+        <span>Rutas activas y equipos completados segun el filtro de fechas.</span>
+      </div>
+      <div class="analytics-route-tools">
+        <div class="analytics-route-toggle" aria-label="Filtro de avance de rutas">
+          <button type="button" class="${routeProgressMode === 'range' ? 'is-active' : ''}" data-route-progress-mode="range">Rango</button>
+          <button type="button" class="${routeProgressMode === 'today' ? 'is-active' : ''}" data-route-progress-mode="today">Hoy</button>
+        </div>
+        <button type="button" class="analytics-toolbar-btn" data-route-open="true"><i class="fa-solid fa-route"></i> Ver rutas</button>
+      </div>
+    </div>
+    <div class="analytics-route-summary">
+      <article class="analytics-route-main">
+        <div class="analytics-route-main-top">
+          <div>
+            <span class="analytics-route-label">Avance activo</span>
+            <strong class="analytics-route-value">${routeOverallPct}%</strong>
+          </div>
+          <span class="analytics-type-badge" style="${buildAccentVars(activeRouteStats.length ? '#10b981' : '#64748b', 0.12, 0.22)}">${formatNumber(activeRouteStats.length)} en curso</span>
+        </div>
+        <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${routeOverallPct}%;"></div></div>
+        <small>${formatNumber(routeDoneEquipment)} de ${formatNumber(routeTotalEquipment)} equipo(s) medidos en rutas activas.</small>
+      </article>
+      <article class="analytics-route-stat">
+        <div class="analytics-route-stat-top"><span class="analytics-route-label">Equipos hechos</span><i class="fa-solid fa-gears" style="color:#0ea5e9;"></i></div>
+        <strong>${formatNumber(routeActivityInRange.length)}</strong>
+        <span>${esc(routeMetricLabel)} &middot; ${routeEquipmentProgressPct}% del programa</span>
+      </article>
+      <article class="analytics-route-stat">
+        <div class="analytics-route-stat-top"><span class="analytics-route-label">Rutas</span><i class="fa-solid fa-route" style="color:#f97316;"></i></div>
+        <strong>${formatNumber(activeRouteStats.length)}</strong>
+        <span>${formatNumber(routeCatalog.length)} configurada(s)</span>
+      </article>
+      <article class="analytics-route-stat">
+        <div class="analytics-route-stat-top"><span class="analytics-route-label">Hoy</span><i class="fa-regular fa-calendar-check" style="color:#10b981;"></i></div>
+        <strong>${formatNumber(routeActivityToday.length)}</strong>
+        <span>equipo(s) completados hoy</span>
+      </article>
+    </div>
+    <div class="analytics-route-grid">${routeCardsHtml}</div>
+    <div class="analytics-route-units">${routeUnitsHtml}</div>
+  </section>`;
             const printDonutCardsHtml = [
                 buildPrintDonutCard({
                     title: 'Distribucion por especialidad',
@@ -1766,44 +2073,6 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
   <p>${esc(item.detail)}</p>
 </article>`).join('');
             const printBarChartsHtml = [
-                buildPrintBarCard({
-                    title: 'Carga por especialidad',
-                    meta: 'Participacion de trabajos cerrados por tecnica en el rango.',
-                    accent: getAccentColor(topType ? topType[0] : 'Otros'),
-                    entries: [
-                        ...specialtyEntries.slice(0, 5).map(([label, value]) => ({
-                            label,
-                            value,
-                            color: getAccentColor(label),
-                            valueLabel: `${formatNumber(value)} · ${tasks.length ? Math.round((value / tasks.length) * 100) : 0}%`
-                        })),
-                        ...(specialtyBarOther > 0 ? [{
-                            label: 'Otras',
-                            value: specialtyBarOther,
-                            color: '#94a3b8',
-                            valueLabel: `${formatNumber(specialtyBarOther)} · ${tasks.length ? Math.round((specialtyBarOther / tasks.length) * 100) : 0}%`
-                        }] : [])
-                    ]
-                }),
-                buildPrintBarCard({
-                    title: 'Carga por unidad',
-                    meta: 'Unidades con mayor concentracion operacional dentro del periodo.',
-                    accent: '#475569',
-                    entries: [
-                        ...unitEntries.slice(0, 5).map(([label, value], index) => ({
-                            label,
-                            value,
-                            color: unitPalette[index % unitPalette.length],
-                            valueLabel: `${formatNumber(value)} · ${tasks.length ? Math.round((value / tasks.length) * 100) : 0}%`
-                        })),
-                        ...(unitBarOther > 0 ? [{
-                            label: 'Otras',
-                            value: unitBarOther,
-                            color: '#cbd5e1',
-                            valueLabel: `${formatNumber(unitBarOther)} · ${tasks.length ? Math.round((unitBarOther / tasks.length) * 100) : 0}%`
-                        }] : [])
-                    ]
-                }),
                 buildPrintBarCard({
                     title: 'Lideres con mayor actividad',
                     meta: 'Responsables con mas cierres y cobertura en el rango.',
@@ -2620,87 +2889,99 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
 
-            async function exportarPDFPython(datos) {
-                const btn = document.querySelector('[data-accion="exportar-pdf"]');
-                const originalLabel = btn ? btn.innerHTML : '';
-                const endpointCandidates = [
+            // Intenta el servidor Python con timeout corto (2s por endpoint).
+            // Si responde, descarga el PDF que él genera (calidad rica).
+            // Si no, devuelve null para que el caller use el fallback.
+            async function _intentarPdfServerPython(datos, timeoutMs = 2000) {
+                const endpoints = [
                     `${window.location.origin}/generar-pdf`,
                     'http://127.0.0.1:3001/generar-pdf',
                     'http://localhost:3001/generar-pdf'
                 ];
+                for (const ep of endpoints) {
+                    try {
+                        const ctrl = new AbortController();
+                        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+                        const resp = await fetch(ep, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(datos),
+                            signal: ctrl.signal
+                        });
+                        clearTimeout(t);
+                        if (!resp.ok) continue;
+                        const payload = await resp.json().catch(() => ({}));
+                        if (payload?.pdf) return payload.pdf;
+                    } catch (e) { /* siguiente endpoint */ }
+                }
+                return null;
+            }
 
+            async function exportarPDFPython(datos) {
+                // 1) Intentar servidor Python (calidad rica, si está disponible)
+                // 2) Si falla, usar fallback client-side con window.print()
+                const btn = document.querySelector('[data-accion="exportar-pdf"]');
+                const originalLabel = btn ? btn.innerHTML : '';
                 if (btn) {
                     btn.disabled = true;
                     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando PDF...';
                 }
 
+                const fallbackName = `Planify_Informe_${datos?.rango?.desde || 'periodo'}_${datos?.rango?.hasta || ''}`;
+                const cleanName = String(datos?.fileName || fallbackName)
+                    .replace(/\.pdf$/i, '')
+                    .replace(/[\\/:*?"<>|]+/g, '-');
+
+                // --- Paso 1: intentar Python (timeout corto por endpoint) ---
+                const pdfBase64 = await _intentarPdfServerPython(datos, 2000);
+                if (pdfBase64) {
+                    try {
+                        const bytes = Uint8Array.from(atob(pdfBase64), c => c.charCodeAt(0));
+                        const blob = new Blob([bytes], { type: 'application/pdf' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = cleanName + '.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        if (btn) { btn.disabled = false; btn.innerHTML = originalLabel; }
+                        return;
+                    } catch (e) {
+                        console.warn('[Planify] PDF Python responded pero falló decode:', e);
+                    }
+                }
+
+                // --- Paso 2: fallback client-side con window.print() ---
+                console.info('[Planify] PDF: servidor Python no disponible, usando window.print() como fallback.');
+                const oldTitle = document.title;
+                let cleaned = false;
+                const cleanup = () => {
+                    if (cleaned) return;
+                    cleaned = true;
+                    document.body.classList.remove('analytics-print-mode');
+                    document.title = oldTitle;
+                    if (btn) { btn.disabled = false; btn.innerHTML = originalLabel; }
+                    window.removeEventListener('afterprint', cleanup);
+                };
                 try {
-                    let lastError = null;
-                    let result = null;
-
-                    for (const endpoint of endpointCandidates) {
-                        try {
-                            const response = await fetch(endpoint, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(datos)
-                            });
-                            const payload = await response.json().catch(() => ({}));
-
-                            if (!response.ok) {
-                                throw new Error(payload.error || `Error en servidor PDF (${endpoint})`);
-                            }
-                            if (!payload?.pdf) {
-                                throw new Error(`Respuesta PDF invalida (${endpoint})`);
-                            }
-
-                            result = payload;
-                            lastError = null;
-                            break;
-                        } catch (error) {
-                            lastError = error;
-                        }
-                    }
-
-                    if (lastError || !result?.pdf) {
-                        throw lastError || new Error('No se pudo generar el PDF');
-                    }
-
-                    const byteCharacters = atob(result.pdf);
-                    const byteNumbers = new Array(byteCharacters.length);
-                    for (let i = 0; i < byteCharacters.length; i++) {
-                        byteNumbers[i] = byteCharacters.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    const blob = new Blob([byteArray], { type: 'application/pdf' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    const fallbackName = `Planify_Informe_${datos.rango?.desde || 'periodo'}_${datos.rango?.hasta || ''}.pdf`;
-                    a.href = url;
-                    a.download = String(datos.fileName || fallbackName).replace(/[\\/:*?"<>|]+/g, '-');
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    document.title = cleanName;
+                    document.body.classList.add('analytics-print-mode');
+                    window.addEventListener('afterprint', cleanup);
+                    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+                    await new Promise(resolve => setTimeout(resolve, 120));
+                    window.print();
+                    setTimeout(cleanup, 4000);
                 } catch (error) {
-                    console.error('[Planify] Error al generar PDF:', error);
-                    alert('Error al generar PDF. Verifica que el servidor local de Planify o pdf-server.js esten corriendo y con acceso a Python.');
-                } finally {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = originalLabel;
-                    }
+                    console.error('[Planify] Error al preparar PDF:', error);
+                    cleanup();
+                    alert('No se pudo abrir el diálogo de impresión. Intenta de nuevo.');
                 }
             }
 
             function dashboardBuildChartSnapshotMap() {
                 const defs = [
-                    { key: 'jobs', id: 'chart-dashboard-jobs', title: 'Trabajos por periodo', subtitle: 'Cantidad de cierres en el rango.', accent: '#f97316' },
-                    { key: 'hh', id: 'chart-dashboard-hh', title: 'HH por periodo', subtitle: 'Horas registradas sin doble eje.', accent: '#64748b' },
-                    { key: 'vibration', id: 'chart-dashboard-vibration', title: 'Vibracion promedio', subtitle: 'Con umbrales de seguimiento y atencion.', accent: '#f97316' },
-                    { key: 'temperature', id: 'chart-dashboard-temperature', title: 'Termografia promedio', subtitle: 'Separada para una lectura mas clara.', accent: '#fb923c' },
-                    { key: 'types', id: 'chart-dashboard-types', title: 'Carga por especialidad', subtitle: 'Distribucion de cierres por tecnica.', accent: '#f59e0b' },
-                    { key: 'units', id: 'chart-dashboard-units', title: 'Carga por unidad', subtitle: 'Top unidades con actividad.', accent: '#94a3b8' },
                     { key: 'equipment', id: 'chart-dashboard-equipments', title: 'Equipos mas intervenidos', subtitle: 'Activos con mayor reincidencia.', accent: '#64748b' }
                 ];
                 return defs.reduce((acc, def) => {
@@ -2991,12 +3272,6 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                     border: '#fed7aa'
                 });
 
-                dashboardSetRowHeights(summarySheet, 14, 46, 20);
-                dashboardAddChartCard(workbook, summarySheet, chartSnapshotMap.jobs, 14, 1, 30, 6);
-                dashboardAddChartCard(workbook, summarySheet, chartSnapshotMap.hh, 14, 7, 30, 12);
-                dashboardAddChartCard(workbook, summarySheet, chartSnapshotMap.vibration, 32, 1, 46, 6);
-                dashboardAddChartCard(workbook, summarySheet, chartSnapshotMap.temperature, 32, 7, 46, 12);
-
                 const visualSheet = workbook.addWorksheet('Visuales', {
                     properties: { defaultRowHeight: 21 },
                     views: [{ state: 'frozen', ySplit: 2 }]
@@ -3020,12 +3295,10 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                     ]
                 });
                 dashboardSetRowHeights(visualSheet, 4, 52, 20);
-                dashboardAddChartCard(workbook, visualSheet, chartSnapshotMap.types, 4, 1, 18, 6);
-                dashboardAddChartCard(workbook, visualSheet, chartSnapshotMap.units, 4, 7, 18, 12);
-                dashboardAddChartCard(workbook, visualSheet, chartSnapshotMap.equipment, 20, 1, 34, 12);
+                dashboardAddChartCard(workbook, visualSheet, chartSnapshotMap.equipment, 4, 1, 18, 12);
                 dashboardAddMiniTable(
                     visualSheet,
-                    36,
+                    20,
                     1,
                     'Top equipos',
                     'Activos con mayor volumen en el rango.',
@@ -3039,7 +3312,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 );
                 dashboardAddMiniTable(
                     visualSheet,
-                    36,
+                    20,
                     7,
                     'Top lideres',
                     'Mayores cargas declaradas por persona.',
@@ -3050,7 +3323,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 );
                 dashboardAddMiniTable(
                     visualSheet,
-                    46,
+                    30,
                     1,
                     'Alertas',
                     'Foco rapido para seguimiento operativo.',
@@ -3061,7 +3334,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 );
                 dashboardAddMiniTable(
                     visualSheet,
-                    46,
+                    30,
                     7,
                     'Lectura ejecutiva',
                     'Mensajes cortos para la reunion.',
@@ -3177,58 +3450,110 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 };
 
                 try {
-                    const endpointCandidates = [
+                    // --- Paso 1: intentar el servidor Python (calidad rica) ---
+                    const endpoints = [
                         `${window.location.origin}/generar-excel`,
                         'http://127.0.0.1:3001/generar-excel',
                         'http://localhost:3001/generar-excel'
                     ];
-                    let lastError = null;
-                    let result = null;
-
-                    for (const endpoint of endpointCandidates) {
+                    for (const ep of endpoints) {
                         try {
-                            const response = await fetch(endpoint, {
+                            const ctrl = new AbortController();
+                            const t = setTimeout(() => ctrl.abort(), 2000);
+                            const resp = await fetch(ep, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload)
+                                body: JSON.stringify(payload),
+                                signal: ctrl.signal
                             });
-                            const parsed = await response.json().catch(() => ({}));
-
-                            if (!response.ok) {
-                                throw new Error(parsed.error || `Error en servidor Excel (${endpoint})`);
+                            clearTimeout(t);
+                            if (!resp.ok) continue;
+                            const parsed = await resp.json().catch(() => ({}));
+                            if (parsed?.xlsx) {
+                                const binary = atob(parsed.xlsx);
+                                const bytes = new Uint8Array(binary.length);
+                                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                                const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = payload.fileName;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                                return; // listo, salimos del try
                             }
-                            if (!parsed?.xlsx) {
-                                throw new Error(`Respuesta Excel invalida (${endpoint})`);
-                            }
-
-                            result = parsed;
-                            lastError = null;
-                            break;
-                        } catch (error) {
-                            lastError = error;
-                        }
+                        } catch (e) { /* siguiente endpoint */ }
                     }
 
-                    if (lastError || !result?.xlsx) {
-                        throw lastError || new Error('No se pudo generar el Excel');
+                    // --- Paso 2: fallback client-side con SheetJS ---
+                    console.info('[Planify] Excel: servidor Python no disponible, usando SheetJS como fallback.');
+                    if (typeof window.XLSX === 'undefined') {
+                        throw new Error('SheetJS no está disponible. Recarga la página.');
+                    }
+                    const XLSX = window.XLSX;
+                    const wb = XLSX.utils.book_new();
+                    const addSheet = (name, rows) => {
+                        if (!rows?.length) return;
+                        const ws = XLSX.utils.json_to_sheet(rows);
+                        XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+                    };
+
+                    // Resumen ejecutivo
+                    addSheet('Resumen', [
+                        { Métrica: 'Rango', Valor: `${payload.rango.desde} → ${payload.rango.hasta} (${payload.rango.diasAnalizados} día(s))` },
+                        { Métrica: 'Periodo anterior', Valor: `${payload.periodoAnterior.desde} → ${payload.periodoAnterior.hasta}` },
+                        { Métrica: 'Generado', Valor: payload.generado },
+                        {},
+                        { Métrica: 'Trabajos cerrados', Valor: payload.kpis.trabajosCerrados.actual, Anterior: payload.kpis.trabajosCerrados.anterior, Delta: payload.kpis.trabajosCerrados.extra },
+                        { Métrica: 'Mediciones', Valor: payload.kpis.mediciones.actual, Anterior: payload.kpis.mediciones.anterior, Delta: payload.kpis.mediciones.porDia },
+                        { Métrica: 'HH registradas', Valor: payload.kpis.hhRegistradas.actual, Anterior: payload.kpis.hhRegistradas.anterior, Delta: payload.kpis.hhRegistradas.porTrabajo },
+                        { Métrica: 'OT cerradas', Valor: payload.kpis.otCerradas.actual, Anterior: payload.kpis.otCerradas.anterior },
+                        { Métrica: 'Equipos intervenidos', Valor: payload.kpis.equiposIntervenidos.actual, Anterior: payload.kpis.equiposIntervenidos.anterior },
+                        { Métrica: 'Personal participante', Valor: payload.kpis.personalParticipante.actual, Anterior: payload.kpis.personalParticipante.anterior },
+                        { Métrica: 'Lecturas críticas', Valor: payload.kpis.lecturasCriticas.actual, Anterior: payload.kpis.lecturasCriticas.anterior },
+                        { Métrica: 'Seguimiento activo', Valor: payload.kpis.seguimientoActivo.actual, Anterior: payload.kpis.seguimientoActivo.anterior }
+                    ]);
+                    addSheet('Por especialidad', (payload.distribucion.especialidad || []).map(x => ({
+                        Especialidad: x.nombre, Trabajos: x.total, 'Pct': x.pct + '%'
+                    })));
+                    addSheet('Por unidad', (payload.distribucion.unidad || []).map(x => ({
+                        Unidad: x.nombre, Trabajos: x.total, 'Pct': x.pct + '%'
+                    })));
+                    addSheet('Condicion', (payload.distribucion.condicion || []).map(x => ({
+                        Estado: x.estado, Mediciones: x.total, 'Pct': x.pct + '%'
+                    })));
+                    addSheet('Mediciones x tipo', (payload.distribucion.mixMediciones || []).map(x => ({
+                        Tipo: x.tipo, Mediciones: x.total, 'Pct': x.pct + '%'
+                    })));
+                    addSheet('Alertas', alertRows.map(x => ({
+                        Categoría: x.categoria, Equipo: x.equipo, Unidad: x.unidad, Punto: x.punto, Valor: x.valor, Fecha: x.fecha
+                    })));
+                    addSheet('Trabajos', taskRows.map(x => ({
+                        Fecha: x.fecha, Unidad: x.unidad, Equipo: x.equipo, Especialidad: x.especialidad,
+                        Líder: x.lider, OT: x.ot, HH: x.hh
+                    })));
+                    addSheet('Lideres', (payload.lideres || []).map(x => ({
+                        Líder: x.nombre, Trabajos: x.trabajos, 'Unidades distintas': x.unidades
+                    })));
+                    addSheet('Top equipos', (payload.topEquipos || []).map(x => ({
+                        Equipo: x.nombre, Unidad: x.unidad, Trabajos: x.trabajos
+                    })));
+                    addSheet('Acciones', (payload.accionesSugeridas || []).map((a, i) => ({
+                        '#': i + 1, 'Acción sugerida': a
+                    })));
+
+                    // Si no se agregó ninguna hoja, agregar una de aviso
+                    if (!wb.SheetNames.length) {
+                        addSheet('Resumen', [{ Mensaje: 'Sin datos para el rango seleccionado.' }]);
                     }
 
-                    // Decode base64 and trigger download
-                    const binary = atob(result.xlsx);
-                    const bytes = new Uint8Array(binary.length);
-                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-                    const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = payload.fileName;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
+                    // XLSX.writeFile crea el blob y dispara la descarga
+                    XLSX.writeFile(wb, payload.fileName);
                 } catch (error) {
-                    console.error('[Planify] Error al generar Excel via servidor:', error);
-                    alert('Error al generar Excel. Verifica que el servidor local de Planify o pdf-server.js esten corriendo y con acceso a Python.');
+                    console.error('[Planify] Error al generar Excel client-side:', error);
+                    alert('No se pudo generar el Excel: ' + (error.message || error));
                 } finally {
                     if (exportXlsxBtn) {
                         exportXlsxBtn.disabled = false;
@@ -3254,22 +3579,18 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 });
             }
 
-            host.innerHTML = `
+host.innerHTML = `
 <div class="analytics-dashboard fade-in">
-  <section class="panel analytics-panel analytics-panel--hero">
-    <div class="analytics-hero-top">
+
+  <section class="panel analytics-panel analytics-panel--hero analytics-panel--controls">
+    <div class="analytics-titlebar">
       <div>
-        <div class="analytics-eyebrow">Dashboard de trabajos y condicion</div>
-        <h1 class="analytics-title"><i class="fa-solid fa-chart-pie"></i> Dashboard Ejecutivo</h1>
-        <p class="analytics-subtitle">Vista consolidada de trabajos cerrados, mediciones, alertas y comparacion frente al periodo equivalente anterior.</p>
-      </div>
-      <div class="analytics-range-summary analytics-clickable" data-drill="comparison">
-        <span>${formatDate(rangeStart)} - ${formatDate(rangeEnd)}</span>
-        <strong>${rangeDays} dia(s)</strong>
-        <span class="analytics-range-compare ${comparisonCards.tasks.className}"><i class="fa-solid ${comparisonCards.tasks.icon}"></i> ${comparisonCards.tasks.shortLabel}</span>
+        <span class="analytics-titlebar-kicker">Dashboard de control</span>
+        <h1><i class="fa-solid fa-chart-column"></i> Avance Operacional</h1>
+        <p class="analytics-titlebar-copy">Seguimiento de rutas, cierres y actividad del periodo.</p>
       </div>
     </div>
-    <div class="analytics-toolbar">
+    <div class="analytics-toolbar analytics-toolbar--primary">
       <div class="analytics-presets">
         <button class="analytics-preset ${preset === 'semanal' ? 'is-active' : ''}" data-preset="semanal">Semanal</button>
         <button class="analytics-preset ${preset === 'mensual' ? 'is-active' : ''}" data-preset="mensual">Mensual</button>
@@ -3280,13 +3601,22 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         <label><span>Desde</span><input id="dashboard-date-from" type="date" class="form-control" value="${isoDate(rangeStart)}"></label>
         <label><span>Hasta</span><input id="dashboard-date-to" type="date" class="form-control" value="${isoDate(rangeEnd)}"></label>
       </div>
+      <div class="analytics-range-summary analytics-clickable" data-drill="comparison">
+        <span>${formatDate(rangeStart)} - ${formatDate(rangeEnd)}</span>
+        <strong>${rangeDays} dia(s)</strong>
+        <span class="analytics-range-compare ${comparisonCards.tasks.className}"><i class="fa-solid ${comparisonCards.tasks.icon}"></i> ${comparisonCards.tasks.shortLabel}</span>
+      </div>
       <div class="analytics-toolbar-actions">
         <button id="dashboard-export-xlsx" class="analytics-toolbar-btn" type="button"><i class="fa-solid fa-file-excel"></i> Excel Visual</button>
         <button id="dashboard-export-print" data-accion="exportar-pdf" class="analytics-toolbar-btn" type="button"><i class="fa-solid fa-file-pdf"></i> PDF Gerencial</button>
       </div>
     </div>
     <div class="analytics-specialty-row">${specialtyHtml}</div>
-    <div class="analytics-hero-strip">
+  </section>
+
+${routeProgressHtml}
+
+  <section class="analytics-hero-strip">
       <article class="analytics-hero-callout analytics-clickable" data-drill="tasks-all">
         <span class="analytics-hero-label">Resumen del rango</span>
         <strong class="analytics-hero-value">${formatNumber(tasks.length)} cierres</strong>
@@ -3310,7 +3640,6 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         </div>
         <span class="analytics-hero-meta">${conditionHeadline.meta}</span>
       </article>
-    </div>
   </section>
 
   <section class="analytics-kpi-sections">
@@ -3369,61 +3698,7 @@ ${conditionKpiHtml}
     </article>
   </section>
 
-  <section class="analytics-story-grid">
-    <article class="panel analytics-story-card analytics-story-card--accent analytics-clickable" data-drill="tasks-all">
-      <span class="analytics-story-label">Cobertura del periodo</span>
-      <strong class="analytics-story-value">${formatNumber(participants.size)} personas activas</strong>
-      <span class="analytics-story-sub">${tasks.length > 0 ? `${formatNumber(unitEntries.length)} unidad(es) con actividad y ${formatNumber(avgHhPerTask, 1)} HH promedio por trabajo.` : 'Cuando existan cierres, aqui se resumira la cobertura operacional.'}</span>
-      <div class="analytics-story-meta">
-        <span class="analytics-story-chip analytics-clickable" data-drill="participants-all"><i class="fa-solid fa-users"></i> ${formatNumber(participants.size)} participante(s)</span>
-        <span class="analytics-story-chip analytics-clickable" data-drill="hh-all"><i class="fa-solid fa-business-time"></i> ${formatNumber(hh, 1)} HH totales</span>
-        <span class="analytics-compare-badge ${comparisonCards.participants.className}"><i class="fa-solid ${comparisonCards.participants.icon}"></i> ${comparisonCards.participants.shortLabel}</span>
-      </div>
-    </article>
-    <article class="panel analytics-story-card analytics-clickable" data-drill="equipment" data-name="${esc(topEquipment ? topEquipment[0] : '')}" data-unit="${esc(topEquipmentStat ? topEquipmentStat.unit : '')}" data-id="${esc(topEquipmentStat ? topEquipmentStat.equipmentId : '')}">
-      <span class="analytics-story-label">Unidad y carga foco</span>
-      <strong class="analytics-story-value">${esc(topEquipment ? topEquipment[0] : 'Sin equipo foco')}</strong>
-      <span class="analytics-story-sub">${topEquipment ? `Fue el activo con mas intervenciones en el periodo, dentro de ${esc(topUnit ? topUnit[0] : 'la operacion general')}.` : 'Aun no hay suficiente actividad para destacar un equipo.'}</span>
-      <div class="analytics-story-meta">
-        <span class="analytics-story-chip analytics-clickable" data-drill="equipment" data-name="${esc(topEquipment ? topEquipment[0] : '')}" data-unit="${esc(topEquipmentStat ? topEquipmentStat.unit : '')}" data-id="${esc(topEquipmentStat ? topEquipmentStat.equipmentId : '')}"><i class="fa-solid fa-gears"></i> ${formatNumber(topEquipment ? topEquipment[1] : 0)} intervenciones</span>
-        <span class="analytics-story-chip analytics-clickable" data-drill="unit" data-unit="${esc(topUnit ? topUnit[0] : '')}"><i class="fa-solid fa-location-dot"></i> ${esc(topUnit ? topUnit[0] : 'Sin unidad')}</span>
-        <span class="analytics-compare-badge ${comparisonCards.topUnit.className}"><i class="fa-solid ${comparisonCards.topUnit.icon}"></i> ${comparisonCards.topUnit.shortLabel}</span>
-      </div>
-    </article>
-    <article class="panel analytics-story-card analytics-clickable" data-drill="task" data-task-id="${esc(latestTask ? latestTask.id : '')}">
-      <span class="analytics-story-label">Ultimo cierre visible</span>
-      <strong class="analytics-story-value">${esc(latestTask ? latestTask.equipment : 'Sin registros')}</strong>
-      <span class="analytics-story-sub">${latestTask ? `${esc(latestTask.unit || 'Sin unidad')} &middot; ${esc(latestTask.leader || 'Sin lider')} &middot; ${esc(formatDate(latestTask.date))}` : 'No hay trabajos cerrados para mostrar en este rango.'}</span>
-      <div class="analytics-story-meta">
-        <span class="analytics-story-chip analytics-clickable" data-drill="ot" data-ot="${esc(latestTask ? (latestTask.ot || '') : '')}"><i class="fa-solid fa-hashtag"></i> ${esc(latestTask ? (latestTask.ot || 'Sin OT') : 'Sin OT')}</span>
-        <span class="analytics-story-chip analytics-clickable" data-drill="specialty" data-specialty="${esc(topType ? topType[0] : '')}"><i class="fa-solid fa-chart-simple"></i> ${esc(topType ? topType[0] : 'Sin tipo')}</span>
-      </div>
-    </article>
-  </section>
-
   <section class="analytics-grid analytics-grid--charts">
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Operacion</span>
-          <h3>Trabajos por periodo</h3>
-          <span>Una sola lectura: cantidad de cierres por bloque temporal.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--wide"><canvas id="chart-dashboard-jobs"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>Pico:</strong> ${jobsPeak ? `${esc(labels[jobsPeak.index])} / ${formatNumber(jobsPeak.value)} cierre(s)` : 'Sin datos'}</span><span>${comparisonCards.tasks.shortLabel}</span></div>
-    </article>
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Operacion</span>
-          <h3>HH por periodo</h3>
-          <span>Horas declaradas sin mezclar escalas con los cierres.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--wide"><canvas id="chart-dashboard-hh"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>Pico:</strong> ${hhPeak ? `${esc(labels[hhPeak.index])} / ${formatNumber(hhPeak.value, 1)} HH` : 'Sin datos'}</span><span><strong>Prom:</strong> ${formatNumber(avgHhPerTask, 1)} HH por cierre</span></div>
-    </article>
     <article class="panel analytics-panel analytics-span-2 analytics-visual-panel">
       <div class="analytics-panel-head">
         <div class="analytics-panel-head-copy">
@@ -3439,50 +3714,6 @@ ${conditionKpiHtml}
         <span><strong>${esc(topUnit ? topUnit[0] : 'Sin unidad')}</strong> ${topUnit ? `${formatNumber(topUnit[1])} trabajo(s)` : 'sin carga por unidad'}</span>
         <span><strong>${esc(topType ? topType[0] : 'Sin tecnica')}</strong> ${topType ? `${formatNumber(topType[1])} trabajo(s)` : 'sin tipo dominante'}</span>
       </div>
-    </article>
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Condicion</span>
-          <h3>Vibracion promedio</h3>
-          <span>Con bandas de seguimiento y atencion para leer tendencia rapido.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--wide"><canvas id="chart-dashboard-vibration"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>Ultima:</strong> ${vibLatestPoint ? `${formatNumber(vibLatestPoint.value, 2)} mm/s` : 'Sin dato'}</span><span><strong>Pico:</strong> ${vibPeakPoint ? `${formatNumber(vibPeakPoint.value, 2)} mm/s` : 'Sin dato'}</span></div>
-    </article>
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Condicion</span>
-          <h3>Termografia promedio</h3>
-          <span>Separada de vibracion para evitar dobles ejes y lecturas confusas.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--wide"><canvas id="chart-dashboard-temperature"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>Ultima:</strong> ${tempLatestPoint ? `${formatNumber(tempLatestPoint.value, 1)} C` : 'Sin dato'}</span><span><strong>Pico:</strong> ${tempPeakPoint ? `${formatNumber(tempPeakPoint.value, 1)} C` : 'Sin dato'}</span></div>
-    </article>
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Distribucion</span>
-          <h3>Carga por especialidad</h3>
-          <span>Ordenada de mayor a menor, con cantidad real de cierres.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--small"><canvas id="chart-dashboard-types"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>${esc(topType ? topType[0] : 'Sin tecnica')}</strong> ${topType ? `${topTypePercent}% del total` : 'sin distribucion dominante'}</span><span>${formatNumber(specialtyEntries.length)} especialidad(es) activas</span></div>
-    </article>
-    <article class="panel analytics-panel">
-      <div class="analytics-panel-head">
-        <div class="analytics-panel-head-copy">
-          <span class="analytics-panel-kicker">Distribucion</span>
-          <h3>Carga por unidad</h3>
-          <span>Top unidades intervenidas durante el rango.</span>
-        </div>
-      </div>
-      <div class="analytics-chart-wrap analytics-chart-wrap--small"><canvas id="chart-dashboard-units"></canvas></div>
-      <div class="analytics-chart-note"><span><strong>${esc(topUnit ? topUnit[0] : 'Sin unidad')}</strong> ${topUnit ? `${formatNumber(topUnit[1])} trabajo(s)` : 'sin carga dominante'}</span><span>${formatNumber(unitEntries.length)} unidad(es) con actividad</span></div>
     </article>
     <article class="panel analytics-panel">
       <div class="analytics-panel-head">
@@ -3839,6 +4070,33 @@ ${conditionKpiHtml}
                         return;
                     }
 
+                    const routeModeTrigger = event.target.closest('[data-route-progress-mode]');
+                    if (routeModeTrigger) {
+                        event.preventDefault();
+                        routeProgressMode = routeModeTrigger.dataset.routeProgressMode === 'today' ? 'today' : 'range';
+                        draw();
+                        return;
+                    }
+
+                    const routeOpenTrigger = event.target.closest('[data-route-open]');
+                    if (routeOpenTrigger) {
+                        event.preventDefault();
+                        if (typeof window.mostrarVista === 'function') window.mostrarVista('rutas');
+                        return;
+                    }
+
+                    const routeTrigger = event.target.closest('[data-route-index]');
+                    if (routeTrigger) {
+                        event.preventDefault();
+                        const index = Number(routeTrigger.dataset.routeIndex);
+                        if (Number.isFinite(index) && typeof window.rutasAbrirDetalle === 'function') {
+                            window.rutasAbrirDetalle(index);
+                        } else if (typeof window.mostrarVista === 'function') {
+                            window.mostrarVista('rutas');
+                        }
+                        return;
+                    }
+
                     const drillTrigger = event.target.closest('[data-drill]');
                     if (!drillTrigger) return;
                     if (!drillTrigger.closest('.analytics-detail-drawer')) {
@@ -3846,6 +4104,82 @@ ${conditionKpiHtml}
                     }
 
                     const { drill, unit, specialty, name, taskId, measureId, ot, id } = drillTrigger.dataset;
+
+                    // Selector: en vez de saltar directo al item con mayor %,
+                    // muestra TODOS los items como lista clickeable para elegir.
+                    function abrirSelector(config) {
+                        const { titulo, subtitulo, entries, kind, total, sufijo, decimales } = config;
+                        if (!entries || !entries.length) {
+                            openDetailDrawer({
+                                title: titulo,
+                                subtitle: 'Sin datos en el rango seleccionado.',
+                                emptyMessage: 'No hay registros para distribuir.'
+                            });
+                            return;
+                        }
+                        const filas = entries.map(([nombre, valor], idx) => {
+                            const pct = total ? Math.round((valor / total) * 100) : 0;
+                            const color = kind === 'specialty'
+                                ? getAccentColor(nombre)
+                                : (unitPalette[idx % unitPalette.length] || '#94a3b8');
+                            const valorTxt = `${formatNumber(valor, decimales || 0)}${sufijo || ''}`;
+                            const attr = kind === 'specialty'
+                                ? `data-drill="specialty" data-specialty="${esc(nombre)}"`
+                                : `data-drill="unit" data-unit="${esc(nombre)}"`;
+                            return `<button type="button" class="analytics-clickable" ${attr}
+                                style="display:flex; align-items:center; gap:0.65rem; width:100%; text-align:left; padding:0.65rem 0.85rem; border:1px solid #e5e7eb; border-radius:10px; background:#fff; cursor:pointer; margin-bottom:0.45rem;">
+                                <span style="width:12px; height:12px; border-radius:999px; background:${color}; flex-shrink:0;"></span>
+                                <span style="flex:1; font-weight:600; color:#0f172a; min-width:0;">${esc(nombre)}</span>
+                                <span style="font-weight:800; color:#0f172a; white-space:nowrap;">${valorTxt}</span>
+                                <span style="font-size:0.8rem; color:#94a3b8; min-width:46px; text-align:right;">${pct}%</span>
+                                <i class="fa-solid fa-chevron-right" style="color:#cbd5e1; font-size:0.78rem;"></i>
+                            </button>`;
+                        }).join('');
+                        openDetailDrawer({
+                            title: titulo,
+                            subtitle: subtitulo,
+                            summary: [{ label: 'Items', value: formatNumber(entries.length), icon: 'fa-layer-group' }],
+                            sections: [{
+                                title: 'Selecciona para ver el detalle',
+                                subtitle: `${entries.length} opcion(es)`,
+                                html: filas
+                            }]
+                        });
+                    }
+
+                    if (drill === 'picker-hh-specialty') {
+                        abrirSelector({
+                            titulo: 'HH por especialidad',
+                            subtitulo: 'Elige una especialidad para ver su detalle de horas-hombre.',
+                            entries: hhTypeEntries, kind: 'specialty', total: hh, sufijo: ' HH', decimales: 1
+                        });
+                        return;
+                    }
+                    if (drill === 'picker-hh-unit') {
+                        abrirSelector({
+                            titulo: 'HH por unidad',
+                            subtitulo: 'Elige una unidad para ver su detalle de horas-hombre.',
+                            entries: hhUnitEntries, kind: 'unit', total: hh, sufijo: ' HH', decimales: 1
+                        });
+                        return;
+                    }
+                    if (drill === 'picker-tasks-unit') {
+                        abrirSelector({
+                            titulo: 'Trabajos por unidad',
+                            subtitulo: 'Elige una unidad para ver sus trabajos cerrados.',
+                            entries: unitEntries, kind: 'unit', total: tasks.length, sufijo: ' trabajo(s)'
+                        });
+                        return;
+                    }
+                    if (drill === 'picker-tasks-specialty') {
+                        abrirSelector({
+                            titulo: 'Tipos de trabajo',
+                            subtitulo: 'Elige una especialidad para ver sus trabajos cerrados.',
+                            entries: specialtyEntries, kind: 'specialty', total: tasks.length, sufijo: ' trabajo(s)'
+                        });
+                        return;
+                    }
+
                     if (drill === 'tasks-all') {
                         openDetailDrawer({
                             title: 'Trabajos cerrados',
@@ -3935,273 +4269,26 @@ ${conditionKpiHtml}
                     y: { ticks: { color: neutralTicks }, grid: { color: warmGrid } }
                 }
             };
-            const chartPointColors = values => values.map((_, index) => index === values.length - 1 ? '#f97316' : '#fdba74');
-            const lineThreshold = (length, value) => Array.from({ length }, () => value);
+            function clearChartHover(chart) {
+                if (!chart) return;
+                try {
+                    chart.setActiveElements([]);
+                    if (chart.tooltip?.setActiveElements) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+                    chart.update('none');
+                    if (chart.canvas) chart.canvas.style.cursor = 'default';
+                } catch (_) {}
+            }
+            function bindChartHoverReset(chart) {
+                const canvas = chart?.canvas;
+                if (!canvas || canvas.__analyticsHoverResetBound) return;
+                const reset = () => clearChartHover(chart);
+                canvas.addEventListener('mouseleave', reset);
+                canvas.addEventListener('blur', reset);
+                canvas.addEventListener('touchend', reset, { passive: true });
+                canvas.addEventListener('touchcancel', reset, { passive: true });
+                canvas.__analyticsHoverResetBound = true;
+            }
             const equipmentLookup = new Map(equipmentList.map(item => [item.equipment, item]));
-
-            const jobsEl = document.getElementById('chart-dashboard-jobs');
-            if (jobsEl) charts.push(new Chart(jobsEl, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Trabajos',
-                            data: jobs,
-                            backgroundColor: chartPointColors(jobs),
-                            borderRadius: 10,
-                            maxBarThickness: 34
-                        }
-                    ]
-                },
-                options: {
-                    ...common,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: context => `Trabajos: ${formatNumber(context.parsed.y)}`,
-                                afterLabel: context => [
-                                    `${formatNumber(otSeries[context.dataIndex])} OT / ${formatNumber(equipmentSeries[context.dataIndex])} equipo(s)`,
-                                    formatSeriesDelta(jobs, context.dataIndex, 0, 'trab.')
-                                ]
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        setDetailAnchorFromChart(event, chart, elements);
-                        const index = elements[0].index;
-                        openPeriodDetail(keys[index], labels[index]);
-                    },
-                    scales: {
-                        x: common.scales.x,
-                        y: { ...common.scales.y, beginAtZero: true, ticks: { color: neutralTicks, precision: 0 } }
-                    }
-                }
-            }));
-
-            const hhEl = document.getElementById('chart-dashboard-hh');
-            if (hhEl) charts.push(new Chart(hhEl, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'HH',
-                            data: hhSeries,
-                            borderColor: '#475569',
-                            backgroundColor: 'rgba(100,116,139,.12)',
-                            fill: true,
-                            tension: .3,
-                            pointRadius: 3,
-                            pointHoverRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    ...common,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: context => `HH: ${formatNumber(context.parsed.y, 1)}`,
-                                afterLabel: context => [
-                                    jobs[context.dataIndex]
-                                        ? `${formatNumber(hhSeries[context.dataIndex] / jobs[context.dataIndex], 1)} HH por cierre`
-                                        : 'Sin cierres en este bloque',
-                                    formatSeriesDelta(hhSeries, context.dataIndex, 1, 'HH')
-                                ]
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        setDetailAnchorFromChart(event, chart, elements);
-                        const index = elements[0].index;
-                        openPeriodDetail(keys[index], labels[index]);
-                    },
-                    scales: {
-                        x: common.scales.x,
-                        y: { ...common.scales.y, beginAtZero: true }
-                    }
-                }
-            }));
-
-            const typesEl = document.getElementById('chart-dashboard-types');
-            if (typesEl) {
-                const labelsType = specialtyEntries.map(item => item[0]);
-                const valuesType = specialtyEntries.map(item => item[1]);
-                charts.push(new Chart(typesEl, {
-                    type: 'bar',
-                    data: {
-                        labels: labelsType,
-                        datasets: [{
-                            label: 'Trabajos',
-                            data: valuesType,
-                            backgroundColor: labelsType.map((label, index) => index === 0 ? '#f97316' : index === 1 ? '#fb923c' : (TYPE_COLORS[label] || '#cbd5e1')),
-                            borderRadius: 10,
-                            borderSkipped: false
-                        }]
-                    },
-                    options: {
-                        ...common,
-                        indexAxis: 'y',
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: context => `Cierres: ${formatNumber(context.parsed.x)}`,
-                                    afterLabel: context => `Participacion: ${sharePercent(valuesType[context.dataIndex], tasks.length)}% del total`
-                                }
-                            }
-                        },
-                        onClick: (event, elements, chart) => {
-                            if (!elements.length) return;
-                            setDetailAnchorFromChart(event, chart, elements);
-                            const index = elements[0].index;
-                            openSpecialtyDetail(labelsType[index]);
-                        },
-                        scales: {
-                            x: { ...common.scales.x, beginAtZero: true, ticks: { color: neutralTicks, precision: 0 } },
-                            y: { ...common.scales.y, grid: { display: false } }
-                        }
-                    }
-                }));
-            }
-
-            const unitEl = document.getElementById('chart-dashboard-units');
-            if (unitEl) {
-                const topUnits = [...byUnit.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-                charts.push(new Chart(unitEl, {
-                    type: 'bar',
-                    data: {
-                        labels: topUnits.map(item => item[0]),
-                        datasets: [{
-                            label: 'Trabajos',
-                            data: topUnits.map(item => item[1]),
-                            backgroundColor: topUnits.map((_, index) => unitPalette[index % unitPalette.length]),
-                            borderRadius: 10,
-                            borderSkipped: false
-                        }]
-                    },
-                    options: {
-                        ...common,
-                        indexAxis: 'y',
-                        onClick: (event, elements, chart) => {
-                            if (!elements.length) return;
-                            setDetailAnchorFromChart(event, chart, elements);
-                            const index = elements[0].index;
-                            openUnitDetail(topUnits[index][0]);
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: context => `Trabajos: ${formatNumber(context.parsed.x)}`,
-                                    afterLabel: context => `Participacion: ${sharePercent(topUnits[context.dataIndex][1], tasks.length)}% del total`
-                                }
-                            }
-                        },
-                        scales: {
-                            x: { ...common.scales.x, beginAtZero: true, ticks: { color: neutralTicks, precision: 0 } },
-                            y: { ...common.scales.y, grid: { display: false } }
-                        }
-                    }
-                }));
-            }
-
-            const vibrationEl = document.getElementById('chart-dashboard-vibration');
-            if (vibrationEl) charts.push(new Chart(vibrationEl, {
-                type: 'line',
-                data: {
-                    labels: vibChartLabels,
-                    datasets: [
-                        { label: 'Vibracion promedio', data: vibChartSeries, borderColor: '#f97316', backgroundColor: 'rgba(249,115,22,.16)', fill: true, tension: .2, pointRadius: 3, pointHoverRadius: 4 },
-                        { label: 'Seguimiento', data: lineThreshold(vibChartLabels.length, 3.2), borderColor: '#f59e0b', borderDash: [7, 6], pointRadius: 0, pointHoverRadius: 0, fill: false },
-                        { label: 'Atencion', data: lineThreshold(vibChartLabels.length, 4.5), borderColor: '#dc2626', borderDash: [7, 6], pointRadius: 0, pointHoverRadius: 0, fill: false }
-                    ]
-                },
-                options: {
-                    ...common,
-                    plugins: {
-                        ...common.plugins,
-                        tooltip: {
-                            filter: context => context.datasetIndex === 0,
-                            callbacks: {
-                                label: context => `Promedio: ${formatNumber(context.parsed.y, 2)} mm/s`,
-                                afterLabel: context => [
-                                    formatSeriesDelta(vibChartSeries, context.dataIndex, 2, 'mm/s'),
-                                    formatThresholdGap(context.parsed.y, 3.2, 4.5, 2, 'mm/s')
-                                ]
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        setDetailAnchorFromChart(event, chart, elements);
-                        const index = elements[0].index;
-                        openPeriodDetail(vibChartKeys[index], vibChartLabels[index], 'vibracion');
-                    },
-                    scales: {
-                        x: common.scales.x,
-                        y: {
-                            ...common.scales.y,
-                            beginAtZero: true,
-                            ticks: {
-                                color: neutralTicks,
-                                callback: value => `${formatNumber(Number(value), 1)} mm/s`
-                            }
-                        }
-                    }
-                }
-            }));
-
-            const temperatureEl = document.getElementById('chart-dashboard-temperature');
-            if (temperatureEl) charts.push(new Chart(temperatureEl, {
-                type: 'line',
-                data: {
-                    labels: tempChartLabels,
-                    datasets: [
-                        { label: 'Termografia promedio', data: tempChartSeries, borderColor: '#9a3412', backgroundColor: 'rgba(251,146,60,.16)', fill: true, tension: .2, pointRadius: 3, pointHoverRadius: 4 },
-                        { label: 'Seguimiento', data: lineThreshold(tempChartLabels.length, 65), borderColor: '#f59e0b', borderDash: [7, 6], pointRadius: 0, pointHoverRadius: 0, fill: false },
-                        { label: 'Atencion', data: lineThreshold(tempChartLabels.length, 80), borderColor: '#dc2626', borderDash: [7, 6], pointRadius: 0, pointHoverRadius: 0, fill: false }
-                    ]
-                },
-                options: {
-                    ...common,
-                    plugins: {
-                        ...common.plugins,
-                        tooltip: {
-                            filter: context => context.datasetIndex === 0,
-                            callbacks: {
-                                label: context => `Promedio: ${formatNumber(context.parsed.y, 1)} C`,
-                                afterLabel: context => [
-                                    formatSeriesDelta(tempChartSeries, context.dataIndex, 1, 'C'),
-                                    formatThresholdGap(context.parsed.y, 65, 80, 1, 'C')
-                                ]
-                            }
-                        }
-                    },
-                    onClick: (event, elements, chart) => {
-                        if (!elements.length) return;
-                        setDetailAnchorFromChart(event, chart, elements);
-                        const index = elements[0].index;
-                        openPeriodDetail(tempChartKeys[index], tempChartLabels[index], 'termografia');
-                    },
-                    scales: {
-                        x: common.scales.x,
-                        y: {
-                            ...common.scales.y,
-                            beginAtZero: false,
-                            ticks: {
-                                color: neutralTicks,
-                                callback: value => `${formatNumber(Number(value), 0)} C`
-                            }
-                        }
-                    }
-                }
-            }));
 
             const equipmentEl = document.getElementById('chart-dashboard-equipments');
             if (equipmentEl) charts.push(new Chart(equipmentEl, {
@@ -4249,6 +4336,7 @@ ${conditionKpiHtml}
                     }
                 }
             }));
+            charts.forEach(bindChartHoverReset);
         }
 
         setPreset('mensual');

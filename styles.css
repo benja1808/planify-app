@@ -470,15 +470,13 @@ main {
 /* --- PANELES / TARJETAS (Glassmorphism) --- */
 .panel {
     background: var(--card-bg);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     border: 1px solid rgba(226, 232, 240, 0.95);
     border-radius: 18px;
     padding: 1.5rem;
     box-shadow: var(--panel-shadow);
     position: relative;
     overflow: hidden;
-    transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+    transition: border-color 160ms ease, background-color 160ms ease;
 }
 
 .panel::before {
@@ -491,7 +489,6 @@ main {
 }
 
 .panel:hover {
-    box-shadow: var(--panel-shadow-hover);
     border-color: rgba(203, 213, 225, 0.95);
 }
 

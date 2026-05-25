@@ -89,9 +89,14 @@ let estado = {
     movimientosInventario: [],
     horasExtra: [],
     informeNovedadesDiarias: null,
-    usuarioActual: 'visita', // 'visita', 'admin', 'trabajador'
+    usuarioActual: 'visita', // 'visita', 'admin', 'administrador', 'trabajador'
     trabajadorLogueado: null  // objeto trabajador cuando rol === 'trabajador'
 };
+
+function esRolGestion(rol = estado.usuarioActual) {
+    return rol === 'admin' || rol === 'administrador';
+}
+window.esRolGestion = esRolGestion;
 
 let semanalExcelImportState = {
     fileName: '',
@@ -514,7 +519,7 @@ function obtenerTrabajadorActual() {
 }
 
 function usuarioPuedeAprobarInsumos() {
-    if (estado.usuarioActual === 'admin') return true;
+    if (esRolGestion()) return true;
     return Boolean(obtenerTrabajadorActual()?.puede_aprobar_insumos);
 }
 
@@ -523,7 +528,7 @@ function usuarioSolicitanteActualId() {
 }
 
 function nombreAprobadorActual() {
-    if (estado.usuarioActual === 'admin') return 'Planificador';
+    if (esRolGestion()) return estado.usuarioActual === 'administrador' ? 'Administrador' : 'Planificador';
     return obtenerTrabajadorActual()?.nombre || 'Supervisor';
 }
 
@@ -832,7 +837,7 @@ async function desregistrarPushRemotoPlanify() {
 
 function tareaNotificableParaUsuario(tarea) {
     if (!tarea || estado.usuarioActual === 'visita') return false;
-    if (estado.usuarioActual === 'admin') return true;
+    if (esRolGestion()) return true;
     const trabajadorId = obtenerTrabajadorActual()?.id;
     if (!trabajadorId) return false;
     return String(tarea.liderId) === String(trabajadorId) ||
@@ -863,13 +868,13 @@ function describirTareaParaNotificacion(tarea) {
 }
 
 function obtenerConteosNotificables() {
-    const hePendientes = estado.usuarioActual === 'admin'
+    const hePendientes = esRolGestion()
         ? (estado.horasExtra || []).filter((item) => item.estado === 'pendiente').length
         : 0;
     const solicitudesPendientes = usuarioPuedeAprobarInsumos()
         ? (estado.solicitudesInsumos || []).filter((item) => item.estado === 'pendiente').length
         : 0;
-    const stockBajo = estado.usuarioActual === 'admin'
+    const stockBajo = esRolGestion()
         ? obtenerInsumosStockBajo().length
         : 0;
     return { hePendientes, solicitudesPendientes, stockBajo };
@@ -877,7 +882,7 @@ function obtenerConteosNotificables() {
 
 function horasExtraNotificables() {
     const registros = estado.horasExtra || [];
-    if (estado.usuarioActual === 'admin') return registros;
+    if (esRolGestion()) return registros;
     const trabajadorId = obtenerTrabajadorActual()?.id;
     if (!trabajadorId) return [];
     return registros.filter((item) => String(item.trabajador_id || '') === String(trabajadorId));
@@ -885,7 +890,7 @@ function horasExtraNotificables() {
 
 function solicitudesInsumosNotificables() {
     const solicitudes = estado.solicitudesInsumos || [];
-    if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos()) return solicitudes;
+    if (esRolGestion() || usuarioPuedeAprobarInsumos()) return solicitudes;
     const trabajadorId = usuarioSolicitanteActualId();
     if (!trabajadorId) return [];
     return solicitudes.filter((item) => String(item.trabajador_id || '') === String(trabajadorId));
@@ -978,7 +983,7 @@ async function sincronizarDatosParaNotificaciones({ force = false, renderOnChang
             }).catch(() => {})
         );
 
-        if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos() || estado.usuarioActual === 'trabajador') {
+        if (esRolGestion() || usuarioPuedeAprobarInsumos() || estado.usuarioActual === 'trabajador') {
             fetches.push(refrescarDatosInsumos({ preferRemote: true }).catch(() => null));
         }
 
@@ -987,7 +992,7 @@ async function sincronizarDatosParaNotificaciones({ force = false, renderOnChang
 
         const huboCambios = crearFirmaDatosNotificables() !== firmaAnterior;
         if (huboCambios) {
-            if (estado.usuarioActual === 'admin') actualizarBadgeHE();
+            if (esRolGestion()) actualizarBadgeHE();
             actualizarBadgeInsumos();
             if (renderOnChange && document.visibilityState === 'visible') {
                 solicitarRenderRealtimeNoIntrusivo();
@@ -1868,7 +1873,7 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
     document.getElementById('modal-lider-id').value = liderId;
     document.getElementById('modal-ayudantes-ids').value = ayudantesIdsStr || '';
     document.getElementById('modal-numero-aviso').value = '';
-    document.getElementById('modal-hh-trabajo').value = '';
+    document.getElementById('modal-hh-trabajo').value = '1';
     document.getElementById('modal-acciones').value = '';
     document.getElementById('modal-observaciones').value = '';
     document.getElementById('modal-analisis').value = '';
@@ -1883,7 +1888,7 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
 async function completarTareaConPrompts(id, liderId, ayudantesIdsStr) {
     const observaciones = prompt("Ingrese breve reporte/observaciones del trabajo finalizado:");
     const numeroAviso = prompt("Ingrese n\u00famero de Aviso / Notificaci\u00f3n SAP (Opcional):");
-    const hhTrabajo = prompt("Ingrese Horas Hombre (HH) consumidas:");
+    const hhTrabajo = prompt("Ingrese Horas Hombre (HH) consumidas:", "1");
 
     await guardarTareaFinalizada({
         id,
@@ -1892,10 +1897,15 @@ async function completarTareaConPrompts(id, liderId, ayudantesIdsStr) {
         accionesRealizadas: observaciones || '',
         observaciones: observaciones || '',
         numeroAviso: numeroAviso || '',
-        hhTrabajo: hhTrabajo || '',
+        hhTrabajo: hhTrabajo || '1',
         analisisTecnico: '',
         recomendacionAnalista: ''
     });
+}
+
+function normalizarHHTrabajo(value) {
+    const parsed = parseFloat(String(value ?? '').replace(',', '.'));
+    return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : '1';
 }
 
 async function guardarTareaFinalizada({
@@ -1927,6 +1937,7 @@ async function guardarTareaFinalizada({
     const ayudantesIds = ayudantesIdsStr ? ayudantesIdsStr.split(',').filter(Boolean) : [];
     const histId = crypto.randomUUID();
     const fechaTermino = new Date().toISOString();
+    const hhTrabajoFinal = normalizarHHTrabajo(hhTrabajo);
     const registroHistorial = {
         id: histId,
         tipo: tarea.tipo,
@@ -1939,7 +1950,7 @@ async function guardarTareaFinalizada({
         acciones_realizadas: accionesRealizadas || '',
         observaciones: observaciones || '',
         numero_aviso: numeroAviso || '',
-        hh_trabajo: hhTrabajo || '',
+        hh_trabajo: hhTrabajoFinal,
         ot_numero: tarea.otNumero,
         analisis: analisisTecnico || '',
         recomendacion_analista: recomendacionAnalista || '',
@@ -3112,7 +3123,7 @@ async function renderInsumosView() {
     await refrescarDatosInsumos({ preferRemote: true });
 
     const trabajador = obtenerTrabajadorActual();
-    const esAdmin = estado.usuarioActual === 'admin';
+    const esAdmin = esRolGestion();
     const puedeAprobar = usuarioPuedeAprobarInsumos();
     const puedeSolicitar = estado.usuarioActual === 'trabajador';
     const catalogoActivo = obtenerInsumosActivos();
@@ -4502,6 +4513,10 @@ function _volverAlLogin() {
     document.getElementById('login-overlay').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     document.querySelector('.role-cards').style.display = 'block';
+    const pinBox = document.getElementById('pin-container');
+    if (pinBox) pinBox.style.display = 'none';
+    pinLoginTarget = 'admin';
+    if (pinInput) pinInput.value = '';
     const wlc = document.getElementById('worker-login-container');
     if (wlc) wlc.style.display = 'none';
     const rutEl = document.getElementById('input-worker-rut');
@@ -4520,7 +4535,7 @@ async function restaurarSesionPersistida() {
     try { data = JSON.parse(raw); } catch (e) { return false; }
     if (!data || !data.rol) return false;
 
-    if (data.rol === 'admin' || data.rol === 'visita') {
+    if (data.rol === 'admin' || data.rol === 'administrador' || data.rol === 'visita') {
         accederApp(data.rol);
         return true;
     }
@@ -4594,7 +4609,7 @@ async function guardarHorasExtra(trabajadorId, fecha, horas, motivo) {
 
 // ── HORAS EXTRA: aprobar registro ────────────────────────────────────────────
 async function aprobarHorasExtra(heId) {
-    const planificadorNombre = estado.usuarioActual === 'admin' ? 'Planificador' : 'Admin';
+    const planificadorNombre = esRolGestion() ? (estado.usuarioActual === 'administrador' ? 'Administrador' : 'Planificador') : 'Admin';
     const updates = {
         estado: 'aprobado',
         aprobado_por: planificadorNombre,
@@ -4612,7 +4627,7 @@ async function aprobarHorasExtra(heId) {
 
 // ── HORAS EXTRA: rechazar registro ───────────────────────────────────────────
 async function rechazarHorasExtra(heId, motivo) {
-    const planificadorNombre = estado.usuarioActual === 'admin' ? 'Planificador' : 'Admin';
+    const planificadorNombre = esRolGestion() ? (estado.usuarioActual === 'administrador' ? 'Administrador' : 'Planificador') : 'Admin';
     const updates = {
         estado: 'rechazado',
         aprobado_por: planificadorNombre,
@@ -4719,7 +4734,7 @@ async function actualizarBadgeInsumos() {
 
     const pendientes = (solicitudes || []).filter((item) => {
         if (String(item.estado || 'pendiente') !== 'pendiente') return false;
-        if (estado.usuarioActual === 'admin' || usuarioPuedeAprobarInsumos()) return true;
+        if (esRolGestion() || usuarioPuedeAprobarInsumos()) return true;
         return String(item.trabajador_id || '') === String(usuarioSolicitanteActualId() || '');
     }).length;
 
@@ -9084,13 +9099,13 @@ function renderControlView() {
     }
 
     mainContent.innerHTML = `
-        <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${estado.usuarioActual !== 'admin' ? 'max-width:800px; margin:0 auto;' : ''}">
+        <div class="dashboard-grid fade-in" style="grid-template-columns:1fr; ${!esRolGestion() ? 'max-width:800px; margin:0 auto;' : ''}">
             <div class="dashboard-lists">
                 <div class="panel dashboard-hero">
                     <div class="dashboard-hero-head">
                         <div>
                             <div class="dashboard-eyebrow">Centro de control diario</div>
-                            <h2 style="margin-bottom:0.4rem;"><i class="fa-solid fa-chart-column"></i> Dashboard Operativo</h2>
+                            <h2 style="margin-bottom:0.4rem;"><i class="fa-solid fa-chart-column"></i> Avance Operacional</h2>
                             <p class="dashboard-hero-copy">${resumenFecha}. ${tareasActivas.length > 0 ? `Hay ${tareasActivas.length} trabajo(s) activo(s)` : 'No hay trabajos activos'}${colaTareas.length > 0 ? ` y ${colaTareas.length} en cola` : ''}.</p>
                         </div>
                         <div class="dashboard-hero-badges">
@@ -9403,7 +9418,7 @@ function renderDashboardView() {
             <div class="dashboard-metric-meta">${item.meta}</div>
         </article>
     `).join('');
-    const isAdmin = estado.usuarioActual === 'admin';
+    const isAdmin = esRolGestion();
     const saludoDashboard = (() => {
         const hora = new Date().getHours();
         if (hora < 12) return 'Buen dia';
@@ -10362,7 +10377,7 @@ function renderDashboardView() {
 // COMPONENTE: Vista Semanal
 function renderSemanalView() {
     // Validar si el usuario actual es admin
-    const isAdmin = estado.usuarioActual === 'admin';
+    const isAdmin = esRolGestion();
     const trabajador = estado.trabajadorLogueado;
 
     // Workers solo ven SUS tareas; admin ve todas
@@ -11684,7 +11699,7 @@ function renderVibracionesHub() {
 }
 
 function renderRutasLista() {
-    const isAdmin = estado.usuarioActual === 'admin';
+    const isAdmin = esRolGestion();
     const ejecuciones = getRutasEjecuciones();
 
     const unidadesUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.unidad))];
@@ -11715,10 +11730,9 @@ function renderRutasLista() {
         const tieneEjecucion = !!ej;
 
         return `<article class="rutas-card" data-ruta-idx="${r.idx}"
+            data-ruta-search="${escapeHtml(`${r.nombre} ${r.plan || ''}`.toLowerCase())}"
             onclick="window.rutasAbrirDetalle(${r.idx})"
-            style="cursor:pointer; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.06); transition:transform 150ms, box-shadow 150ms;"
-            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 8px 22px rgba(15,23,42,0.1)'"
-            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 1px 3px rgba(15,23,42,0.06)'">
+            style="cursor:pointer; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.04);">
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
                 <span style="background:${color}; color:#fff; font-size:0.74rem; font-weight:800; padding:0.25rem 0.6rem; border-radius:999px;">${r.unidad}</span>
                 <span style="background:#f1f5f9; color:#475569; font-size:0.74rem; font-weight:600; padding:0.25rem 0.6rem; border-radius:999px;">${labelFrecuencia(r.frecuencia)}</span>
@@ -11797,7 +11811,7 @@ function renderRutasLista() {
 
             <section>
                 <div style="font-size:0.85rem; color:#64748b; margin-bottom:0.7rem;">
-                    Mostrando <strong style="color:#0f172a;">${filtradas.length}</strong> de ${totalRutas} ruta${totalRutas !== 1 ? 's' : ''}
+                    Mostrando <strong id="rutas-count" style="color:#0f172a;">${filtradas.length}</strong> de ${totalRutas} ruta${totalRutas !== 1 ? 's' : ''}
                 </div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:0.85rem;">
                     ${filtradas.length
@@ -11819,10 +11833,22 @@ function renderRutasLista() {
     });
     const search = document.getElementById('rutas-search');
     if (search) {
+        // Filtrado EN SITIO: no se re-renderiza la vista en cada tecla
+        // (eso recreaba el input y revertía el texto). Solo se muestran/ocultan
+        // las tarjetas y se actualiza el contador.
         search.addEventListener('input', (e) => {
             vistaRutasEstado.busqueda = e.target.value;
-            renderRutasView();
-            setTimeout(() => document.getElementById('rutas-search')?.focus(), 0);
+            const q = String(e.target.value || '').toLowerCase().trim();
+            const cards = document.querySelectorAll('.rutas-card');
+            let visibles = 0;
+            cards.forEach(card => {
+                const txt = card.dataset.rutaSearch || '';
+                const match = !q || txt.includes(q);
+                card.style.display = match ? '' : 'none';
+                if (match) visibles += 1;
+            });
+            const countEl = document.getElementById('rutas-count');
+            if (countEl) countEl.textContent = visibles;
         });
     }
 }
@@ -11830,7 +11856,7 @@ function renderRutasLista() {
 function renderRutasDetalle(idx) {
     const r = RUTAS_VIBRACION_SEED[idx];
     if (!r) { vistaRutasEstado.rutaActivaIdx = null; renderRutasView(); return; }
-    const isAdmin = estado.usuarioActual === 'admin';
+    const isAdmin = esRolGestion();
     const ej = getEjecucionActiva(idx);
     const completadosSet = new Set(ej?.equiposCompletados || []);
     const total = r.equipos.length;
@@ -12239,6 +12265,7 @@ Ingresa el número de OT (Orden de Trabajo):`, '');
         ot: otTrim,
         fechaInicio: new Date().toISOString().slice(0, 10),
         equiposCompletados: [],
+        equiposCompletadosAt: {},
         observaciones: {}
     });
     renderRutasView();
@@ -12248,7 +12275,14 @@ window.rutasToggleEquipo = function(idx, eqIdx, checked) {
     if (!ej) return;
     const set = new Set(ej.equiposCompletados || []);
     const yaEstabaListo = set.has(eqIdx);
-    if (checked) set.add(eqIdx); else set.delete(eqIdx);
+    ej.equiposCompletadosAt = ej.equiposCompletadosAt || {};
+    if (checked) {
+        set.add(eqIdx);
+        if (!ej.equiposCompletadosAt[eqIdx]) ej.equiposCompletadosAt[eqIdx] = new Date().toISOString();
+    } else {
+        set.delete(eqIdx);
+        delete ej.equiposCompletadosAt[eqIdx];
+    }
     ej.equiposCompletados = [...set];
     setEjecucionActiva(idx, ej);
     renderRutasView();
@@ -12284,6 +12318,9 @@ Esto archivará la ejecución actual (OT ${ej.ot}). Podrás iniciar una nueva.`)
             fechaCierre: new Date().toISOString().slice(0, 10),
             totalEquipos: r.equipos.length,
             completados: ej.equiposCompletados.length,
+            equiposCompletados: ej.equiposCompletados || [],
+            equiposCompletadosAt: ej.equiposCompletadosAt || {},
+            mediciones: ej.mediciones || {},
             observaciones: ej.observaciones || {}
         });
         localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
@@ -12307,6 +12344,7 @@ const navConfig = {
     'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
     'nav-rutas': 'rutas',
+    'nav-avisos': 'avisos-sap',
     'nav-historial': 'historial',
     'nav-equipos': 'equipos',
     'nav-trabajadores': 'trabajadores',
@@ -12371,6 +12409,13 @@ function renderizarVistaActual() {
             break;
         case 'rutas':
             renderRutasView();
+            break;
+        case 'avisos-sap':
+            if (typeof window.renderAvisosSapView === 'function') {
+                window.renderAvisosSapView();
+            } else {
+                mainContent.innerHTML = '<div class="panel" style="margin:1rem;padding:1.2rem;"><p>El módulo Avisos SAP aún no carga. Recarga la página.</p></div>';
+            }
             break;
         case 'mis_horas':
             renderMisHorasView();
@@ -13685,6 +13730,7 @@ function renderFichaTecnicaModal() {
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-termografia">Termografía</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-lubricacion">Lubricación / Aceite</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-actividad">Actividad</button>
+                    <button class="tab-btn planify-ficha-tab-btn" data-target="tab-avisos-sap">Avisos SAP <span id="ficha-avisos-badge" style="display:none; background:#0ea5e9; color:#fff; border-radius:999px; font-size:0.7rem; font-weight:800; padding:0.05rem 0.45rem; margin-left:0.3rem; vertical-align:middle;"></span></button>
                 </div>
                 <div class="planify-ficha-body">
                     <div id="tab-vibraciones" class="tab-pane">
@@ -13769,6 +13815,20 @@ function renderFichaTecnicaModal() {
                                 <div id="ficha-componentes-relacionados" class="planify-ficha-related-list"></div>
                             </section>
                         </div>
+                    </div>
+                    <div id="tab-avisos-sap" class="tab-pane" style="display:none;">
+                        <section class="planify-ficha-card">
+                            <div class="planify-ficha-card-head">
+                                <div>
+                                    <h3>Avisos SAP de este equipo</h3>
+                                    <span>Notificaciones creadas en SAP vinculadas por ubicación técnica.</span>
+                                </div>
+                                <a href="#" id="ficha-ir-avisos" style="font-size:0.82rem; color:#0ea5e9; font-weight:700; text-decoration:none;"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver módulo Avisos</a>
+                            </div>
+                            <div id="ficha-avisos-list" style="display:flex; flex-direction:column; gap:0.6rem; padding:0.5rem 0;">
+                                <p style="color:#94a3b8; padding:1rem; text-align:center; margin:0;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando…</p>
+                            </div>
+                        </section>
                     </div>
                 </div>
             </div>
@@ -13954,8 +14014,97 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
     document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricación'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin técnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medición" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestaña mostrará registros de lubricación cuando existan.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
+    cargarAvisosSapDeFicha(equipo);
     document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas para ${equipo.componente || equipo.activo}.` : 'No hay tendencia suficiente para este componente.';
     document.getElementById('ficha-termo-subtitulo').textContent = termoSummary.count ? `${numeroFicha(termoSummary.count)} inspección(es) térmicas registradas para ${equipo.componente || equipo.activo}.` : 'No hay tendencia térmica disponible para este componente.';
+}
+
+// Carga los avisos SAP vinculados a un equipo y los renderiza en la pestaña
+// "Avisos SAP" de su ficha técnica. Vincula por equipo_id (FK) y como
+// respaldo también por ubicacion_tecnica/kks.
+async function cargarAvisosSapDeFicha(equipo) {
+    const lista = document.getElementById('ficha-avisos-list');
+    const badge = document.getElementById('ficha-avisos-badge');
+    const linkIr = document.getElementById('ficha-ir-avisos');
+    if (linkIr) linkIr.onclick = (e) => {
+        e.preventDefault();
+        document.getElementById('modal-ficha-tecnica')?.remove();
+        document.getElementById('nav-avisos')?.click();
+    };
+    if (!lista) return;
+    if (!equipo || !window.supabaseClient) {
+        lista.innerHTML = `<p style="color:#94a3b8; padding:1rem; text-align:center; margin:0;">No disponible.</p>`;
+        return;
+    }
+    try {
+        const utKeys = [...new Set([equipo.ubicacion_tecnica, equipo.kks].filter(Boolean))];
+        // 1) Trae los vinculados por equipo_id
+        let avisos = [];
+        if (equipo.id) {
+            const { data, error } = await window.supabaseClient.from('avisos_sap')
+                .select('*').eq('equipo_id', equipo.id);
+            if (error) throw error;
+            avisos = data || [];
+        }
+        // 2) Suma los matcheados por UT/KKS (sin duplicar)
+        if (utKeys.length) {
+            const { data, error } = await window.supabaseClient.from('avisos_sap')
+                .select('*').in('ubicacion_tecnica', utKeys);
+            if (error) throw error;
+            const yaIds = new Set(avisos.map(a => a.id));
+            for (const a of (data || [])) if (!yaIds.has(a.id)) avisos.push(a);
+        }
+        avisos.sort((a, b) => String(b.fecha_notif || '').localeCompare(String(a.fecha_notif || '')));
+
+        if (badge) {
+            if (avisos.length) { badge.style.display = ''; badge.textContent = avisos.length; }
+            else badge.style.display = 'none';
+        }
+        if (!avisos.length) {
+            lista.innerHTML = `<p style="color:#94a3b8; padding:1rem; text-align:center; margin:0;"><i class="fa-regular fa-bell-slash"></i> Sin avisos SAP registrados para este equipo.</p>`;
+            return;
+        }
+        const fmtFecha = (s) => {
+            if (!s) return '—';
+            const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+            return m ? `${m[3]}-${m[2]}-${m[1]}` : String(s);
+        };
+        const pillAbc = (v) => {
+            const colores = { A: ['#fef2f2','#b91c1c'], B: ['#fffbeb','#b45309'], C: ['#ecfdf5','#047857'] };
+            const [bg, fg] = colores[v] || ['#f1f5f9','#475569'];
+            return `<span style="background:${bg}; color:${fg}; border-radius:999px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:800; text-transform:uppercase;">${escapeHtml(v || '—')}</span>`;
+        };
+        const pillStatus = (v) => {
+            const first = String(v || '').split(/\s+/)[0];
+            const colores = { CRTD: ['#eff6ff','#1d4ed8'], OUTR: ['#f3f4f6','#4b5563'], TOPV: ['#ecfdf5','#047857'] };
+            const [bg, fg] = colores[first] || ['#f1f5f9','#475569'];
+            return `<span style="background:${bg}; color:${fg}; border-radius:999px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:800;">${escapeHtml(v || '—')}</span>`;
+        };
+        lista.innerHTML = avisos.map(a => `
+            <article style="border:1px solid #e5e7eb; border-radius:12px; padding:0.85rem 1rem; background:#fff;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.4rem; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+                        <span style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.86rem; font-weight:800; color:#0369a1;">#${escapeHtml(a.nro_notificacion)}</span>
+                        ${pillAbc(a.indicador_abc)}
+                        ${pillStatus(a.status_usuario)}
+                        ${a.parada ? '<span style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:999px; padding:0.15rem 0.55rem; font-size:0.7rem; font-weight:800;"><i class="fa-solid fa-triangle-exclamation"></i> PARADA</span>' : ''}
+                    </div>
+                    <span style="font-size:0.8rem; color:#64748b;"><i class="fa-regular fa-calendar"></i> ${fmtFecha(a.fecha_notif)}</span>
+                </div>
+                <div style="font-size:0.95rem; color:#0f172a; font-weight:600; margin-bottom:0.3rem;">${escapeHtml(a.descripcion_original || 'Sin descripción')}</div>
+                <div style="font-size:0.78rem; color:#64748b; display:flex; gap:0.85rem; flex-wrap:wrap;">
+                    <span><i class="fa-solid fa-flag"></i> ${escapeHtml(a.prioridad || '—')}</span>
+                    <span><i class="fa-solid fa-tag"></i> ${escapeHtml(a.clase_aviso || '—')}</span>
+                    <span><i class="fa-solid fa-users-gear"></i> ${escapeHtml(a.pto_trabajo || '—')}</span>
+                    ${a.orden ? `<span><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(a.orden)}</span>` : ''}
+                    ${a.autor ? `<span><i class="fa-solid fa-user-pen"></i> ${escapeHtml(a.autor)}</span>` : ''}
+                </div>
+            </article>
+        `).join('');
+    } catch (e) {
+        console.error('[ficha] avisos:', e);
+        lista.innerHTML = `<p style="color:#dc2626; padding:1rem; text-align:center; margin:0;">Error cargando avisos: ${e.message}</p>`;
+    }
 }
 
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
@@ -14052,6 +14201,7 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
 document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${item.tecnico_nombre || 'Sin técnico'}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
+    cargarAvisosSapDeFicha(equipo);
     document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas / ultima ${String(vibSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(vibSummary.max, 2)} mm/s.` : 'No hay tendencia suficiente para este componente.';
     document.getElementById('ficha-termo-subtitulo').textContent = termoSummary.count ? `${numeroFicha(termoSummary.count)} lectura(s) termicas / ultima ${String(termoSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(termoSummary.max, 1)} C.` : 'No hay tendencia termica disponible para este componente.';
 }
@@ -15071,18 +15221,42 @@ if (searchInputOriginal) {
 const loginOverlay = document.getElementById('login-overlay');
 const pinModal = document.getElementById('pin-container');
 const pinInput = document.getElementById('input-pin');
+const pinLabel = document.getElementById('pin-label');
+let pinLoginTarget = 'admin';
+
+function abrirLoginPin(targetRol) {
+    pinLoginTarget = targetRol === 'administrador' ? 'administrador' : 'admin';
+    if (pinLabel) {
+        pinLabel.innerHTML = `<i class="fa-solid fa-key"></i> PIN de ${pinLoginTarget === 'administrador' ? 'Administrador' : 'Planificador'}`;
+    }
+    const err = document.getElementById('pin-error');
+    if (err) {
+        err.textContent = 'PIN Incorrecto';
+        err.style.display = 'none';
+    }
+    if (pinModal) pinModal.style.display = 'block';
+    document.querySelector('.role-cards').style.display = 'none';
+    if (pinInput) {
+        pinInput.value = '';
+        pinInput.focus();
+    }
+}
 
 // Botón Planificador
 document.getElementById('btn-login-admin')?.addEventListener('click', () => {
-    pinModal.style.display = 'block';
-    document.querySelector('.role-cards').style.display = 'none';
-    pinInput?.focus();
+    abrirLoginPin('admin');
+});
+
+// Boton Administrador
+document.getElementById('btn-login-administrador')?.addEventListener('click', () => {
+    abrirLoginPin('administrador');
 });
 
 // Cancelar PIN planificador
 document.getElementById('btn-cancel-pin')?.addEventListener('click', () => {
     pinModal.style.display = 'none';
     document.querySelector('.role-cards').style.display = 'block';
+    pinLoginTarget = 'admin';
     if (pinInput) pinInput.value = '';
     const err = document.getElementById('pin-error');
     if (err) err.style.display = 'none';
@@ -15097,10 +15271,12 @@ pinInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') validarPi
 
 function validarPin() {
     const pin = pinInput?.value || '';
-    if (pin === '2025') {
-        accederApp('admin');
+    const pinEsperado = pinLoginTarget === 'administrador' ? '1808' : '2025';
+    if (pin === pinEsperado) {
+        accederApp(pinLoginTarget);
         pinModal.style.display = 'none';
         if (pinInput) pinInput.value = '';
+        pinLoginTarget = 'admin';
     } else {
         const err = document.getElementById('pin-error');
         if (err) err.style.display = 'block';
@@ -15229,14 +15405,17 @@ function accederApp(rol, trabajadorObj = null) {
     // Visibilidad de nav según rol
     const navRoles = {
         'nav-mis-horas':          ['trabajador'],
-        'nav-control':            ['admin'],
+        'nav-control':            ['admin', 'administrador'],
+        'nav-dashboard':          ['admin', 'trabajador', 'visita'],
         'nav-semanal':            ['admin'],
-        'nav-rutas':              ['admin', 'trabajador'],
+        'nav-rutas':              ['admin', 'administrador', 'trabajador'],
+        'nav-avisos':             ['admin', 'administrador'],
         'nav-historial':          ['admin'],
         'nav-trabajadores':       ['admin'],
         'nav-checkin':            ['admin'],
-        'nav-horas-extra-admin':  ['admin'],
+        'nav-horas-extra-admin':  ['admin', 'administrador'],
         'nav-insumos':            ['admin', 'trabajador'],
+        'nav-mobile-dashboard':   ['admin', 'trabajador', 'visita'],
         'nav-mobile-semanal':     ['admin', 'trabajador'],
         'nav-mobile-hours':       ['trabajador'],
         'nav-mobile-perfil':      ['trabajador'],
@@ -15244,7 +15423,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mobile-menu':        [],
         'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin'],
-        'btn-logout':             ['admin', 'trabajador', 'visita']
+        'btn-logout':             ['admin', 'administrador', 'trabajador', 'visita']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
@@ -15252,6 +15431,9 @@ function accederApp(rol, trabajadorObj = null) {
         const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
         el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
+    const mobileDock = document.getElementById('mobile-dock');
+    if (mobileDock && rol === 'administrador') mobileDock.style.display = 'none';
+    else if (mobileDock) mobileDock.style.display = '';
     const setMobileDockItem = (id, icon, label) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -15273,7 +15455,7 @@ function accederApp(rol, trabajadorObj = null) {
     }
 
     // Badge de pendientes solo para planificador
-    if (rol === 'admin') actualizarBadgeHE();
+    if (esRolGestion(rol)) actualizarBadgeHE();
     actualizarBadgeInsumos();
     // Monitor SIEMPRE arranca → así los toasts in-app funcionan sin permisos del SO
     iniciarMonitorNotificaciones({ resetBaseline: true });
@@ -15283,20 +15465,21 @@ function accederApp(rol, trabajadorObj = null) {
     }
 
     const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
-    let vistaInicial = rol === 'admin'
-        ? (esPantallaMovil ? 'dashboard' : 'control')
-        : 'dashboard';
+    let vistaInicial = rol === 'administrador'
+        ? 'control'
+        : (rol === 'admin' ? (esPantallaMovil ? 'dashboard' : 'control') : 'dashboard');
     // Si hay una vista guardada de la sesión anterior, restaurarla
     // siempre que esté permitida para el rol actual.
     try {
-        const vistaGuardada = localStorage.getItem('planify_vista');
-        if (vistaGuardada) {
-            const permitidoAdmin = ['control','dashboard','semanal','rutas','historial','trabajadores','checkin','equipos','horas-extra-admin','insumos','perfil','mis_horas'];
-            const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos'];
-            const permitidoVisita = ['dashboard','semanal','historial','equipos'];
-            const lista = rol === 'admin' ? permitidoAdmin : (rol === 'trabajador' ? permitidoTrabajador : permitidoVisita);
-            if (lista.includes(vistaGuardada)) vistaInicial = vistaGuardada;
-        }
+            const vistaGuardada = localStorage.getItem('planify_vista');
+            if (vistaGuardada) {
+                const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','checkin','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
+                const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
+                const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos'];
+                const permitidoVisita = ['dashboard','semanal','historial','equipos'];
+                const lista = rol === 'admin' ? permitidoAdmin : (rol === 'administrador' ? permitidoAdministrador : (rol === 'trabajador' ? permitidoTrabajador : permitidoVisita));
+                if (lista.includes(vistaGuardada)) vistaInicial = vistaGuardada;
+            }
     } catch (e) { /* noop */ }
     vistaActual = vistaInicial;
     renderizarVistaActual();

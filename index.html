@@ -13,8 +13,9 @@
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css?v=41">
+    <link rel="stylesheet" href="styles.css?v=42">
     <link rel="stylesheet" href="modules/seguimiento/seguimiento.css?v=5">
+    <link rel="stylesheet" href="modules/avisos/avisos.css?v=1">
     
     <!-- PWA / Mobile Capabilites -->
     <link rel="manifest" href="manifest.json">
@@ -110,6 +111,22 @@
                     </svg>
                 </button>
 
+                <button id="btn-login-administrador" class="role-card">
+                    <div class="role-card-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            <path d="m9 12 2 2 4-4"/>
+                        </svg>
+                    </div>
+                    <div class="role-card-body">
+                        <span class="role-card-name">Administrador</span>
+                        <span class="role-card-desc">Control, vibraciones, horas extra y avisos SAP</span>
+                    </div>
+                    <svg class="role-card-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                </button>
+
                 <button id="btn-login-visita" class="role-card">
                     <div class="role-card-icon">
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -129,7 +146,7 @@
 
             <!-- PIN Planificador (oculto por defecto) -->
             <div id="pin-container" style="display: none; margin-top: 1.5rem; text-align: left;">
-                <label style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted);"><i class="fa-solid fa-key"></i> PIN de Planificador</label>
+                <label id="pin-label" style="display: block; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--text-muted);"><i class="fa-solid fa-key"></i> PIN de Planificador</label>
                 <input type="password" id="input-pin" class="form-control" placeholder="****" maxlength="4" style="text-align: center; font-size: 1.5rem; letter-spacing: 0.5rem;">
                 <button id="btn-submit-pin" class="btn btn-success" style="width: 100%; margin-top: 1rem; border-radius: 8px;">Acceder</button>
                 <button id="btn-cancel-pin" class="btn" style="width: 100%; margin-top: 0.5rem; background: transparent; color: var(--text-muted);">Cancelar</button>
@@ -179,6 +196,7 @@
                 <button id="nav-dashboard" class="active">Diario</button>
                 <button id="nav-semanal">Semanal</button>
                 <button id="nav-rutas">Vibraciones</button>
+                <button id="nav-avisos">Avisos SAP</button>
                 <button id="nav-historial">Historial</button>
                 <button id="nav-equipos">Equipos</button>
                 <button id="nav-trabajadores">Trabajadores</button>
@@ -507,9 +525,10 @@
 
     <!-- Scripts locales modulares -->
     <script src="modules/seguimiento/seguimiento.js?v=6" defer></script>
-    <script src="app.js?v=207" defer></script>
+    <script src="modules/avisos/avisos.js?v=5" defer></script>
+    <script src="app.js?v=212" defer></script>
     <script src="dailyNews.js?v=1" defer></script>
-    <script src="dashboardAnalytics.js?v=36" defer></script>
+    <script src="dashboardAnalytics.js?v=44" defer></script>
 
     <!-- Modal: Rechazo de Solicitud de Insumos -->
 <div id="modal-insumos-rechazo" class="modal-overlay-base" style="z-index:10000;">

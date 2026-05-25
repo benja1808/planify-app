@@ -1,0 +1,247 @@
+/* ───────────────────────────────────────────────────────────────────── */
+/*  Módulo Avisos SAP                                                     */
+/* ───────────────────────────────────────────────────────────────────── */
+
+.avisos-view { padding: 1rem; }
+
+.avisos-hero {
+    background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 60%);
+    border: 1px solid rgba(14, 165, 233, 0.25);
+    border-radius: 16px;
+    padding: 1.1rem 1.25rem;
+    margin-bottom: 1rem;
+    position: relative;
+    overflow: hidden;
+}
+.avisos-hero::after {
+    content: '';
+    position: absolute;
+    top: -60px; right: -40px;
+    width: 220px; height: 220px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(14,165,233,0.12), rgba(14,165,233,0));
+    pointer-events: none;
+}
+.avisos-hero-top {
+    display: flex; gap: 1rem; justify-content: space-between;
+    align-items: flex-start; flex-wrap: wrap;
+    position: relative; z-index: 1;
+}
+.avisos-eyebrow {
+    font-size: 0.72rem; font-weight: 800; color: #0369a1;
+    text-transform: uppercase; letter-spacing: 0.06em;
+}
+.avisos-hero h1 {
+    margin: 0.3rem 0; font-size: 1.4rem; color: #0f172a;
+}
+.avisos-hero p { margin: 0; color: #475569; font-size: 0.9rem; }
+.avisos-hero-actions {
+    display: flex; gap: 0.55rem; flex-wrap: wrap;
+}
+.avisos-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    background: #fff; color: #0369a1;
+    border: 1px solid rgba(14,165,233,0.25);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem; font-weight: 700;
+}
+
+.avisos-toolbar {
+    display: flex; gap: 0.55rem; flex-wrap: wrap;
+    margin-bottom: 0.85rem; align-items: center;
+}
+.avisos-toolbar input[type="text"] {
+    flex: 1 1 240px;
+    min-width: 200px;
+}
+.avisos-toolbar select {
+    flex: 0 0 auto;
+    min-width: 130px;
+}
+.avisos-toolbar .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.avisos-table-wrap {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    overflow: auto;
+    max-height: 70vh;
+}
+.avisos-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.84rem;
+}
+.avisos-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #f8fafc;
+    color: #475569;
+    font-weight: 700;
+    text-align: left;
+    padding: 0.65rem 0.7rem;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 2px solid #e5e7eb;
+    white-space: nowrap;
+}
+.avisos-table tbody tr {
+    transition: background 120ms;
+    cursor: pointer;
+}
+.avisos-table tbody tr:hover {
+    background: #f0f9ff;
+}
+.avisos-table tbody td {
+    padding: 0.55rem 0.7rem;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+    color: #0f172a;
+}
+.avisos-table tbody tr:last-child td { border-bottom: none; }
+
+.avisos-pill {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+.avisos-pill--abc-A { background: #fef2f2; color: #b91c1c; }
+.avisos-pill--abc-B { background: #fffbeb; color: #b45309; }
+.avisos-pill--abc-C { background: #ecfdf5; color: #047857; }
+.avisos-pill--prio-Alta  { background: #fef2f2; color: #b91c1c; }
+.avisos-pill--prio-Media { background: #fffbeb; color: #b45309; }
+.avisos-pill--prio-Baja  { background: #ecfdf5; color: #047857; }
+.avisos-pill--st-CRTD { background: #eff6ff; color: #1d4ed8; }
+.avisos-pill--st-OUTR { background: #f3f4f6; color: #4b5563; }
+.avisos-pill--st-TOPV { background: #ecfdf5; color: #047857; }
+.avisos-pill--st-default { background: #f1f5f9; color: #475569; }
+.avisos-pill--parada { background: #fef2f2; color: #b91c1c; border:1px solid #fecaca; }
+
+.avisos-cell-mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    color: #1e293b;
+}
+.avisos-cell-link {
+    color: #FF6900;
+    text-decoration: none;
+    font-weight: 600;
+}
+.avisos-cell-link:hover { text-decoration: underline; }
+
+.avisos-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: #94a3b8;
+    font-size: 0.9rem;
+}
+
+/* Modal detalle */
+.aviso-detail-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    z-index: 11000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.aviso-detail-overlay.is-open { display: flex; }
+.aviso-detail-card {
+    background: #fff;
+    border-radius: 16px;
+    max-width: 720px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: auto;
+    padding: 1.4rem;
+    box-shadow: 0 20px 60px rgba(15,23,42,0.3);
+}
+.aviso-detail-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.aviso-detail-head h2 {
+    margin: 0;
+    font-size: 1.15rem;
+    color: #0f172a;
+}
+.aviso-detail-close {
+    border: none;
+    background: #f1f5f9;
+    color: #475569;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+.aviso-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+}
+.aviso-detail-item {
+    padding: 0.55rem 0.75rem;
+    background: #f8fafc;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+}
+.aviso-detail-item label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.2rem;
+}
+.aviso-detail-item span {
+    font-size: 0.92rem;
+    color: #0f172a;
+    font-weight: 600;
+}
+.aviso-detail-desc {
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 0.75rem;
+}
+.aviso-detail-desc label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.35rem;
+}
+.aviso-detail-desc p {
+    margin: 0;
+    color: #0f172a;
+    font-size: 0.95rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+}
+.aviso-detail-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.85rem;
+}

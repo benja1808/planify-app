@@ -987,7 +987,7 @@
             acciones_realizadas: acciones,
             observaciones: observacion,
             numero_aviso: '',
-            hh_trabajo: ''
+            hh_trabajo: '1'
         };
         const { data, error } = await getSupabase()
             .from('historial_tareas')
