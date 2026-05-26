@@ -2898,16 +2898,17 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             }
             async function _intentarPdfServerPython(datos, timeoutMs = 3000) {
                 const remoto = _backendBase();
+                // Para el backend remoto (Render) damos más tiempo (cold-start free tier)
                 const endpoints = [
-                    remoto ? `${remoto.replace(/\/$/, '')}/generar-pdf` : null,
-                    `${window.location.origin}/generar-pdf`,
-                    'http://127.0.0.1:3001/generar-pdf',
-                    'http://localhost:3001/generar-pdf'
+                    remoto ? { url: `${remoto.replace(/\/$/, '')}/generar-pdf`, timeout: 35000 } : null,
+                    { url: `${window.location.origin}/generar-pdf`, timeout: timeoutMs },
+                    { url: 'http://127.0.0.1:3001/generar-pdf', timeout: timeoutMs },
+                    { url: 'http://localhost:3001/generar-pdf', timeout: timeoutMs }
                 ].filter(Boolean);
-                for (const ep of endpoints) {
+                for (const { url: ep, timeout: epTimeout } of endpoints) {
                     try {
                         const ctrl = new AbortController();
-                        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+                        const t = setTimeout(() => ctrl.abort(), epTimeout);
                         const resp = await fetch(ep, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -3457,18 +3458,19 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 
                 try {
                     // --- Paso 1: intentar el servidor Python (calidad rica) ---
-                    // Orden: backend remoto (Render via PLANIFY_PDF_BACKEND) → mismo origen → localhost
+                    // Orden: backend remoto (Render) con 35s timeout por cold-start →
+                    // mismo origen y localhost con 3s timeout
                     const remotoExcel = _backendBase();
                     const endpoints = [
-                        remotoExcel ? `${remotoExcel.replace(/\/$/, '')}/generar-excel` : null,
-                        `${window.location.origin}/generar-excel`,
-                        'http://127.0.0.1:3001/generar-excel',
-                        'http://localhost:3001/generar-excel'
+                        remotoExcel ? { url: `${remotoExcel.replace(/\/$/, '')}/generar-excel`, timeout: 35000 } : null,
+                        { url: `${window.location.origin}/generar-excel`, timeout: 3000 },
+                        { url: 'http://127.0.0.1:3001/generar-excel', timeout: 3000 },
+                        { url: 'http://localhost:3001/generar-excel', timeout: 3000 }
                     ].filter(Boolean);
-                    for (const ep of endpoints) {
+                    for (const { url: ep, timeout: epTimeout } of endpoints) {
                         try {
                             const ctrl = new AbortController();
-                            const t = setTimeout(() => ctrl.abort(), 3000);
+                            const t = setTimeout(() => ctrl.abort(), epTimeout);
                             const resp = await fetch(ep, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },

@@ -23,10 +23,9 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- Backend de Planify (Render). Después del deploy, pega aquí la URL pública: -->
-    <!-- ej.  window.PLANIFY_PDF_BACKEND = 'https://planify-backend.onrender.com'; -->
+    <!-- Backend de Planify desplegado en Render (genera PDF/Excel ricos con Python) -->
     <script>
-        // window.PLANIFY_PDF_BACKEND = 'https://planify-backend.onrender.com';
+        window.PLANIFY_PDF_BACKEND = 'https://planify-backend-lfq3.onrender.com';
     </script>
 
     <!-- Registrar Service Worker (offline support) -->
@@ -532,9 +531,9 @@
     <!-- Scripts locales modulares -->
     <script src="modules/seguimiento/seguimiento.js?v=6" defer></script>
     <script src="modules/avisos/avisos.js?v=5" defer></script>
-    <script src="app.js?v=212" defer></script>
+    <script src="app.js?v=213" defer></script>
     <script src="dailyNews.js?v=1" defer></script>
-    <script src="dashboardAnalytics.js?v=44" defer></script>
+    <script src="dashboardAnalytics.js?v=45" defer></script>
 
     <!-- Modal: Rechazo de Solicitud de Insumos -->
 <div id="modal-insumos-rechazo" class="modal-overlay-base" style="z-index:10000;">

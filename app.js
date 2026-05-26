@@ -11819,6 +11819,42 @@ function renderRutasLista() {
                         : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin rutas</strong><p>Ajusta los filtros para ver más resultados.</p></div></div>`}
                 </div>
             </section>
+
+            ${(() => {
+                let hist = [];
+                try { hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch(e){}
+                if (!hist.length) return '';
+                const ultimos = hist.slice().reverse().slice(0, 12);
+                const fmt = s => { const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}-${m[2]}-${m[1]}`:s; };
+                return `
+                <section style="margin-top:1.5rem;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.7rem;">
+                        <h2 style="margin:0; font-size:1.05rem; color:#0f172a;">
+                            <i class="fa-solid fa-flag-checkered" style="color:#64748b;"></i> Rutas cerradas (${hist.length})
+                        </h2>
+                        ${hist.length > 12 ? `<span style="font-size:0.78rem; color:#94a3b8;">Mostrando las 12 más recientes</span>` : ''}
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:0.65rem;">
+                        ${ultimos.map((h, idx) => {
+                            const c = colorUnidad(h.unidad || '');
+                            const pct = h.totalEquipos ? Math.round((h.completados/h.totalEquipos)*100) : 0;
+                            return `<article style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:0.85rem 1rem;">
+                                <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem; flex-wrap:wrap;">
+                                    ${h.unidad ? `<span style="background:${c}; color:#fff; font-size:0.7rem; font-weight:800; padding:0.18rem 0.55rem; border-radius:999px;">${escapeHtml(h.unidad)}</span>` : ''}
+                                    ${h.ot ? `<span style="font-family:ui-monospace; font-size:0.78rem; color:#0369a1; font-weight:700;"><i class="fa-solid fa-hashtag"></i>${escapeHtml(h.ot)}</span>` : ''}
+                                    <span style="margin-left:auto; font-size:0.7rem; color:#94a3b8;">${fmt(h.fechaCierre)}</span>
+                                </div>
+                                <div style="font-size:0.88rem; font-weight:700; color:#0f172a; line-height:1.25; margin-bottom:0.45rem;">${escapeHtml(h.rutaNombre || 'Ruta')}</div>
+                                <div style="display:flex; gap:0.5rem; font-size:0.74rem; color:#475569; flex-wrap:wrap;">
+                                    <span><i class="fa-solid fa-check" style="color:#16a34a;"></i> ${h.completados || 0} listo${(h.completados||0)!==1?'s':''}</span>
+                                    ${h.noEjecutados ? `<span><i class="fa-solid fa-xmark" style="color:#dc2626;"></i> ${h.noEjecutados} no ejec.</span>` : ''}
+                                    <span style="margin-left:auto; font-weight:800; color:${c};">${pct}%</span>
+                                </div>
+                            </article>`;
+                        }).join('')}
+                    </div>
+                </section>`;
+            })()}
         </div>
     `;
 
@@ -11859,14 +11895,18 @@ function renderRutasDetalle(idx) {
     const isAdmin = esRolGestion();
     const ej = getEjecucionActiva(idx);
     const completadosSet = new Set(ej?.equiposCompletados || []);
+    const noEjecutadosSet = new Set(ej?.equiposNoEjecutados || []);
     const total = r.equipos.length;
     const completados = completadosSet.size;
+    const noEjecutados = noEjecutadosSet.size;
+    const pendientes = total - completados - noEjecutados;
     const pct = total ? Math.round((completados / total) * 100) : 0;
     const color = colorUnidad(r.unidad);
     const observaciones = ej?.observaciones || {};
 
     const renderEquipo = (eq, eqIdx) => {
         const done = completadosSet.has(eqIdx);
+        const skipped = noEjecutadosSet.has(eqIdx);
         const obs = observaciones[eqIdx] || '';
         const equipoVinculado = obtenerEquipoPorUT(eq.ubicacion_tecnica);
         const tieneFicha = !!equipoVinculado?.id;
@@ -11875,14 +11915,42 @@ function renderRutasDetalle(idx) {
         const fichaTitle = totalPartes > 1 ? 'Elegir parte del equipo para abrir su ficha' : 'Click para abrir la ficha del equipo';
         const fichaLabel = totalPartes > 1 ? `Ver partes (${totalPartes})` : 'Ver ficha';
         const datosGuardados = Array.isArray(ej?.mediciones?.[eqIdx]) ? ej.mediciones[eqIdx] : [];
-        return `<article class="ruta-equipo" style="border:1px solid ${done ? '#bbf7d0' : '#e5e7eb'}; background:${done ? '#f0fdf4' : '#fff'}; border-radius:10px; padding:0.7rem 0.9rem; margin-bottom:0.5rem; transition:all 150ms;">
+        const borderColor = done ? '#bbf7d0' : skipped ? '#fecaca' : '#e5e7eb';
+        const bgColor = done ? '#f0fdf4' : skipped ? '#fef2f2' : '#fff';
+        const disabledAttr = !ej ? 'disabled' : '';
+        const titleStyle = done
+            ? 'text-decoration:line-through; color:#64748b;'
+            : skipped
+                ? 'color:#7f1d1d;'
+                : '';
+        // Pills clickeables: Listo (verde) y No ejecutado (rojo)
+        const pillListo = `
+            <button type="button" ${disabledAttr}
+                onclick="event.stopPropagation(); window.rutasMarcarEquipo(${idx}, ${eqIdx}, ${done ? "'pendiente'" : "'listo'"})"
+                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.7rem; border-radius:999px;
+                    font-size:0.78rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
+                    border:1px solid ${done ? '#16a34a' : '#cbd5e1'};
+                    background:${done ? '#16a34a' : '#fff'}; color:${done ? '#fff' : '#475569'};
+                    transition:all 120ms;"
+                title="Marcar como listo / ejecutado">
+                <i class="fa-solid fa-check"></i> Listo
+            </button>`;
+        const pillNoEjec = `
+            <button type="button" ${disabledAttr}
+                onclick="event.stopPropagation(); window.rutasMarcarEquipo(${idx}, ${eqIdx}, ${skipped ? "'pendiente'" : "'no-ejecutado'"})"
+                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.7rem; border-radius:999px;
+                    font-size:0.78rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
+                    border:1px solid ${skipped ? '#dc2626' : '#cbd5e1'};
+                    background:${skipped ? '#dc2626' : '#fff'}; color:${skipped ? '#fff' : '#475569'};
+                    transition:all 120ms;"
+                title="Marcar como no ejecutado">
+                <i class="fa-solid fa-xmark"></i> No ejecutado
+            </button>`;
+        return `<article class="ruta-equipo" style="border:1px solid ${borderColor}; background:${bgColor}; border-radius:10px; padding:0.7rem 0.9rem; margin-bottom:0.5rem; transition:all 150ms;">
             <div style="display:flex; align-items:flex-start; gap:0.65rem;">
-                <input type="checkbox" ${done ? 'checked' : ''} ${!ej ? 'disabled' : ''}
-                    onchange="window.rutasToggleEquipo(${idx}, ${eqIdx}, this.checked)"
-                    style="width:18px; height:18px; accent-color:#10b981; margin-top:2px; flex-shrink:0; cursor:${ej ? 'pointer' : 'not-allowed'};">
                 <div style="flex:1; min-width:0; ${tieneFicha ? 'cursor:pointer;' : ''}"
                     ${tieneFicha ? `onclick="window.rutasAbrirFichaEquipo('${equipoVinculado.id}')" title="${fichaTitle}"` : ''}>
-                    <div style="font-weight:600; color:#0f172a; font-size:0.92rem; line-height:1.35; ${done ? 'text-decoration:line-through; color:#64748b;' : ''} display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+                    <div style="font-weight:600; color:#0f172a; font-size:0.92rem; line-height:1.35; ${titleStyle} display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
                         <span>${escapeHtml(eq.nombre)}</span>
                         ${tieneFicha
                             ? `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#dbeafe; color:#1e40af; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;"><i class="fa-solid fa-link"></i> ${fichaLabel}</span>`
@@ -11894,9 +11962,12 @@ function renderRutasDetalle(idx) {
                         <i class="fa-solid fa-diagram-project"></i> ${escapeHtml(eq.ubicacion_tecnica || '—')}
                     </div>
                 </div>
-                ${done ? `<i class="fa-solid fa-check-circle" style="color:#10b981; font-size:1.1rem; flex-shrink:0;"></i>` : ''}
             </div>
             ${ej ? `
+                <div style="display:flex; gap:0.4rem; margin-top:0.6rem; flex-wrap:wrap;">
+                    ${pillListo}
+                    ${pillNoEjec}
+                </div>
                 <input type="text" class="form-control" placeholder="Observación (opcional)"
                     value="${escapeHtml(obs)}"
                     oninput="window.rutasSetObservacion(${idx}, ${eqIdx}, this.value)"
@@ -11925,7 +11996,10 @@ function renderRutasDetalle(idx) {
                 <section class="panel" style="margin-bottom:1.1rem; padding:1rem 1.1rem;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                         <div>
-                            <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em;">Ejecución activa</div>
+                            <div style="font-size:0.78rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; display:inline-flex; align-items:center; gap:0.35rem;">
+                                Ejecución activa
+                                <span style="display:inline-flex; align-items:center; gap:0.25rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.5rem; border-radius:999px; font-size:0.62rem;"><i class="fa-solid fa-cloud-arrow-up"></i> Guardado automático</span>
+                            </div>
                             <div style="font-size:1rem; font-weight:700; color:#0f172a; margin-top:0.15rem;">
                                 <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> OT ${escapeHtml(ej.ot || '—')}
                             </div>
@@ -11935,20 +12009,22 @@ function renderRutasDetalle(idx) {
                         </div>
                         <div style="text-align:right;">
                             <div style="font-size:1.6rem; font-weight:800; color:${color};">${pct}%</div>
-                            <div style="font-size:0.78rem; color:#64748b;">${completados} de ${total}</div>
+                            <div style="font-size:0.78rem; color:#64748b;">${completados} listo${completados!==1?'s':''} · ${noEjecutados} no ejec. · ${pendientes} pend.</div>
                         </div>
                     </div>
-                    <div style="height:10px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.7rem;">
-                        <div style="height:100%; width:${pct}%; background:${color}; transition:width 250ms;"></div>
+                    <div style="display:flex; height:10px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.7rem;">
+                        <div style="height:100%; width:${total ? (completados/total)*100 : 0}%; background:#16a34a; transition:width 250ms;"></div>
+                        <div style="height:100%; width:${total ? (noEjecutados/total)*100 : 0}%; background:#dc2626; transition:width 250ms;"></div>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
-                        ${isAdmin && completados === total ? `
-                            <button onclick="window.rutasCerrarEjecucion(${idx})" class="btn btn-success" style="font-size:0.85rem;">
+                        <button onclick="window.rutasGuardarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#16a34a; color:#15803d; background:#f0fdf4;" title="Guardar manual — confirma que tu avance está respaldado (igual se guarda solo a cada cambio)">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar
+                        </button>
+                        ${isAdmin ? `
+                            <button onclick="window.rutasCerrarEjecucion(${idx})" class="btn btn-success" style="font-size:0.85rem;" title="Cerrar la ejecución y archivarla en Rutas cerradas">
                                 <i class="fa-solid fa-flag-checkered"></i> Cerrar ruta
                             </button>
-                        ` : ''}
-                        ${isAdmin ? `
-                            <button onclick="window.rutasCancelarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#fecaca; color:#dc2626;">
+                            <button onclick="window.rutasCancelarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#fecaca; color:#dc2626;" title="Descartar la ejecución sin guardar en historial">
                                 <i class="fa-solid fa-xmark"></i> Cancelar
                             </button>
                         ` : ''}
@@ -12266,29 +12342,63 @@ Ingresa el número de OT (Orden de Trabajo):`, '');
         fechaInicio: new Date().toISOString().slice(0, 10),
         equiposCompletados: [],
         equiposCompletadosAt: {},
+        equiposNoEjecutados: [],
+        equiposNoEjecutadosAt: {},
         observaciones: {}
     });
     renderRutasView();
 };
-window.rutasToggleEquipo = function(idx, eqIdx, checked) {
+
+// Marca un equipo con un estado: 'listo' | 'no-ejecutado' | 'pendiente'.
+// Solo uno puede estar activo: marcar Listo limpia No-Ejecutado y viceversa.
+window.rutasMarcarEquipo = function(idx, eqIdx, estado) {
     const ej = getEjecucionActiva(idx);
     if (!ej) return;
-    const set = new Set(ej.equiposCompletados || []);
-    const yaEstabaListo = set.has(eqIdx);
+    ej.equiposCompletados = Array.isArray(ej.equiposCompletados) ? ej.equiposCompletados : [];
+    ej.equiposNoEjecutados = Array.isArray(ej.equiposNoEjecutados) ? ej.equiposNoEjecutados : [];
     ej.equiposCompletadosAt = ej.equiposCompletadosAt || {};
-    if (checked) {
-        set.add(eqIdx);
-        if (!ej.equiposCompletadosAt[eqIdx]) ej.equiposCompletadosAt[eqIdx] = new Date().toISOString();
-    } else {
-        set.delete(eqIdx);
-        delete ej.equiposCompletadosAt[eqIdx];
+    ej.equiposNoEjecutadosAt = ej.equiposNoEjecutadosAt || {};
+    const yaListo = ej.equiposCompletados.includes(eqIdx);
+    // Quitar siempre de ambos primero
+    ej.equiposCompletados = ej.equiposCompletados.filter(x => x !== eqIdx);
+    ej.equiposNoEjecutados = ej.equiposNoEjecutados.filter(x => x !== eqIdx);
+    delete ej.equiposCompletadosAt[eqIdx];
+    delete ej.equiposNoEjecutadosAt[eqIdx];
+    if (estado === 'listo') {
+        ej.equiposCompletados.push(eqIdx);
+        ej.equiposCompletadosAt[eqIdx] = new Date().toISOString();
+    } else if (estado === 'no-ejecutado') {
+        ej.equiposNoEjecutados.push(eqIdx);
+        ej.equiposNoEjecutadosAt[eqIdx] = new Date().toISOString();
     }
-    ej.equiposCompletados = [...set];
     setEjecucionActiva(idx, ej);
     renderRutasView();
-    if (checked && !yaEstabaListo) {
+    if (estado === 'listo' && !yaListo) {
         setTimeout(() => window.rutasAbrirCapturaEquipo?.(idx, eqIdx), 0);
     }
+};
+
+// Compat con versiones anteriores: el viejo toggle redirige a marcarEquipo
+window.rutasToggleEquipo = function(idx, eqIdx, checked) {
+    window.rutasMarcarEquipo(idx, eqIdx, checked ? 'listo' : 'pendiente');
+};
+
+// Botón "Guardar" — feedback visual; el auto-save ya pasa en cada cambio
+window.rutasGuardarEjecucion = function(idx) {
+    const ej = getEjecucionActiva(idx);
+    if (!ej) return;
+    // El estado ya está persistido; lo re-grabamos por si acaso
+    setEjecucionActiva(idx, ej);
+    const toast = document.createElement('div');
+    toast.textContent = '✓ Avance guardado';
+    Object.assign(toast.style, {
+        position:'fixed', bottom:'1.5rem', left:'50%', transform:'translateX(-50%)',
+        background:'#16a34a', color:'#fff', padding:'0.7rem 1.2rem',
+        borderRadius:'999px', fontSize:'0.9rem', fontWeight:'700',
+        zIndex:'10001', boxShadow:'0 8px 24px rgba(15,23,42,0.2)'
+    });
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1800);
 };
 window.rutasSetObservacion = function(idx, eqIdx, valor) {
     const ej = getEjecucionActiva(idx);
@@ -12303,23 +12413,34 @@ window.rutasCerrarEjecucion = function(idx) {
     const r = RUTAS_VIBRACION_SEED[idx];
     const ej = getEjecucionActiva(idx);
     if (!ej || !r) return;
-    if (!confirm(`¿Cerrar la ruta "${r.nombre}"?
-
-Esto archivará la ejecución actual (OT ${ej.ot}). Podrás iniciar una nueva.`)) return;
-    // Guardar al historial local (simple: appendear a "planify_rutas_historial")
+    const total = r.equipos.length;
+    const completados = (ej.equiposCompletados || []).length;
+    const noEjecutados = (ej.equiposNoEjecutados || []).length;
+    const sinTocar = total - completados - noEjecutados;
+    let resumen = `Listos: ${completados} · No ejecutados: ${noEjecutados}`;
+    if (sinTocar > 0) resumen += ` · Sin marcar: ${sinTocar}`;
+    const msg = `¿Cerrar la ruta "${r.nombre}" (OT ${ej.ot})?\n\n${resumen}\n\nQuedará archivada en "Rutas cerradas" y se podrá iniciar una nueva ejecución.`;
+    if (!confirm(msg)) return;
     try {
         const histRaw = localStorage.getItem('planify_rutas_historial');
         const hist = histRaw ? JSON.parse(histRaw) : [];
         hist.push({
             rutaIdx: idx,
             rutaNombre: r.nombre,
+            unidad: r.unidad,
+            frecuencia: r.frecuencia,
+            plan: r.plan,
             ot: ej.ot,
             fechaInicio: ej.fechaInicio,
             fechaCierre: new Date().toISOString().slice(0, 10),
-            totalEquipos: r.equipos.length,
-            completados: ej.equiposCompletados.length,
+            totalEquipos: total,
+            completados,
+            noEjecutados,
+            sinMarcar: sinTocar,
             equiposCompletados: ej.equiposCompletados || [],
             equiposCompletadosAt: ej.equiposCompletadosAt || {},
+            equiposNoEjecutados: ej.equiposNoEjecutados || [],
+            equiposNoEjecutadosAt: ej.equiposNoEjecutadosAt || {},
             mediciones: ej.mediciones || {},
             observaciones: ej.observaciones || {}
         });
