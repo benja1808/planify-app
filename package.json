@@ -1,8 +1,11 @@
 {
   "name": "planner_app",
   "version": "1.0.0",
-  "description": "",
-  "main": "app.js",
+  "description": "Backend API para Planify (genera PDF/Excel con Python + endpoints de push)",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "node -c app.js && node -c server.js"

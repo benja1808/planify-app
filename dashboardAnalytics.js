@@ -2889,15 +2889,21 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
             }
 
-            // Intenta el servidor Python con timeout corto (2s por endpoint).
+            // Intenta el servidor Python con timeout corto (3s por endpoint).
+            // Orden: backend remoto (Render) → mismo origen → localhost dev.
             // Si responde, descarga el PDF que él genera (calidad rica).
             // Si no, devuelve null para que el caller use el fallback.
-            async function _intentarPdfServerPython(datos, timeoutMs = 2000) {
+            function _backendBase() {
+                return (typeof window !== 'undefined' && window.PLANIFY_PDF_BACKEND) || '';
+            }
+            async function _intentarPdfServerPython(datos, timeoutMs = 3000) {
+                const remoto = _backendBase();
                 const endpoints = [
+                    remoto ? `${remoto.replace(/\/$/, '')}/generar-pdf` : null,
                     `${window.location.origin}/generar-pdf`,
                     'http://127.0.0.1:3001/generar-pdf',
                     'http://localhost:3001/generar-pdf'
-                ];
+                ].filter(Boolean);
                 for (const ep of endpoints) {
                     try {
                         const ctrl = new AbortController();
@@ -3451,15 +3457,18 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 
                 try {
                     // --- Paso 1: intentar el servidor Python (calidad rica) ---
+                    // Orden: backend remoto (Render via PLANIFY_PDF_BACKEND) → mismo origen → localhost
+                    const remotoExcel = _backendBase();
                     const endpoints = [
+                        remotoExcel ? `${remotoExcel.replace(/\/$/, '')}/generar-excel` : null,
                         `${window.location.origin}/generar-excel`,
                         'http://127.0.0.1:3001/generar-excel',
                         'http://localhost:3001/generar-excel'
-                    ];
+                    ].filter(Boolean);
                     for (const ep of endpoints) {
                         try {
                             const ctrl = new AbortController();
-                            const t = setTimeout(() => ctrl.abort(), 2000);
+                            const t = setTimeout(() => ctrl.abort(), 3000);
                             const resp = await fetch(ep, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },

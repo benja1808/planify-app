@@ -1,0 +1,35 @@
+# Render Blueprint — Backend de Planify (PDF + Excel)
+# Al conectar el repo en Render, este archivo crea automáticamente el servicio.
+# Render detecta Python por requirements.txt y Node por package.json.
+#
+# El frontend (Netlify) llamará a https://<service>.onrender.com/generar-pdf
+# y /generar-excel.
+
+services:
+  - type: web
+    name: planify-backend
+    runtime: node
+    region: oregon            # cambia si prefieres otra región
+    plan: free                # cold-start ~30s después de 15 min sin uso
+    branch: main
+    buildCommand: "npm ci && pip install -r requirements.txt"
+    startCommand: "node server.js"
+    healthCheckPath: "/push/status"
+    autoDeploy: true          # redeploys cuando hagas push a main
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      # Variables opcionales para push notifications (déjalas vacías si no usas push)
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      # Supabase: ya hardcodeada en server.js, pero permitir override
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
