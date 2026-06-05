@@ -109,6 +109,9 @@ let semanalExcelImportState = {
     tone: 'info'
 };
 let tareasEliminandose = new Set();
+// Selección múltiple de trabajos en vista Semanal (para asignar en bloque).
+// Se mantiene entre re-renders mientras el usuario esté en la vista semanal.
+let weeklyBulkSelected = new Set();
 
 let vistaActual = 'checkin'; // 'checkin', 'dashboard', 'trabajadores', 'historial', 'semanal', 'perfil'
 
@@ -2092,6 +2095,152 @@ window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
 // trabajo finalizado: cabecera, datos OT/aviso/HH, líder y técnicos, acciones,
 // observaciones, análisis, recomendación, y todas las mediciones asociadas
 // agrupadas por componente.
+// Editor de registros del historial — solo para planificador / administrador.
+// Permite corregir errores típicos: unidad, líder, OT, aviso SAP, HH, acciones,
+// observaciones, análisis, recomendación.
+window.abrirEditorHistorial = function(registroId) {
+    if (!esRolGestion()) return;
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { alert('Registro no encontrado'); return; }
+
+    // Modal id reutilizable
+    let modal = document.getElementById('modal-editor-historial');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modal-editor-historial';
+        modal.className = 'modal-overlay-base';
+        modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:11000;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        document.body.appendChild(modal);
+    }
+
+    const titulo = String(item.tipo || item.tarea || 'Registro')
+        .replace(/^\s*\[[^\]]+\]\s*/, '')
+        .replace(/\s*\([^)]+\)\s*$/, '').trim();
+
+    // Unidades sugeridas
+    const unidadesDisponibles = [...new Set([
+        ...(estado.equipos || []).map(e => e.ubicacion).filter(Boolean),
+        ...(estado.tareas || []).map(t => t.ubicacion).filter(Boolean),
+        'U1','U2','U3','U4','U5','SC','SMC','DESAL','PA','U1-2','U3-4-5'
+    ])].sort();
+
+    // Trabajadores
+    const trabs = (estado.trabajadores || []).slice().sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+
+    modal.innerHTML = `
+        <div style="background:#fff;border-radius:16px;max-width:720px;width:100%;max-height:92vh;overflow:auto;padding:1.4rem;box-shadow:0 20px 60px rgba(15,23,42,0.3);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1rem;">
+                <div>
+                    <span style="font-size:0.72rem;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.06em;"><i class="fa-solid fa-pen-to-square"></i> Editar registro</span>
+                    <h2 style="margin:0.3rem 0 0;font-size:1.12rem;color:#0f172a;">${escapeHtml(titulo)}</h2>
+                    <p style="margin:0.2rem 0 0;font-size:0.78rem;color:#64748b;">${escapeHtml(item.id.slice(0,8))} · ${item.created_at ? new Date(item.created_at).toLocaleString('es-CL') : ''}</p>
+                </div>
+                <button type="button" id="ed-hist-close" style="border:none;background:#f1f5f9;color:#475569;width:32px;height:32px;border-radius:999px;cursor:pointer;font-size:1.1rem;">&times;</button>
+            </div>
+            <form id="ed-hist-form" style="display:grid;grid-template-columns:repeat(2,1fr);gap:0.75rem;">
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Unidad / Ubicación</label>
+                    <input id="ed-hist-unidad" list="ed-hist-unidades" class="form-control" value="${escapeHtml(item.ubicacion || '')}" placeholder="Ej: U3">
+                    <datalist id="ed-hist-unidades">${unidadesDisponibles.map(u=>`<option value="${escapeHtml(u)}"></option>`).join('')}</datalist>
+                </div>
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Líder</label>
+                    <select id="ed-hist-lider" class="form-control">
+                        <option value="">— Sin líder —</option>
+                        ${trabs.map(t => `<option value="${escapeHtml(t.id)}" data-nombre="${escapeHtml(t.nombre)}" ${item.lider_id === t.id || item.lider_nombre === t.nombre ? 'selected' : ''}>${escapeHtml(t.nombre)}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">N° OT</label>
+                    <input id="ed-hist-ot" class="form-control" value="${escapeHtml(item.ot_numero || '')}" placeholder="Ej: 2002170498">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">N° Aviso</label>
+                    <input id="ed-hist-aviso" class="form-control" value="${escapeHtml(item.numero_aviso || '')}" placeholder="Opcional">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">HH trabajo</label>
+                    <input id="ed-hist-hh" type="number" step="0.1" class="form-control" value="${escapeHtml(item.hh_trabajo ?? '')}">
+                </div>
+                <div>
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Tipo / Tarea</label>
+                    <input id="ed-hist-tipo" class="form-control" value="${escapeHtml(item.tipo || item.tarea || '')}">
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Acciones realizadas</label>
+                    <textarea id="ed-hist-acciones" class="form-control" rows="3">${escapeHtml(item.acciones_realizadas || '')}</textarea>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Observaciones</label>
+                    <textarea id="ed-hist-obs" class="form-control" rows="2">${escapeHtml(item.observaciones || '')}</textarea>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Análisis técnico</label>
+                    <textarea id="ed-hist-analisis" class="form-control" rows="2">${escapeHtml(item.analisis || '')}</textarea>
+                </div>
+                <div style="grid-column:1/-1;">
+                    <label style="font-size:0.78rem;font-weight:700;color:#475569;display:block;margin-bottom:0.25rem;">Recomendación del analista</label>
+                    <textarea id="ed-hist-recom" class="form-control" rows="2">${escapeHtml(item.recomendacion_analista || '')}</textarea>
+                </div>
+                <p id="ed-hist-err" style="grid-column:1/-1;display:none;color:#dc2626;font-size:0.85rem;margin:0;"></p>
+            </form>
+            <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:flex-end;margin-top:1rem;">
+                <button id="ed-hist-cancel" class="btn" style="background:transparent;color:#64748b;border:1px solid #e5e7eb;">Cancelar</button>
+                <button id="ed-hist-save" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Guardar cambios</button>
+            </div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+    const closeFn = () => { modal.style.display = 'none'; };
+    modal.querySelector('#ed-hist-close').addEventListener('click', closeFn);
+    modal.querySelector('#ed-hist-cancel').addEventListener('click', closeFn);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeFn(); }, { once: true });
+
+    modal.querySelector('#ed-hist-save').addEventListener('click', async () => {
+        const errEl = modal.querySelector('#ed-hist-err');
+        errEl.style.display = 'none';
+        const setErr = m => { errEl.textContent = m; errEl.style.display = ''; };
+
+        const liderSel = modal.querySelector('#ed-hist-lider');
+        const liderId = liderSel.value || null;
+        const liderNombre = liderId
+            ? (liderSel.options[liderSel.selectedIndex]?.dataset.nombre || '')
+            : '';
+
+        const patch = {
+            ubicacion: (modal.querySelector('#ed-hist-unidad').value || '').trim() || null,
+            lider_id: liderId,
+            lider_nombre: liderNombre || null,
+            ot_numero: (modal.querySelector('#ed-hist-ot').value || '').trim() || null,
+            numero_aviso: (modal.querySelector('#ed-hist-aviso').value || '').trim() || null,
+            hh_trabajo: modal.querySelector('#ed-hist-hh').value === '' ? null : Number(modal.querySelector('#ed-hist-hh').value),
+            tipo: (modal.querySelector('#ed-hist-tipo').value || '').trim() || item.tipo,
+            acciones_realizadas: modal.querySelector('#ed-hist-acciones').value.trim() || null,
+            observaciones: modal.querySelector('#ed-hist-obs').value.trim() || null,
+            analisis: modal.querySelector('#ed-hist-analisis').value.trim() || null,
+            recomendacion_analista: modal.querySelector('#ed-hist-recom').value.trim() || null
+        };
+
+        const btn = modal.querySelector('#ed-hist-save');
+        btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando…';
+        try {
+            const tabla = (typeof tablasDb !== 'undefined' && tablasDb.historial) || 'historial';
+            const { error } = await window.supabaseClient.from(tabla).update(patch).eq('id', item.id);
+            if (error) throw error;
+            // Actualizar local
+            Object.assign(item, patch);
+            estado.historialTareas = (estado.historialTareas || []).map(t => t.id === item.id ? { ...t, ...patch } : t);
+            closeFn();
+            if (typeof renderHistorialView === 'function') renderHistorialView(true);
+        } catch (e) {
+            console.error('[historial] editar:', e);
+            setErr('Error al guardar: ' + (e.message || e));
+        } finally {
+            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar cambios';
+        }
+    });
+};
+
 window.abrirDetalleHistorial = function(registroId) {
     const modal = document.getElementById('modal-detalle-historial');
     if (!modal) return;
@@ -5248,40 +5397,41 @@ function renderEquiposView() {
     const criticidadColor = { A: '#ef4444', B: '#f59e0b', C: '#22c55e' };
     const equiposRaw = estado.equipos || [];
 
-    // Agrupar por activo + ubicación → una tarjeta por grupo
+    // ── Pre-cómputo: agrupar + ordenar + cachear el searchText UNA SOLA VEZ ──
+    // Con 300+ equipos esto evita recorrer/normalizar todo en cada tecleo.
     const gruposMap = new Map();
     equiposRaw.forEach(eq => {
         const key = `${String(eq.activo || '').trim().toLowerCase()}__${String(eq.ubicacion || '').trim().toLowerCase()}`;
         if (!gruposMap.has(key)) gruposMap.set(key, []);
         gruposMap.get(key).push(eq);
     });
-    const grupos = [...gruposMap.values()].sort((a, b) => {
-        const na = String(a[0].activo || '').localeCompare(String(b[0].activo || ''), 'es');
-        if (na !== 0) return na;
-        return String(a[0].ubicacion || '').localeCompare(String(b[0].ubicacion || ''), 'es');
-    });
+    const orderCrit = { A: 0, B: 1, C: 2 };
+    const grupos = [...gruposMap.values()]
+        .map(comps => {
+            const rep = [...comps].sort((a, b) =>
+                (orderCrit[String(a.criticidad||'').toUpperCase()] ?? 9) -
+                (orderCrit[String(b.criticidad||'').toUpperCase()] ?? 9)
+            )[0];
+            const search = normalizar(comps.flatMap(eq => [
+                eq.activo, eq.componente, eq.kks, eq.ubicacion, eq.ubicacion_original, eq.frecuencia_nueva
+            ]).join(' '));
+            return { comps, rep, search };
+        })
+        .sort((a, b) => {
+            const na = String(a.rep.activo || '').localeCompare(String(b.rep.activo || ''), 'es');
+            if (na !== 0) return na;
+            return String(a.rep.ubicacion || '').localeCompare(String(b.rep.ubicacion || ''), 'es');
+        });
 
-    const renderTarjetaEquipo = (comps) => {
-        // Elegir equipo representativo (el de mayor criticidad, o el primero)
-        const orderCrit = { A: 0, B: 1, C: 2 };
-        const rep = [...comps].sort((a, b) =>
-            (orderCrit[String(a.criticidad||'').toUpperCase()] ?? 9) -
-            (orderCrit[String(b.criticidad||'').toUpperCase()] ?? 9)
-        )[0];
+    const renderTarjetaEquipo = ({ comps, rep }) => {
         const crit = String(rep.criticidad || '').toUpperCase();
         const critColor = criticidadColor[crit] || '#64748b';
         const componentes = comps.map(c => c.componente).filter(Boolean);
         const componentesStr = componentes.length ? componentes.join(' · ') : 'Sin componentes';
-        const ubicacionEsc = String(rep.ubicacion || '').replace(/'/g, "\\'");
-        const onclick = comps.length > 1
-            ? `window.elegirComponenteYAbrirFicha('${rep.id}','${ubicacionEsc}')`
-            : `window.abrirFichaTecnica('${rep.id}')`;
-        const searchText = normalizar(comps.flatMap(eq => [
-            eq.activo, eq.componente, eq.kks, eq.ubicacion, eq.ubicacion_original, eq.frecuencia_nueva
-        ]).join(' '));
+        const ubicEsc = escapeHtml(String(rep.ubicacion || ''));
 
         return `
-            <article class="equipment-card" data-equipo-card data-search="${searchText}" onclick="${onclick}">
+            <article class="equipment-card" data-equipo-id="${rep.id}" data-equipo-multi="${comps.length > 1 ? '1' : ''}" data-equipo-ubic="${ubicEsc}">
                 <div class="equipment-card-head">
                     <div>
                         <div class="equipment-card-title">${rep.activo || 'Equipo sin nombre'}</div>
@@ -5333,36 +5483,95 @@ function renderEquiposView() {
                     <h2 style="margin:0;"><i class="fa-solid fa-layer-group"></i> Inventario de equipos</h2>
                     <div id="equipos-search-status" style="color:var(--text-muted); font-size:0.88rem;">${grupos.length} resultado(s)</div>
                 </div>
-                <div id="equipos-grid" class="equipment-grid">
-                    ${grupos.length ? grupos.map(renderTarjetaEquipo).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin equipos cargados</strong><p>Cuando existan equipos en la base, aparecerán aquí para búsqueda y consulta.</p></div></div>`}
+                <div id="equipos-grid" class="equipment-grid"></div>
+                <div id="equipos-sentinel" style="height:1px;"></div>
+                <div id="equipos-load-more" style="text-align:center; padding:0.8rem; color:#94a3b8; font-size:0.85rem; display:none;">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Cargando más equipos…
                 </div>
             </section>
         </div>
     `;
 
-    const input = document.getElementById('equipos-search');
+    const input    = document.getElementById('equipos-search');
     const clearBtn = document.getElementById('equipos-search-clear');
-    const cards = Array.from(document.querySelectorAll('[data-equipo-card]'));
-    const status = document.getElementById('equipos-search-status');
+    const grid     = document.getElementById('equipos-grid');
+    const status   = document.getElementById('equipos-search-status');
+    const sentinel = document.getElementById('equipos-sentinel');
+    const loadMore = document.getElementById('equipos-load-more');
 
-    const aplicarFiltro = () => {
-        const query = normalizar(input?.value || '');
-        let visibles = 0;
-        cards.forEach((card) => {
-            const match = !query || (card.dataset.search || '').includes(query);
-            card.style.display = match ? '' : 'none';
-            if (match) visibles += 1;
-        });
-        if (status) status.textContent = `${visibles} resultado(s)`;
-        if (clearBtn) clearBtn.style.display = query ? 'inline-flex' : 'none';
+    // Lazy render: el navegador no pelea con 300+ tarjetas + FA icons de golpe.
+    const BATCH = 60;
+    let resultados = grupos;
+    let pintados   = 0;
+
+    const pintarLote = () => {
+        const desde = pintados;
+        const hasta = Math.min(desde + BATCH, resultados.length);
+        if (desde >= hasta) {
+            if (loadMore) loadMore.style.display = 'none';
+            return;
+        }
+        // String + un único insertAdjacentHTML — minimiza reflow.
+        let html = '';
+        for (let i = desde; i < hasta; i++) html += renderTarjetaEquipo(resultados[i]);
+        grid.insertAdjacentHTML('beforeend', html);
+        pintados = hasta;
+        if (loadMore) loadMore.style.display = pintados < resultados.length ? '' : 'none';
     };
 
-    input?.addEventListener('input', aplicarFiltro);
+    const reset = () => {
+        grid.replaceChildren();
+        pintados = 0;
+        if (resultados.length === 0) {
+            grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;"><div><strong>${input?.value ? 'Sin resultados' : 'Sin equipos cargados'}</strong><p>${input?.value ? 'Prueba con otro término de búsqueda.' : 'Cuando existan equipos en la base, aparecerán aquí para búsqueda y consulta.'}</p></div></div>`;
+            if (loadMore) loadMore.style.display = 'none';
+            return;
+        }
+        pintarLote();
+    };
+
+    // Filtro en memoria sobre searchText pre-normalizado + debounce.
+    let debounceTimer = null;
+    const aplicarFiltro = () => {
+        const query = normalizar(input?.value || '');
+        resultados = !query ? grupos : grupos.filter(g => g.search.includes(query));
+        if (status) status.textContent = `${resultados.length} resultado(s)`;
+        if (clearBtn) clearBtn.style.display = query ? 'inline-flex' : 'none';
+        reset();
+    };
+
+    input?.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(aplicarFiltro, 110);
+    });
     clearBtn?.addEventListener('click', () => {
         input.value = '';
+        clearTimeout(debounceTimer);
         aplicarFiltro();
         input.focus();
     });
+
+    // Click delegado: una sola escucha en el grid, no un onclick por tarjeta.
+    grid.addEventListener('click', (ev) => {
+        const card = ev.target.closest('[data-equipo-id]');
+        if (!card) return;
+        const id = card.dataset.equipoId;
+        if (card.dataset.equipoMulti === '1') {
+            window.elegirComponenteYAbrirFicha(id, card.dataset.equipoUbic || '');
+        } else {
+            window.abrirFichaTecnica(id);
+        }
+    });
+
+    // Lazy load por scroll: el sentinel debajo del grid dispara el próximo lote.
+    if ('IntersectionObserver' in window && sentinel) {
+        const io = new IntersectionObserver((entries) => {
+            if (entries.some(e => e.isIntersecting)) pintarLote();
+        }, { rootMargin: '400px 0px' });
+        io.observe(sentinel);
+    }
+
+    reset();
 }
 
 function renderTrabajadoresView() {
@@ -6197,6 +6406,9 @@ function renderHistorialView() {
                         <button type="button" class="btn btn-outline" data-action="report" data-id="${registro.id}">
                             <i class="fa-solid fa-file-lines"></i> Informe
                         </button>
+                        ${esRolGestion() ? `<button type="button" class="btn btn-outline btn-icon" title="Editar registro (solo planificador)" data-action="edit" data-id="${registro.id}" style="border-color:#fde68a;color:#b45309;background:#fffbeb;">
+                            <i class="fa-solid fa-pen-to-square"></i>
+                        </button>` : ''}
                         <button type="button" class="btn btn-outline btn-icon" title="Eliminar registro" data-action="delete" data-id="${registro.id}" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
                             <i class="fa-solid fa-trash"></i>
                         </button>
@@ -6453,6 +6665,12 @@ function renderHistorialView() {
         if (action === 'report') {
             const id = button.dataset.id;
             if (id) window._generarInformeTarea(id);
+            return;
+        }
+
+        if (action === 'edit') {
+            const id = button.dataset.id;
+            if (id && esRolGestion()) window.abrirEditorHistorial(id);
             return;
         }
 
@@ -10474,7 +10692,8 @@ function renderSemanalView() {
             ? `<button class="btn btn-outline" type="button" onclick="window.abrirFichaTecnica('${equipoId}')"><i class="fa-solid fa-arrow-up-right-from-square"></i> Equipo</button>`
             : '';
 
-        return `<article class="weekly-task-card list-item" data-weekly-card data-weekly-search="${normalizarSemanal([
+        const seleccionado = weeklyBulkSelected.has(tarea.id);
+        return `<article class="weekly-task-card list-item${seleccionado ? ' weekly-card-selected' : ''}" data-weekly-card data-weekly-tarea-id="${tarea.id}" data-weekly-search="${normalizarSemanal([
             nombreLimpio,
             getUbicSemanal(tarea),
             otNumero,
@@ -10482,6 +10701,12 @@ function renderSemanalView() {
             ayudantes.join(' '),
             tipos.join(' ')
         ].join(' '))}">
+            ${isAdmin ? `
+                <label class="weekly-bulk-check" title="Seleccionar para asignar en bloque" onclick="event.stopPropagation();">
+                    <input type="checkbox" class="weekly-bulk-checkbox" data-weekly-bulk-id="${tarea.id}" ${seleccionado ? 'checked' : ''}>
+                    <span class="weekly-bulk-check-box"><i class="fa-solid fa-check"></i></span>
+                </label>
+            ` : ''}
             <div class="weekly-task-top">
                 <div class="weekly-task-main">
                     <div class="weekly-task-title">${nombreLimpio}</div>
@@ -10826,8 +11051,84 @@ function renderSemanalView() {
                 </section>
             </div>
         </div>
+        ${isAdmin ? `
+            <!-- Barra flotante de selección múltiple (asignar en bloque) -->
+            <div id="weekly-bulk-bar" class="weekly-bulk-bar" style="display:none;">
+                <div class="weekly-bulk-bar-info">
+                    <span class="weekly-bulk-bar-count" id="weekly-bulk-count">0</span>
+                    <span>trabajo(s) seleccionado(s)</span>
+                </div>
+                <div class="weekly-bulk-bar-actions">
+                    <button type="button" id="weekly-bulk-select-all" class="btn btn-outline btn-small"><i class="fa-regular fa-square-check"></i> Seleccionar todos visibles</button>
+                    <button type="button" id="weekly-bulk-clear" class="btn btn-outline btn-small"><i class="fa-solid fa-xmark"></i> Limpiar</button>
+                    <button type="button" id="weekly-bulk-assign" class="btn btn-primary btn-small"><i class="fa-solid fa-users-gear"></i> Asignar a todos</button>
+                </div>
+            </div>
+        ` : ''}
     `;
     mainContent.innerHTML = html;
+
+    // --- SELECCIÓN MÚLTIPLE (ASIGNACIÓN EN BLOQUE) ────────────────────────
+    if (isAdmin) {
+        const bulkBar = document.getElementById('weekly-bulk-bar');
+        const bulkCount = document.getElementById('weekly-bulk-count');
+        const bulkSelectAllBtn = document.getElementById('weekly-bulk-select-all');
+        const bulkClearBtn = document.getElementById('weekly-bulk-clear');
+        const bulkAssignBtn = document.getElementById('weekly-bulk-assign');
+
+        // Sincroniza ids inválidos (tareas que ya no existen) tras re-renders
+        const idsValidos = new Set(tareasSemanales.map(t => t.id));
+        [...weeklyBulkSelected].forEach(id => { if (!idsValidos.has(id)) weeklyBulkSelected.delete(id); });
+
+        function refreshBulkBar() {
+            const n = weeklyBulkSelected.size;
+            if (bulkCount) bulkCount.textContent = n;
+            if (bulkBar) bulkBar.style.display = n > 0 ? 'flex' : 'none';
+        }
+        refreshBulkBar();
+
+        document.querySelectorAll('.weekly-bulk-checkbox').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                const id = e.currentTarget.dataset.weeklyBulkId;
+                const card = document.querySelector(`[data-weekly-tarea-id="${id}"]`);
+                if (e.currentTarget.checked) {
+                    weeklyBulkSelected.add(id);
+                    card?.classList.add('weekly-card-selected');
+                } else {
+                    weeklyBulkSelected.delete(id);
+                    card?.classList.remove('weekly-card-selected');
+                }
+                refreshBulkBar();
+            });
+        });
+
+        bulkSelectAllBtn?.addEventListener('click', () => {
+            // Selecciona solo las tarjetas actualmente visibles (respeta filtro de búsqueda)
+            const visibles = [...document.querySelectorAll('[data-weekly-card]')]
+                .filter(el => el.style.display !== 'none');
+            visibles.forEach(el => {
+                const id = el.dataset.weeklyTareaId;
+                if (!id) return;
+                weeklyBulkSelected.add(id);
+                el.classList.add('weekly-card-selected');
+                const cb = el.querySelector('.weekly-bulk-checkbox');
+                if (cb) cb.checked = true;
+            });
+            refreshBulkBar();
+        });
+
+        bulkClearBtn?.addEventListener('click', () => {
+            weeklyBulkSelected.clear();
+            document.querySelectorAll('.weekly-bulk-checkbox').forEach(cb => { cb.checked = false; });
+            document.querySelectorAll('.weekly-card-selected').forEach(el => el.classList.remove('weekly-card-selected'));
+            refreshBulkBar();
+        });
+
+        bulkAssignBtn?.addEventListener('click', () => {
+            if (!weeklyBulkSelected.size) return;
+            window.abrirBulkAsignarSemanal([...weeklyBulkSelected]);
+        });
+    }
 
     // --- LOGICA FORMULARIO SEMANAL ---
     if (isAdmin) {
@@ -11157,6 +11458,159 @@ function asignarPersonalATarea(id) {
 
     _abrirModalIniciar(id, false);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// ASIGNACIÓN EN BLOQUE (vista Semanal) — varios trabajos a la vez.
+// Recibe un array de IDs de tarea, abre un modal y asigna el mismo
+// líder + ayudantes a todas las tareas seleccionadas.
+// ─────────────────────────────────────────────────────────────────────
+window.abrirBulkAsignarSemanal = function(ids) {
+    const lista = Array.isArray(ids) ? ids.filter(Boolean) : [];
+    if (!lista.length) return;
+    const tareas = lista.map(id => estado.tareas.find(t => t.id === id)).filter(Boolean);
+    if (!tareas.length) { alert('No se encontraron las tareas seleccionadas.'); return; }
+
+    // Limpiar modal previo si existe
+    document.getElementById('modal-bulk-asignar')?.remove();
+
+    const trabajadoresActivos = (estado.trabajadores || [])
+        .filter(t => t.activo !== false)
+        .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+
+    // Resumen de unidades/tipos para que el planificador vea qué está agrupando
+    const unidades = [...new Set(tareas.map(t => t.ubicacion || t.unidad || '—'))];
+    const conLider = tareas.filter(t => t.liderId).length;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-bulk-asignar';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10500; align-items:center; justify-content:center; padding:1rem;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; box-shadow:0 30px 70px rgba(15,23,42,0.35); width:100%; max-width:560px; max-height:90vh; overflow:auto;">
+        <div style="padding:1.1rem 1.3rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; gap:0.7rem;">
+          <div>
+            <h2 style="margin:0; font-size:1.05rem; color:#0f172a;"><i class="fa-solid fa-users-gear" style="color:#FF6900;"></i> Asignar a ${tareas.length} trabajo(s)</h2>
+            <p style="margin:0.2rem 0 0; font-size:0.8rem; color:#64748b;">
+              ${unidades.length} unidad(es) · ${conLider} con líder previo (se sobreescribirá)
+            </p>
+          </div>
+          <button type="button" id="bulk-asignar-cerrar" class="btn btn-outline btn-icon" title="Cerrar" style="border-color:#e5e7eb; color:#64748b;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div style="padding:1rem 1.3rem; display:flex; flex-direction:column; gap:0.9rem;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;"><i class="fa-solid fa-user-tie"></i> Líder / Supervisor</label>
+            <select id="bulk-asignar-lider" class="form-control" style="width:100%;">
+              <option value="">— Seleccionar líder —</option>
+              ${trabajadoresActivos.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.nombre)}${t.cargo ? ` — ${escapeHtml(t.cargo)}` : ''}</option>`).join('')}
+            </select>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;"><i class="fa-solid fa-users"></i> Ayudantes / Técnicos</label>
+            <div style="display:flex; gap:0.4rem; margin-bottom:0.35rem;">
+              <button type="button" id="bulk-asignar-ayud-todos" class="btn btn-outline btn-small" style="font-size:0.7rem;">Todos</button>
+              <button type="button" id="bulk-asignar-ayud-ninguno" class="btn btn-outline btn-small" style="font-size:0.7rem;">Ninguno</button>
+            </div>
+            <div id="bulk-asignar-ayudantes" style="max-height:220px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; padding:0.4rem; background:#f8fafc; display:flex; flex-direction:column; gap:0.15rem;">
+              ${trabajadoresActivos.length ? trabajadoresActivos.map(t => `
+                <label style="display:flex; align-items:center; gap:0.5rem; padding:0.35rem 0.6rem; background:#fff; border:1px solid #e5e7eb; border-radius:8px; font-size:0.85rem; cursor:pointer;">
+                  <input type="checkbox" class="bulk-ayud-check" value="${escapeHtml(t.id)}" data-nombre="${escapeHtml(t.nombre)}" style="width:15px; height:15px; accent-color:#FF6900;">
+                  <span>${escapeHtml(t.nombre)}${t.cargo ? ` <span style="color:#94a3b8; font-size:0.78rem;">— ${escapeHtml(t.cargo)}</span>` : ''}</span>
+                </label>
+              `).join('') : `<p style="margin:0; padding:0.5rem; color:#94a3b8; font-size:0.85rem;">Sin trabajadores activos.</p>`}
+            </div>
+          </div>
+
+          <div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:0.6rem 0.8rem; font-size:0.8rem; color:#9a3412;">
+            <i class="fa-solid fa-circle-info"></i>
+            Se aplicará el mismo líder y los mismos ayudantes a las <strong>${tareas.length}</strong> tareas seleccionadas.
+          </div>
+        </div>
+
+        <div style="padding:0.85rem 1.3rem; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button type="button" id="bulk-asignar-cancelar" class="btn btn-outline">Cancelar</button>
+          <button type="button" id="bulk-asignar-confirmar" class="btn btn-primary"><i class="fa-solid fa-check"></i> Asignar a ${tareas.length}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const liderSel = overlay.querySelector('#bulk-asignar-lider');
+    const ayudContainer = overlay.querySelector('#bulk-asignar-ayudantes');
+
+    // Si el líder elegido también aparece marcado como ayudante, lo desmarcamos
+    liderSel.addEventListener('change', () => {
+        const lid = liderSel.value;
+        ayudContainer.querySelectorAll('.bulk-ayud-check').forEach(cb => {
+            cb.disabled = (cb.value === lid);
+            if (cb.disabled) cb.checked = false;
+        });
+    });
+
+    overlay.querySelector('#bulk-asignar-ayud-todos').addEventListener('click', () => {
+        ayudContainer.querySelectorAll('.bulk-ayud-check:not(:disabled)').forEach(cb => { cb.checked = true; });
+    });
+    overlay.querySelector('#bulk-asignar-ayud-ninguno').addEventListener('click', () => {
+        ayudContainer.querySelectorAll('.bulk-ayud-check').forEach(cb => { cb.checked = false; });
+    });
+
+    const cerrar = () => overlay.remove();
+    overlay.querySelector('#bulk-asignar-cerrar').addEventListener('click', cerrar);
+    overlay.querySelector('#bulk-asignar-cancelar').addEventListener('click', cerrar);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#bulk-asignar-confirmar').addEventListener('click', async () => {
+        const liderId = liderSel.value;
+        if (!liderId) { alert('Selecciona un líder.'); return; }
+        const lider = estado.trabajadores.find(t => t.id === liderId);
+        const ayudanteIds = [...ayudContainer.querySelectorAll('.bulk-ayud-check:checked')]
+            .map(cb => cb.value).filter(v => v !== liderId);
+        const ayudanteNombres = ayudanteIds
+            .map(id => estado.trabajadores.find(t => t.id === id)?.nombre)
+            .filter(Boolean);
+
+        const btn = overlay.querySelector('#bulk-asignar-confirmar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Asignando...';
+
+        // Actualiza estado local en una sola pasada
+        const idsSet = new Set(tareas.map(t => t.id));
+        estado.tareas = estado.tareas.map(t => idsSet.has(t.id) ? {
+            ...t,
+            liderId, liderNombre: lider?.nombre || '',
+            ayudantesIds: ayudanteIds, ayudantesNombres: ayudanteNombres
+        } : t);
+
+        // Actualiza en base de datos en paralelo (best-effort: si una falla no abortamos)
+        const dbPayload = {
+            lider_id: liderId,
+            lider_nombre: lider?.nombre || '',
+            ayudantes_ids: ayudanteIds,
+            ayudantes_nombres: ayudanteNombres
+        };
+        const resultados = await Promise.allSettled(
+            tareas.map(t => _db.update('tareas', t.id, dbPayload))
+        );
+        const fallidos = resultados.filter(r => r.status === 'rejected').length;
+
+        // Limpiar selección y refrescar la vista
+        weeklyBulkSelected.clear();
+        cerrar();
+        renderizarVistaActual();
+
+        if (fallidos > 0) {
+            alert(`${tareas.length - fallidos} de ${tareas.length} tareas asignadas. ${fallidos} fallaron en la sincronización (se reintentarán).`);
+        } else {
+            // Toast simple no intrusivo
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#16a34a; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(22,163,74,0.35); z-index:11000;';
+            toast.innerHTML = `<i class="fa-solid fa-circle-check"></i> ${tareas.length} trabajo(s) asignado(s) a ${lider?.nombre || 'líder'}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3200);
+        }
+    });
+};
 
 // Para trabajadores: iniciar directo sin modal, usando asignación ya existente
 async function iniciarTareaDirecto(id) {
@@ -11501,7 +11955,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
 
 
-const RUTAS_VIBRACION_SEED = [{"nombre":"MP MM MONITOREO BOMBAS U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083260","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -1A","ubicacion_tecnica":"2893-12-LAC01-AP101-MG01","unidad":"U1"},{"nombre":"BOMBA AGUA ALIMENTACION -1B","ubicacion_tecnica":"2893-12-LAC01-AP102-MG01","unidad":"U1"},{"nombre":"BOMBA AGUA ALIMENTACION -1C","ubicacion_tecnica":"2893-12-LAC01-AP103-MG01","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1A","ubicacion_tecnica":"2893-12-LAC01-AP101-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1B","ubicacion_tecnica":"2893-12-LAC01-AP102-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL B.A.A 1C","ubicacion_tecnica":"2893-12-LAC01-AP103-KP03","unidad":"U1"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 1C","ubicacion_tecnica":"2893-12-LAC01-AP103-KP02","unidad":"U1"},{"nombre":"BOMBA AGUA CONDENSADA -1A","ubicacion_tecnica":"2893-12-LCB01-AP101-KP01","unidad":"U1"},{"nombre":"BOMBA AGUA CONDENSADA -1B","ubicacion_tecnica":"2893-12-LCB01-AP102-KP01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1A","ubicacion_tecnica":"2893-13-PAC01-AP101-KP01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1B","ubicacion_tecnica":"2893-13-PAC01-AP102-KP01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO TURBINA U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083261","equipos":[{"nombre":"SISTEMA TURBINA U1","ubicacion_tecnica":"2893-11-MAB","unidad":"U1"},{"nombre":"DESCANSOS GENERADOR U1","ubicacion_tecnica":"2893-11-MAK20-AE401","unidad":"U1"}]},{"nombre":"MP MM MONITOREO VENTILADORES U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083262","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U1","ubicacion_tecnica":"2893-15-HLB40-AN101-KN01","unidad":"U1"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U1","ubicacion_tecnica":"2893-15-HLB20-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U1","ubicacion_tecnica":"2893-15-HNF01-AN101--M01","unidad":"U1"},{"nombre":"UNIDAD VENTILADOR VTI U1","ubicacion_tecnica":"2893-15-HTC02-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR TIRO FORZADO VTF U1","ubicacion_tecnica":"2893-15-HLB10-AN101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO BOMBAS U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083269","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -2A","ubicacion_tecnica":"2893-22-LAC01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA ALIMENTACION -2B","ubicacion_tecnica":"2893-22-LAC01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA ALIMENTACION -2C","ubicacion_tecnica":"2893-22-LAC01-AP103-KP01","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2A","ubicacion_tecnica":"2893-22-LAC01-AP101-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2B","ubicacion_tecnica":"2893-22-LAC01-AP102-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR B.A.A 2C","ubicacion_tecnica":"2893-22-LAC01-AP103-KP02","unidad":"U2"},{"nombre":"BOMBA AGUA CONDENSADA -2A","ubicacion_tecnica":"2893-22-LCB01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA AGUA CONDENSADA -2B","ubicacion_tecnica":"2893-22-LCB01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2A","ubicacion_tecnica":"2893-23-PAC01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2B","ubicacion_tecnica":"2893-23-PAC01-AP102-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION AUXILIAR -2A","ubicacion_tecnica":"2893-23-PAD01-AP101-KP01","unidad":"U2"},{"nombre":"BOMBA CIRCULACION AUXILIAR -2B","ubicacion_tecnica":"2893-23-PAD01-AP102-KP01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO TURBINA U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083270","equipos":[{"nombre":"SISTEMA TURBINA U2","ubicacion_tecnica":"2893-21-MAB","unidad":"U2"},{"nombre":"DESCANSOS GENERADOR U2","ubicacion_tecnica":"2893-21-MAK20-AE401","unidad":"U2"}]},{"nombre":"MP MM MONITOREO VENTILADORES U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083271","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U2","ubicacion_tecnica":"2893-25-HLB40-AN101-MU02","unidad":"U2"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U2","ubicacion_tecnica":"2893-25-HLB20-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U2","ubicacion_tecnica":"2893-25-HNF01-AN101--M01","unidad":"U2"},{"nombre":"UNIDAD VENTILADOR VTI U2","ubicacion_tecnica":"2893-25-HTC02-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR TIRO FORZADO VTF U2","ubicacion_tecnica":"2893-25-HLB10-AN101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO BOMBAS U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083278","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA ALIMENTACION -3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA ALIMENTACION -3C","ubicacion_tecnica":"2893-32-LAC01-AP103-KP01","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A B.A.A 3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B B.A.A 3A","ubicacion_tecnica":"2893-32-LAC01-AP101-KP03","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A B.A.A 3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B B.A.A 3B","ubicacion_tecnica":"2893-32-LAC01-AP102-KP03","unidad":"U3"},{"nombre":"BOMBA AGUA CONDENSADA -3A","ubicacion_tecnica":"2893-32-LCB01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA AGUA CONDENSADA -3B","ubicacion_tecnica":"2893-32-LCB01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3A","ubicacion_tecnica":"2893-33-PAC01-AP101-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3B","ubicacion_tecnica":"2893-33-PAC01-AP102-KP01","unidad":"U3"},{"nombre":"BOMBA CIRCULACION AUXILIAR -3A","ubicacion_tecnica":"2893-33-PAD01-AP101-KP02","unidad":"U3"},{"nombre":"BOMBA CIRCULACION AUXILIAR -3B","ubicacion_tecnica":"2893-33-PAD01-AP102-KP02","unidad":"U3"}]},{"nombre":"MP MM MONITOREO TURBINA U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083279","equipos":[{"nombre":"SISTEMA TURBINA U3","ubicacion_tecnica":"2893-31-MAB","unidad":"U3"},{"nombre":"DESCANSOS GENERADOR U3","ubicacion_tecnica":"2893-31-MAK20-AE401","unidad":"U3"}]},{"nombre":"MP MM MONITOREO VENTILADORES U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083280","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U3","ubicacion_tecnica":"2893-35-HLB40-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U3","ubicacion_tecnica":"2893-35-HLB20-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U3","ubicacion_tecnica":"2893-35-HNF01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U3","ubicacion_tecnica":"2893-35-HNC01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR TIRO FORZADO VTF U3","ubicacion_tecnica":"2893-35-HLB10-AN101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO BOMBAS U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083287","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -4A","ubicacion_tecnica":"2893-42-LAC01-AP101-MU01","unidad":"U4"},{"nombre":"BOMBA AGUA ALIMENTACION -4B","ubicacion_tecnica":"2893-42-LAC01-AP102-MU01","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -A (B.A.A 4A)","ubicacion_tecnica":"2893-42-LAC01-AP101-KP02","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B (B.A.A 4A)","ubicacion_tecnica":"2893-42-LAC01-AP101-KP03","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B (B.A.A 4B)","ubicacion_tecnica":"2893-42-LAC01-AP102-KP03","unidad":"U4"},{"nombre":"BOMBA AGUA CONDENSADA -4A","ubicacion_tecnica":"2893-42-LCB01-AP101-KP01","unidad":"U4"},{"nombre":"BOMBA AGUA CONDENSADA -4B","ubicacion_tecnica":"2893-42-LCB01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4A","ubicacion_tecnica":"2893-43-PAC01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4B","ubicacion_tecnica":"2893-43-PAC01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION AUXILIAR -4A","ubicacion_tecnica":"2893-43-PAD01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA CIRCULACION AUXILIAR -4B","ubicacion_tecnica":"2893-43-PAD01-AP102--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO TURBINA U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083288","equipos":[{"nombre":"SISTEMA TURBINA U4","ubicacion_tecnica":"2893-41-MAB","unidad":"U4"},{"nombre":"DESCANSOS GENERADOR U4","ubicacion_tecnica":"2893-41-MAK20-AE401","unidad":"U4"}]},{"nombre":"MP MM MONITOREO VENTILADORES U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083289","equipos":[{"nombre":"VENTILADOR AIRE IGNITORES U4","ubicacion_tecnica":"2893-45-HLB40-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE PRIMARIO VAP U4","ubicacion_tecnica":"2893-45-HLB20-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U4","ubicacion_tecnica":"2893-45-HNF01-AN101--M01","unidad":"U4"},{"nombre":"UNIDAD VENTILADOR VTI U4","ubicacion_tecnica":"2893-45-HTC02-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR TIRO FORZADO VTF U4","ubicacion_tecnica":"2893-45-HLB10-AN101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO BOMBAS U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083296","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -5A","ubicacion_tecnica":"2893-52-LAC01-AP101--M03","unidad":"U5"},{"nombre":"BOMBA AGUA ALIMENTACION -5B","ubicacion_tecnica":"2893-52-LAC01-AP102--M03","unidad":"U5"},{"nombre":"BOMBA AGUA ALIMENTACION -5C","ubicacion_tecnica":"2893-52-LAC01-AP103--M03","unidad":"U5"},{"nombre":"BOMBA AGUA CONDENSADA -5A","ubicacion_tecnica":"2893-52-LCB01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA AGUA CONDENSADA -5B","ubicacion_tecnica":"2893-52-LCB01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5A","ubicacion_tecnica":"2893-53-PAC01-AP101-KP01","unidad":"U5"},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5B","ubicacion_tecnica":"2893-53-PAC01-AP102-KP01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO TURBINA U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083297","equipos":[{"nombre":"SISTEMA TURBINA U5","ubicacion_tecnica":"2893-51-MAB","unidad":"U5"},{"nombre":"DESCANSOS GENERADOR U5","ubicacion_tecnica":"2893-51-MAK20-AE401","unidad":"U5"}]},{"nombre":"MP MM MONITOREO VENTILADORES U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083298","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U5","ubicacion_tecnica":"2893-55-HLB20-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U5","ubicacion_tecnica":"2893-55-HNF01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR TIRO FORZADO VTF U5","ubicacion_tecnica":"2893-55-HLB10-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U5","ubicacion_tecnica":"2893-55-HNC01-AN101--M01","unidad":"U5"},{"nombre":"MOTOR VAI U5","ubicacion_tecnica":"2893-55-HLB40-AN101--M01","unidad":"U5"}]},{"nombre":"MP MM SISTEMAS COMUNES  BOMBAS PRETRA 90D","unidad":"SC","frecuencia":"3M","plan":"5000083306","equipos":[{"nombre":"BOMBA AGUA PRETRATADA -A U1-2","ubicacion_tecnica":"2893-01-GAD12-AP101--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PRETRATADA -B U1-2","ubicacion_tecnica":"2893-01-GAD12-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PRETRATADA -C U1-2","ubicacion_tecnica":"2893-01-GAD12-AP103-KP01","unidad":"SC"}]},{"nombre":"MM MONITOREO BOMBAS RETROFIT 90D","unidad":"SC","frecuencia":"3M","plan":"5000083308","equipos":[{"nombre":"BOMBA HUMECTACION -1 HTQ41AP001","ubicacion_tecnica":"2893-01-GDL12-AP101--M01","unidad":"SC"},{"nombre":"BOMBA HUMECTACION -2 HTQ42AP001","ubicacion_tecnica":"2893-01-GDL12-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U1 01HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP101--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U2 02HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U4 04HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP104--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","ubicacion_tecnica":"2893-01-HTJ02-AP001--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","ubicacion_tecnica":"2893-01-HTJ02-AP002--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO -1 HTP13AP001","ubicacion_tecnica":"2893-15-HTL02-AP102--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO -2 HTP23AP001","ubicacion_tecnica":"2893-25-HTL02-AP103--M01","unidad":"SC"}]},{"nombre":"MP MM MONITOREO BOMBAS U1  90 D","unidad":"U1","frecuencia":"3M","plan":"5000083264","equipos":[{"nombre":"BOMBA CIRCULACION AUXILIAR -1A","ubicacion_tecnica":"2893-13-PAD01-AP101--M01","unidad":"U1"},{"nombre":"BOMBA CIRCULACION AUXILIAR -1B","ubicacion_tecnica":"2893-13-PAD01-AP102--M01","unidad":"U1"},{"nombre":"BOMBA BOOSTER -1A","ubicacion_tecnica":"2893-13-PAD04-AP101--M01","unidad":"U1"},{"nombre":"BOMBA BOOSTER -1B","ubicacion_tecnica":"2893-13-PAD04-AP102--M01","unidad":"U1"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1A","ubicacion_tecnica":"2893-13-PGH01-AP101--M01","unidad":"U1"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1B","ubicacion_tecnica":"2893-13-PGH01-AP102--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO BOMBAS U2  90 D","unidad":"U2","frecuencia":"3M","plan":"5000083273","equipos":[{"nombre":"BOMBA BOOSTER -2A","ubicacion_tecnica":"2893-23-PAD04-AP101--M01","unidad":"U2"},{"nombre":"BOMBA BOOSTER -2B","ubicacion_tecnica":"2893-23-PAD04-AP102--M01","unidad":"U2"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2A","ubicacion_tecnica":"2893-23-PGH01-AP101--M01","unidad":"U2"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2B","ubicacion_tecnica":"2893-23-PGH01-AP102--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO BOMBAS U4  90 D","unidad":"U4","frecuencia":"3M","plan":"5000083291","equipos":[{"nombre":"BOMBA BOOSTER -4A","ubicacion_tecnica":"2893-43-PAD04-AP101--M01","unidad":"U4"},{"nombre":"BOMBA BOOSTER -4B","ubicacion_tecnica":"2893-43-PAD04-AP102--M01","unidad":"U4"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4A","ubicacion_tecnica":"2893-43-PGH01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4B","ubicacion_tecnica":"2893-43-PGH01-AP102--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO CAR U1  90D","unidad":"U1","frecuencia":"3M","plan":"5000083266","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U1","ubicacion_tecnica":"2893-15-HLD20-AC101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO CAR U2  90D","unidad":"U2","frecuencia":"3M","plan":"5000083275","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U2","ubicacion_tecnica":"2893-25-HLD20-AC101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO CAR U3  90D","unidad":"U3","frecuencia":"3M","plan":"5000083284","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U3","ubicacion_tecnica":"2893-35-HLD20-AC101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO CAR U4  90D","unidad":"U4","frecuencia":"3M","plan":"5000083293","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U4","ubicacion_tecnica":"2893-45-HLD20-AC101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO CAR U5  90D","unidad":"U5","frecuencia":"3M","plan":"5000083303","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U4","ubicacion_tecnica":"2893-55-HLD20-AC101--M02","unidad":"U5"}]},{"nombre":"MP MM MONITOREO BOMBAS U3  180D","unidad":"U1-2","frecuencia":"6M","plan":"5000083282","equipos":[{"nombre":"BOMBA PETROLEO DIESEL -A U1-2","ubicacion_tecnica":"2893-01-EGE03-AP101--M01","unidad":"U1-2"},{"nombre":"BOMBA PETROLEO DIESEL -B U1-2","ubicacion_tecnica":"2893-01-EGE03-AP102--M01","unidad":"U1-2"},{"nombre":"BOMBA PETROLEO DIESEL -A U3-4-5","ubicacion_tecnica":"2893-01-EGE04-AP101--M01","unidad":"U3-4-5"},{"nombre":"BOMBA PETROLEO DIESEL -B U3-4-5","ubicacion_tecnica":"2893-01-EGE04-AP102--M01","unidad":"U3-4-5"},{"nombre":"BOMBA BOOSTER -4A","ubicacion_tecnica":"2893-33-PAD04-AP101--M01","unidad":"U3"},{"nombre":"BOMBA BOOSTER -3B","ubicacion_tecnica":"2893-33-PAD04-AP102--M01","unidad":"U3"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -A","ubicacion_tecnica":"2893-33-PGH01-AP101--M01","unidad":"U3"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -B","ubicacion_tecnica":"2893-33-PGH01-AP102--M01","unidad":"U3"},{"nombre":"BOMBA YESO (CEBADO) A","ubicacion_tecnica":"2893-35-HRA01-AP101--M01","unidad":"U3"},{"nombre":"BOMBA YESO (CEBADO) B","ubicacion_tecnica":"2893-35-HRA01-AP102--M01","unidad":"U3"},{"nombre":"BOMBA RECIRCULACION ABSORBER -B","ubicacion_tecnica":"2893-35-HRA05-AP102--M01","unidad":"U3"},{"nombre":"BOMBA ELIMINADOR NIEBLA -A","ubicacion_tecnica":"2893-35-HRA07-AP101--M01","unidad":"U3"},{"nombre":"BOMBA ELIMINADOR NIEBLA -B","ubicacion_tecnica":"2893-35-HRA07-AP102--M01","unidad":"U3"},{"nombre":"BOMBA DE VACIO FILTRO BANDA A","ubicacion_tecnica":"2893-35-HRB02-AP101--M01","unidad":"U3"},{"nombre":"BOMBA DE VACIO FILTRO BANDA B","ubicacion_tecnica":"2893-35-HRB03-AP101--M01","unidad":"U3"},{"nombre":"BOMBA FILTRADO -A","ubicacion_tecnica":"2893-35-HRB04-AP102--M01","unidad":"U3"},{"nombre":"BOMBA FILTRADO -B","ubicacion_tecnica":"2893-35-HRB04-AP202--M01","unidad":"U3"},{"nombre":"BOMBAS RECICLADO -B","ubicacion_tecnica":"2893-35-HRD02-AP102--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO BOMBAS U5  180D","unidad":"U5","frecuencia":"6M","plan":"5000083300","equipos":[{"nombre":"BOMBA BOOSTER -5A","ubicacion_tecnica":"2893-53-PAD04-AP101--M01","unidad":"U5"},{"nombre":"BOMBA BOOSTER -5B","ubicacion_tecnica":"2893-53-PAD04-AP102--M01","unidad":"U5"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5A","ubicacion_tecnica":"2893-53-PGH01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5B","ubicacion_tecnica":"2893-53-PGH01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA YESO (CEBADO) 5A","ubicacion_tecnica":"2893-55-HRA01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA YESO (CEBADO) 5B","ubicacion_tecnica":"2893-55-HRA01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA ELIMINADOR NIEBLA -5A","ubicacion_tecnica":"2893-55-HRA07-AP101--M01","unidad":"U5"},{"nombre":"BOMBA ELIMINADOR NIEBLA -5B","ubicacion_tecnica":"2893-55-HRA07-AP102--M01","unidad":"U5"},{"nombre":"BOMBA ALIMENTACION LECHADA 5A","ubicacion_tecnica":"2893-55-HRD03-AP101--M01","unidad":"U5"},{"nombre":"BOMBA ALIMENTACION LECHADA 5B","ubicacion_tecnica":"2893-55-HRD03-AP102--M01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO ESCORIA U1  180 D","unidad":"U1","frecuencia":"U1","plan":"5000083265","equipos":[{"nombre":"CADENA SUMERGIDA U1","ubicacion_tecnica":"2893-16-ETA01-AT101--M01","unidad":"U1"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U1","ubicacion_tecnica":"2893-16-ETA02-AF101--M01","unidad":"U1"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U1","ubicacion_tecnica":"2893-16-ETA02-AF102--M01","unidad":"U1"},{"nombre":"TRITURADOR DE ESCORIA U1","ubicacion_tecnica":"2893-16-ETA01-AJ101--M01","unidad":"U1"},{"nombre":"BOMBA VACIO -1B","ubicacion_tecnica":"2893-16-ETG08-AP202","unidad":"U1"}]},{"nombre":"MP MM MONITOREO ESCORIA U2  180 D","unidad":"U2","frecuencia":"6M","plan":"5000083274","equipos":[{"nombre":"CADENA SUMERGIDA U2","ubicacion_tecnica":"2893-26-ETA01-AT101--M01","unidad":"U2"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U2","ubicacion_tecnica":"2893-26-ETA02-AF101--M01","unidad":"U2"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U2","ubicacion_tecnica":"2893-26-ETA02-AF102--M01","unidad":"U2"},{"nombre":"TRITURADOR DE ESCORIA U2","ubicacion_tecnica":"2893-26-ETA01-AJ101--M01","unidad":"U2"},{"nombre":"BOMBA VACIO 2B","ubicacion_tecnica":"2893-26-ETG08-AP202","unidad":"U2"}]},{"nombre":"MP MM MONITOREO ESCORIA U3  180 D","unidad":"U3","frecuencia":"6M","plan":"5000083283","equipos":[{"nombre":"CADENA SUMERGIDA U3","ubicacion_tecnica":"2893-36-ETA01-AT101--M01","unidad":"U3"},{"nombre":"CORREA ALIM CALIZA AL MOLINO DE MARTILLO U3","ubicacion_tecnica":"2893-35-HRD01-AF101--M01","unidad":"U3"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U3","ubicacion_tecnica":"2893-36-ETA02-AF101--M01","unidad":"U3"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U3","ubicacion_tecnica":"2893-36-ETA02-AF102--M01","unidad":"U3"},{"nombre":"TRITURADOR DE ESCORIA U3","ubicacion_tecnica":"2893-36-ETA01-AJ101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO ESCORIA U4  180 D","unidad":"U4","frecuencia":"6M","plan":"5000083292","equipos":[{"nombre":"CADENA SUMERGIDA U4","ubicacion_tecnica":"2893-46-ETA01-AT101--M01","unidad":"U4"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U4","ubicacion_tecnica":"2893-46-ETA02-AF101--M01","unidad":"U4"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U4","ubicacion_tecnica":"2893-46-ETA02-AF102--M01","unidad":"U4"},{"nombre":"TRITURADOR DE ESCORIA U4","ubicacion_tecnica":"2893-46-ETA01-AJ101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO ESCORIA U5  180 D","unidad":"U5","frecuencia":"6M","plan":"5000083302","equipos":[{"nombre":"CADENA SUMERGIDA U5","ubicacion_tecnica":"2893-56-ETA01-AT101--M01","unidad":"U5"},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U5","ubicacion_tecnica":"2893-56-ETA02-AF101--M01","unidad":"U5"},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U5","ubicacion_tecnica":"2893-56-ETA02-AF102--M01","unidad":"U5"},{"nombre":"TRITURADOR DE ESCORIA U5","ubicacion_tecnica":"2893-56-ETA01-AJ101--M01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO CONDICIONES LLENADO SILO","unidad":"SMC","frecuencia":"1M","plan":"5000083307","equipos":[{"nombre":"CORREA TRANSPORTADORA C4/5","ubicacion_tecnica":"2893-01-ECA02-AF003--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C6B","ubicacion_tecnica":"2893-01-ECA03-AF004--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C7","ubicacion_tecnica":"2893-01-ECA04-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C8","ubicacion_tecnica":"2893-01-ECA05-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C9","ubicacion_tecnica":"2893-01-ECA06-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C10","ubicacion_tecnica":"2893-01-ECA08-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C11","ubicacion_tecnica":"2893-01-ECA09-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C12","ubicacion_tecnica":"2893-01-ECA10-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C13","ubicacion_tecnica":"2893-01-ECA11-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U1U2","ubicacion_tecnica":"2893-01-ECA17-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U3U4","ubicacion_tecnica":"2893-01-ECA17-AF002--M01","unidad":"SMC"},{"nombre":"CORREA TRIPPER U5","ubicacion_tecnica":"2893-01-ECA17-AF003--M01","unidad":"SMC"}]},{"nombre":"MP MM MONITOREO CONDICIONES PUERTO 30D","unidad":"SMC","frecuencia":"1M","plan":"5000083310","equipos":[{"nombre":"MECANISMO ELEVACION GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU001--M01","unidad":"SMC"},{"nombre":"MECANISMO CIERRE  GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU002--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -A GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU003--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -B GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU003--M02","unidad":"SMC"},{"nombre":"MECANISMO PLUMA GRUA 1","ubicacion_tecnica":"2893-01-EAA02-AU004--M01","unidad":"SMC"},{"nombre":"MECANISMO ELEVACION GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU001--M01","unidad":"SMC"},{"nombre":"MECANISMO CIERRE GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU002--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -A GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU003--M01","unidad":"SMC"},{"nombre":"MECANISMO GIRO -B GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU003--M02","unidad":"SMC"},{"nombre":"MECANISMO PLUMA GRUA 2","ubicacion_tecnica":"2893-01-EAA03-AU004--M01","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-1","ubicacion_tecnica":"2893-01-EAA06-AF001--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-1","ubicacion_tecnica":"2893-01-EAA06-AF001--M02","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-2","ubicacion_tecnica":"2893-01-EAA06-AF002--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-2","ubicacion_tecnica":"2893-01-EAA06-AF002--M02","unidad":"SMC"},{"nombre":"VIBRADOR -B MOTOR C9-3","ubicacion_tecnica":"2893-01-EAA06-AF003--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR C9-3","ubicacion_tecnica":"2893-01-EAA06-AF003--M02","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-1","ubicacion_tecnica":"2893-01-EAA07-AF001--M01","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-2","ubicacion_tecnica":"2893-01-EAA07-AF002--M01","unidad":"SMC"},{"nombre":"TRANSPORTADOR 9-3","ubicacion_tecnica":"2893-01-EAA07-AF003--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C1","ubicacion_tecnica":"2893-01-EAA08-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C2","ubicacion_tecnica":"2893-01-EAA09-AF001--M02","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA C3","ubicacion_tecnica":"2893-01-EAA10-AF001--M01","unidad":"SMC"},{"nombre":"CORREA TRANSPORTADORA APILADOR RADIAL","ubicacion_tecnica":"2893-01-EAD01-AF001--M01","unidad":"SMC"}]},{"nombre":"MP MM  PLANTA DE AGUAS COMPRESORES 30D","unidad":"DESAL","frecuencia":"1M","plan":"5000083312","equipos":[{"nombre":"COMPRESOR VAPOR DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES8","ubicacion_tecnica":"2893-01-GDB01-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES9","ubicacion_tecnica":"2893-01-GDB02-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES10","ubicacion_tecnica":"2893-01-GDB03-AN101--M01","unidad":"DESAL"},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES11","ubicacion_tecnica":"2893-01-GDB04-AN101--M01","unidad":"DESAL"},{"nombre":"BOMBA ELECTRICA -A SCI","ubicacion_tecnica":"2893-01-SGX01-AP101--M01","unidad":"DESAL"},{"nombre":"BOMBA ELECTRICA -B SCI","ubicacion_tecnica":"2893-01-SGX01-AP102--M01","unidad":"DESAL"},{"nombre":"BOMBA DIESEL SCI","ubicacion_tecnica":"2893-01-SGX01-AP201--M01","unidad":"DESAL"},{"nombre":"BOMBA JOCKEY","ubicacion_tecnica":"2893-01-SGX01-AP202--M01","unidad":"DESAL"}]},{"nombre":"MP MM MONITOREO VENTILADORES U1  60 D","unidad":"U1","frecuencia":"2M","plan":"5000083263","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -1A","ubicacion_tecnica":"2893-15-HLB30-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR AIRE SELLO VAS -1B","ubicacion_tecnica":"2893-15-HLB31-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -1 QEH05AN001 U1","ubicacion_tecnica":"2893-15-HSD01-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -2 QEH08AN001 U1","ubicacion_tecnica":"2893-15-HSD01-AN102--M01","unidad":"U1"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1A","ubicacion_tecnica":"2893-15-HLB50-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1B","ubicacion_tecnica":"2893-15-HLB51-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR AIRE IGNITORES U1","ubicacion_tecnica":"2893-15-HLB40-AN101--M01","unidad":"U1"}]},{"nombre":"MP MM MONITOREO VENTILADORES U2  60 D","unidad":"U2","frecuencia":"2M","plan":"5000083272","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -2A","ubicacion_tecnica":"2893-25-HLB30-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR AIRE SELLO VAS -2B","ubicacion_tecnica":"2893-25-HLB31-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2A","ubicacion_tecnica":"2893-25-HLB50-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2B","ubicacion_tecnica":"2893-25-HLB51-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR AIRE IGNITORES U2","ubicacion_tecnica":"2893-25-HLB40-AN101--M01","unidad":"U2"}]},{"nombre":"MP MM MONITOREO VENTILADORES U3  60 D","unidad":"U3","frecuencia":"2M","plan":"5000083281","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -3A","ubicacion_tecnica":"2893-35-HLB30-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3B","ubicacion_tecnica":"2893-35-HLB31-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3A","ubicacion_tecnica":"2893-35-HLB50-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3B","ubicacion_tecnica":"2893-35-HLB51-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3A FGD","ubicacion_tecnica":"2893-35-HNC02-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR AIRE SELLO VAS -3B FGD","ubicacion_tecnica":"2893-35-HNC03-AN101--M01","unidad":"U3"},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3A","ubicacion_tecnica":"2893-35-HNF02-BB101-KN01","unidad":"U3"},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3B","ubicacion_tecnica":"2893-35-HNF02-BB102-KN01","unidad":"U3"},{"nombre":"VENTILADOR AIRE IGNITORES U3","ubicacion_tecnica":"2893-35-HLB40-AN101--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO VENTILADORES U4  60 D","unidad":"U4","frecuencia":"2M","plan":"5000083290","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -4A","ubicacion_tecnica":"2893-45-HLB30-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE SELLO VAS -4B","ubicacion_tecnica":"2893-45-HLB31-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DILUCION AMON -4A HSA02AN101","ubicacion_tecnica":"2893-45-HSD01-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DILUCION AMON -4B HSA02AN102","ubicacion_tecnica":"2893-45-HSD01-AN102--M01","unidad":"U4"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4A","ubicacion_tecnica":"2893-45-HLB50-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4B","ubicacion_tecnica":"2893-45-HLB51-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR AIRE IGNITORES U4","ubicacion_tecnica":"2893-45-HLB40-AN101--M01","unidad":"U4"}]},{"nombre":"MP MM MONITOREO VENTILADORES U5  60 D","unidad":"U5","frecuencia":"2M","plan":"5000083299","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -5A","ubicacion_tecnica":"2893-55-HLB30-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5B","ubicacion_tecnica":"2893-55-HLB31-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5A","ubicacion_tecnica":"2893-55-HLB50-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5B","ubicacion_tecnica":"2893-55-HLB51-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5A FGD","ubicacion_tecnica":"2893-55-HNC02-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE SELLO VAS -5B FGD","ubicacion_tecnica":"2893-55-HNC03-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE PURGA 5A","ubicacion_tecnica":"2893-55-HNF02-BB101-KN01","unidad":"U5"},{"nombre":"VENTILADOR AIRE PURGA 5B","ubicacion_tecnica":"2893-55-HNF02-BB102-KN01","unidad":"U5"},{"nombre":"VENTILADOR DILUCION AMON -5A HSA02AN101","ubicacion_tecnica":"2893-55-HSD01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR DILUCION AMON -5B HSA02AN102","ubicacion_tecnica":"2893-55-HSD01-AN102--M01","unidad":"U5"},{"nombre":"VENTILADOR AIRE IGNITORES U5","ubicacion_tecnica":"2893-55-HLB40-AN101--M01","unidad":"U5"}]},{"nombre":"MONITOREO COND LAVADO U1-5 1M","unidad":"U1","frecuencia":"1M","plan":"5000083812","equipos":[{"nombre":"BOMBA -A LAVADO REJA MOVIL U1","ubicacion_tecnica":"2893-13-PUA02-AP101--M01","unidad":"U1"},{"nombre":"BOMBA -B LAVADO REJA MOVIL U1","ubicacion_tecnica":"2893-13-PUA02-AP102--M01","unidad":"U1"},{"nombre":"BOMBA -A LAVADO REJA MOVIL U2","ubicacion_tecnica":"2893-23-PUA02-AP101--M01","unidad":"U2"},{"nombre":"BOMBA -B LAVADO REJA MOVIL U2","ubicacion_tecnica":"2893-23-PUA02-AP102--M01","unidad":"U2"},{"nombre":"BOMBA -A LAVADO REJA MOVIL U3","ubicacion_tecnica":"2893-33-PUA02-AP101--M01","unidad":"U3"},{"nombre":"BOMBA -B LAVADO REJA MOVIL U3","ubicacion_tecnica":"2893-33-PUA02-AP102--M01","unidad":"U3"},{"nombre":"BOMBA -A LAVADO REJA MOVIL U4","ubicacion_tecnica":"2893-43-PUA02-AP101--M01","unidad":"U4"},{"nombre":"BOMBA -B LAVADO REJA MOVIL U4","ubicacion_tecnica":"2893-43-PUA02-AP102--M01","unidad":"U4"},{"nombre":"BOMBA -A LAVADO REJA MOVIL U5","ubicacion_tecnica":"2893-53-PUA02-AP101--M01","unidad":"U5"},{"nombre":"BOMBA -B LAVADO REJA MOVIL U5","ubicacion_tecnica":"2893-53-PUA02-AP102--M01","unidad":"U5"}]},{"nombre":"MP MM MONITOREO CONDIC TRANSP RETRO  90","unidad":"SC","frecuencia":"3M","plan":"5000083330","equipos":[{"nombre":"ALIMENTADOR ROTATORIO SILO 1 HTJ11AF001","ubicacion_tecnica":"2893-01-HTJ01-AF001-KN01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTJ11AF001-M01","ubicacion_tecnica":"2893-01-HTJ01-AF001--M01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTJ11AN001-M01","ubicacion_tecnica":"2893-01-HTJ01-AF001--M02","unidad":"SC"},{"nombre":"VENTILADOR ENFRIAMIENTO HTJ31AN001","ubicacion_tecnica":"2893-01-HTJ01-AF002-KN01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTJ31AF001-M01","ubicacion_tecnica":"2893-01-HTJ01-AF002--M01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTJ31AN001-M01","ubicacion_tecnica":"2893-01-HTJ01-AF002--M02","unidad":"SC"},{"nombre":"MOTOR TRASPORTADOR HTK13AF001-M01","ubicacion_tecnica":"2893-01-HTJ02-AF001--M01","unidad":"SC"},{"nombre":"MOTOR TRANSPORTADOR HTK33AF001-M01","ubicacion_tecnica":"2893-01-HTJ02-AF002--M01","unidad":"SC"},{"nombre":"MOTOR TRANSPORTADOR HTK19AF001-M01","ubicacion_tecnica":"2893-01-HTJ02-AF003--M01","unidad":"SC"},{"nombre":"MOTOR TORNILLO HTK15AF001-M01","ubicacion_tecnica":"2893-01-HTJ02-AF011--M03","unidad":"SC"},{"nombre":"MOTOR TORNILLO HTK35AF001-M01","ubicacion_tecnica":"2893-01-HTJ02-AF012--M03","unidad":"SC"},{"nombre":"VENTILADOR FILTRO AIRE SALIDA HTK17AN001","ubicacion_tecnica":"2893-01-HTJ02-AM000-KN01","unidad":"SC"},{"nombre":"MOTOR VENT FILTRO SALIDA HTK17AN001-M01","ubicacion_tecnica":"2893-01-HTJ02-AM000--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK17AM001-M01","ubicacion_tecnica":"2893-01-HTJ02-AM001--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK17AM002-M01","ubicacion_tecnica":"2893-01-HTJ02-AM002--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK17AM003-M01","ubicacion_tecnica":"2893-01-HTJ02-AM003--M01","unidad":"SC"},{"nombre":"VENTILADOR FILTRO HTK37AN001","ubicacion_tecnica":"2893-01-HTJ02-AM010-KN01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTK37AN001-M01","ubicacion_tecnica":"2893-01-HTJ02-AM010--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK37AM001-M01","ubicacion_tecnica":"2893-01-HTJ02-AM011--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK37AM002-M01","ubicacion_tecnica":"2893-01-HTJ02-AM012--M01","unidad":"SC"},{"nombre":"MOTOR HIDRATADOR HTK37AM003-M01","ubicacion_tecnica":"2893-01-HTJ02-AM013--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","ubicacion_tecnica":"2893-01-HTJ02-AP001-KP01","unidad":"SC"},{"nombre":"MOTOR BOMBA HTQ37AP001-M01","ubicacion_tecnica":"2893-01-HTJ02-AP001--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","ubicacion_tecnica":"2893-01-HTJ02-AP002-KP01","unidad":"SC"},{"nombre":"MOTOR BOMBA HTQ38AP001-M01","ubicacion_tecnica":"2893-01-HTJ02-AP002--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTP33AF002-M01","ubicacion_tecnica":"2893-01-HTP03-AF001--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTP43AF002-M01","ubicacion_tecnica":"2893-01-HTP03-AF002--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTP63AF002-M01","ubicacion_tecnica":"2893-01-HTP03-AF003--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTP73AF002-M01","ubicacion_tecnica":"2893-01-HTP03-AF004--M01","unidad":"SC"},{"nombre":"MOTOR DESCARGADOR HTP35AM001-M01","ubicacion_tecnica":"2893-01-HTP03-AM001--M01","unidad":"SC"},{"nombre":"MOTOR DESCARGADOR HTP45AM001-M01","ubicacion_tecnica":"2893-01-HTP03-AM002--M01","unidad":"SC"},{"nombre":"MOTOR DESCARGADOR HTP65AM001-M01","ubicacion_tecnica":"2893-01-HTP03-AM003--M01","unidad":"SC"},{"nombre":"MOTOR DESCARGADOR HTP75AM001-M01","ubicacion_tecnica":"2893-01-HTP03-AM004--M01","unidad":"SC"},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","ubicacion_tecnica":"2893-15-HTP11-AF101-KN01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","ubicacion_tecnica":"2893-15-HTP11-AF101--M03","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","ubicacion_tecnica":"2893-15-HTP11-AF102--M01","unidad":"SC"},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","ubicacion_tecnica":"2893-15-HTP11-AF103--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","ubicacion_tecnica":"2893-15-HTP11-AF104--M01","unidad":"SC"},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","ubicacion_tecnica":"2893-15-HTP11-AT101--M01","unidad":"SC"},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","ubicacion_tecnica":"2893-25-HTP11-AF101-KN01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK51AF001-M01","ubicacion_tecnica":"2893-25-HTP11-AF101--M01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","ubicacion_tecnica":"2893-25-HTP11-AF101--M03","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","ubicacion_tecnica":"2893-25-HTP11-AF102--M01","unidad":"SC"},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","ubicacion_tecnica":"2893-25-HTP11-AF103--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","ubicacion_tecnica":"2893-25-HTP11-AF104--M01","unidad":"SC"},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","ubicacion_tecnica":"2893-25-HTP11-AT101--M01","unidad":"SC"},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","ubicacion_tecnica":"2893-45-HTP11-AF101-KN01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK51AF001-M01","ubicacion_tecnica":"2893-45-HTP11-AF101--M01","unidad":"SC"},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","ubicacion_tecnica":"2893-45-HTP11-AF101--M03","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","ubicacion_tecnica":"2893-45-HTP11-AF102--M01","unidad":"SC"},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","ubicacion_tecnica":"2893-45-HTP11-AF103--M01","unidad":"SC"},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","ubicacion_tecnica":"2893-45-HTP11-AF104--M01","unidad":"SC"},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","ubicacion_tecnica":"2893-45-HTP11-AT101--M01","unidad":"SC"}]},{"nombre":"MP MM  PLANTA DE AGUAS BOMBAS 180D","unidad":"PA","frecuencia":"6M","plan":"5000083311","equipos":[{"nombre":"BOMBA DE AGUA POTABLE -A","ubicacion_tecnica":"2893-01-GKB01-AP101--M01","unidad":"PA"},{"nombre":"BOMBA DE AGUA POTABLE -B","ubicacion_tecnica":"2893-01-GKB01-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE AGUA POTABLE -C","ubicacion_tecnica":"2893-01-GKB01-AP103--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -A (PARA U 1-2)","ubicacion_tecnica":"2893-01-GAD33-AP101--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -B (PARA U 1-2)","ubicacion_tecnica":"2893-01-GAD33-AP102--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -A (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP103--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -B (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP104--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -A (PARA U5)","ubicacion_tecnica":"2893-01-GAD33-AP108--M01","unidad":"PA"},{"nombre":"BOMBA AGUA SERV. -B (PARA U5)","ubicacion_tecnica":"2893-01-GAD33-AP109--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -A DESALADORA 1-2","ubicacion_tecnica":"2893-01-GAF11-AP101--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -B DESALADORA 1-2","ubicacion_tecnica":"2893-01-GAF11-AP102--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -A DESALADORA 3-4","ubicacion_tecnica":"2893-01-GAF12-AP101--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -B DESALADORA 3-4","ubicacion_tecnica":"2893-01-GAF12-AP102--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -B DESALADORA 5","ubicacion_tecnica":"2893-01-GAF13-AP102-KP01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -A DESALADORA 6-7","ubicacion_tecnica":"2893-01-GAF14-AP101--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -B DESALADORA 6-7","ubicacion_tecnica":"2893-01-GAF14-AP102--M01","unidad":"PA"},{"nombre":"BOMBA RECIRCULACION DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AP101--M01","unidad":"PA"},{"nombre":"BOMBA RECIRCULACION DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AP101--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001 DESA 8","ubicacion_tecnica":"2893-01-GDB01-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001 DES9","ubicacion_tecnica":"2893-01-GDB02-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001 DES10","ubicacion_tecnica":"2893-01-GDB03-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001 DES11","ubicacion_tecnica":"2893-01-GDB04-AP112--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AP103-KP01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AP103--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO GBG25AP001 DES 8","ubicacion_tecnica":"2893-01-GDB01-AP113--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO GBG25AP001 DES9","ubicacion_tecnica":"2893-01-GDB02-AP113--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO GBG25AP001 DES10","ubicacion_tecnica":"2893-01-GDB03-AP113--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO GBG25AP001 DES11","ubicacion_tecnica":"2893-01-GDB04-AP113--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AP104--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA GBG35AP001 DESA 8","ubicacion_tecnica":"2893-01-GDB01-AP111--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA GBG35AP001 DES9","ubicacion_tecnica":"2893-01-GDB02-AP111--M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA GBG35AP001 DES10","ubicacion_tecnica":"2893-01-GDB03-AP111-M01","unidad":"PA"},{"nombre":"BOMBA SALMUERA GBG35AP001 DES11","ubicacion_tecnica":"2893-01-GDB04-AP111--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AP102--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -1 DES8","ubicacion_tecnica":"2893-01-GDB01-AP301--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -2 DES8","ubicacion_tecnica":"2893-01-GDB01-AP302--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -1 DES9","ubicacion_tecnica":"2893-01-GDB02-AP301--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -2 DES9","ubicacion_tecnica":"2893-01-GDB02-AP302-M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -1 DES10","ubicacion_tecnica":"2893-01-GDB03-AP301--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -2 DES10","ubicacion_tecnica":"2893-01-GDB03-AP302--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -1 DES11","ubicacion_tecnica":"2893-01-GDB04-AP301--M01","unidad":"PA"},{"nombre":"BOMBA DE VACIO -2 DES11","ubicacion_tecnica":"2893-01-GDB04-AP302--M01","unidad":"PA"},{"nombre":"BOMBA VACIO 2 GBG08AP001","ubicacion_tecnica":"2893-01-GDQ12-AP103-KP01","unidad":"PA"},{"nombre":"BOMBA FGD MAKE-UP -A (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP105--M01","unidad":"PA"},{"nombre":"BOMBA FGD MAKE-UP -B (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP106--M01","unidad":"PA"},{"nombre":"BOMBA FGD MAKE-UP -C","ubicacion_tecnica":"2893-01-GAD33-AP107--M01","unidad":"PA"},{"nombre":"BOMBA -A MAKEUP 1-2","ubicacion_tecnica":"2893-01-GCL12-AP101--M01","unidad":"PA"},{"nombre":"BOMBA -B MAKEUP 1-2","ubicacion_tecnica":"2893-01-GCL12-AP102--M01","unidad":"PA"},{"nombre":"BOMBA -C MAKEUP 1-2","ubicacion_tecnica":"2893-01-GCL12-AP103--M01","unidad":"PA"},{"nombre":"BOMBA AGUA MAKEUP-A U3-4","ubicacion_tecnica":"2893-01-GCL14-AP101--M01","unidad":"PA"},{"nombre":"BOMBA AGUA MAKEUP-B U3-4","ubicacion_tecnica":"2893-01-GCL14-AP102--M01","unidad":"PA"},{"nombre":"BOMBA AGUA MAKEUP-C U3-4","ubicacion_tecnica":"2893-01-GCL14-AP103--M01","unidad":"PA"},{"nombre":"BOMBA AGUA MAKEUP-B U5","ubicacion_tecnica":"2893-01-GCL17-AP102--M01","unidad":"PA"},{"nombre":"BOMBA AGUA FGD MAKEUP-A U5","ubicacion_tecnica":"2893-01-GCL15-AP101--M01","unidad":"PA"},{"nombre":"BOMBA AGUA FGD MAKEUP-B U5","ubicacion_tecnica":"2893-01-GCL15-AP102--M01","unidad":"PA"},{"nombre":"BOMBA AGUA PRETRATADA -A 3-4","ubicacion_tecnica":"2893-01-GAD14-AP101--M01","unidad":"PA"},{"nombre":"BOMBA AGUA PRETRATADA -B 3-4","ubicacion_tecnica":"2893-01-GAD14-AP102--M01","unidad":"PA"},{"nombre":"BOMBA AGUA PRETRATADA -C 3-4","ubicacion_tecnica":"2893-01-GAD14-AP103--M01","unidad":"PA"},{"nombre":"BOMBA AGUA PRETRATADA -A 5","ubicacion_tecnica":"2893-01-GAD16-AP101--M01","unidad":"PA"},{"nombre":"BOMBA AGUA PRETRATADA -B 5","ubicacion_tecnica":"2893-01-GAD16-AP102--M01","unidad":"PA"},{"nombre":"COMPRESOR VAPOR DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AN101","unidad":"PA"},{"nombre":"COMPRESOR VAPOR DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AN101","unidad":"PA"},{"nombre":"BOMBA LUBRICACION DESALADORA -3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP201--M01","unidad":"PA"},{"nombre":"BOMBA LUBRICACION DESALADORA -4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP201--M01","unidad":"PA"},{"nombre":"BOMBA LUBRICACION DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP201--M01","unidad":"PA"},{"nombre":"BOMBA LUBRICACION DESALADORA -6 (U5)","ubicacion_tecnica":"2893-01-GAA06-AP201--M01","unidad":"PA"},{"nombre":"BOMBA LUBRICACION DESALADORA -7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AP201--M01","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-A DESALA 3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP301","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-B DESALA 3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP302","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-A DESALA 4(U3)","ubicacion_tecnica":"2893-01-GAA04-AP301","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-B DESALA 4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP302","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-A DESALA 5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP301-KP01","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-B DESALA 5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP302-KP01","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI ESPUMANTE-B DESALA 7 (U5)","ubicacion_tecnica":"2893-01-GAA07-AP302","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-A DESALA 3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP303","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-B DESALA 3 (U3)","ubicacion_tecnica":"2893-01-GAA03-AP304","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-A DESALA 4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP303","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-B DESALA 4 (U3)","ubicacion_tecnica":"2893-01-GAA04-AP304","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-A DESALA 5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP303-KP01","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-B DESALA 5 (U4)","ubicacion_tecnica":"2893-01-GAA05-AP304-KP01","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-A DESALA 7(U5)","ubicacion_tecnica":"2893-01-GAA07-AP303","unidad":"PA"},{"nombre":"BOMBA DOSIF ANTI INCRUSTAN-B DESALA 7(U5)","ubicacion_tecnica":"2893-01-GAA07-AP304","unidad":"PA"},{"nombre":"DESALADORA -5 (U4)","ubicacion_tecnica":"2893-01-GAA05","unidad":"PA"},{"nombre":"BOMBA ALIM. AGUA MAR -3 GBG35AP001","ubicacion_tecnica":"2893-01-GDA01-AP103-KP01","unidad":"PA"},{"nombre":"BOMBA ALIM. AGUA INTAKE -2 GBG02AP001","ubicacion_tecnica":"2893-01-GDQ11-AP102-KP01","unidad":"PA"}]},{"nombre":"MP MM MONITOREO FGD U3  90 D","unidad":"U3","frecuencia":"3M","plan":"5000083314","equipos":[{"nombre":"MOTOR BOMBA RECIRCULACION -A","ubicacion_tecnica":"2893-35-HRA05-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA RECIRCULACION -B","ubicacion_tecnica":"2893-35-HRA05-AP102--M01","unidad":"U3"},{"nombre":"MOTOR FILTRO BANDA -A","ubicacion_tecnica":"2893-35-HRB02-AT101--M01","unidad":"U3"},{"nombre":"MOTOR FILTRO BANDA -B","ubicacion_tecnica":"2893-35-HRB03-AT101--M01","unidad":"U3"},{"nombre":"MOTOR SOPLADOR OXIDACION -A","ubicacion_tecnica":"2893-35-HRA08-AN201--M01","unidad":"U3"},{"nombre":"MOTOR SOPLADOR OXIDACION -B","ubicacion_tecnica":"2893-35-HRA08-AN202--M01","unidad":"U3"}]},{"nombre":"MP MM MONITOREO FGD U5  90 D","unidad":"U5","frecuencia":"3M","plan":"5000083316","equipos":[{"nombre":"BOMBA RECIRCULACION ABSORBER -A","ubicacion_tecnica":"2893-55-HRA05-AP101--M01","unidad":"U5"},{"nombre":"BOMBA RECIRCULACION ABSORBER -B","ubicacion_tecnica":"2893-55-HRA05-AP102--M01","unidad":"U5"},{"nombre":"SOPLADOR DE OXIDACION -A","ubicacion_tecnica":"2893-55-HRA08-AN201--M01","unidad":"U5"},{"nombre":"SOPLADOR DE OXIDACION -B","ubicacion_tecnica":"2893-55-HRA08-AN202--M01","unidad":"U5"}]}];
+const RUTAS_VIBRACION_SEED = [{"nombre":"MP MM MONITOREO BOMBAS U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083260","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -1A","unidad":"U1","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11AM","ubicacion_tecnica":"2893-12-LAC01-AP101--M02","unidad":"U1"},{"nombre":"BOMBA AGUA G1-AA.07P11A","ubicacion_tecnica":"2893-12-LAC01-AP101-KP01","unidad":"U1"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-12-LAC01-AP101-MG01","unidad":"U1"},{"nombre":"MOTOR BBA LUBRICACION AUX","ubicacion_tecnica":"2893-12-LAC01-AP101--M01","unidad":"U1"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-12-LAC01-AP101-KP02","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-12-LAC01-AP101-KP03","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-12-LAC01-AP101-MU01","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-12-LAC01-AP101-MU02","unidad":"U1"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-12-LAC01-AP101-MU04","unidad":"U1"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-12-LAC01-AP101-MU05","unidad":"U1"}]},{"nombre":"BOMBA AGUA ALIMENTACION -1B","unidad":"U1","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11BM","ubicacion_tecnica":"2893-12-LAC01-AP102--M02","unidad":"U1"},{"nombre":"BOMBA AGUA G1-AA.07P11B","ubicacion_tecnica":"2893-12-LAC01-AP102-KP01","unidad":"U1"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-12-LAC01-AP102-MG01","unidad":"U1"},{"nombre":"MOTOR BBA LUBRICACION AUX","ubicacion_tecnica":"2893-12-LAC01-AP102--M01","unidad":"U1"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-12-LAC01-AP102-KP02","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-12-LAC01-AP102-KP03","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-12-LAC01-AP102-MU01","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-12-LAC01-AP102-MU02","unidad":"U1"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-12-LAC01-AP102-MU05","unidad":"U1"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-12-LAC01-AP102-MU06","unidad":"U1"}]},{"nombre":"BOMBA AGUA ALIMENTACION -1C","unidad":"U1","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11CM","ubicacion_tecnica":"2893-12-LAC01-AP103--M02","unidad":"U1"},{"nombre":"BOMBA AGUA G1-AA.07P11C","ubicacion_tecnica":"2893-12-LAC01-AP103-KP01","unidad":"U1"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-12-LAC01-AP103-MG01","unidad":"U1"},{"nombre":"MOTOR BBA LUBRICACION AUX","ubicacion_tecnica":"2893-12-LAC01-AP103--M01","unidad":"U1"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-12-LAC01-AP103-KP02","unidad":"U1"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-12-LAC01-AP103-KP03","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-12-LAC01-AP103-MU01","unidad":"U1"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-12-LAC01-AP103-MU02","unidad":"U1"}]},{"nombre":"BOMBA AGUA CONDENSADA -1A","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.05P32A","ubicacion_tecnica":"2893-12-LCB01-AP101-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.05P32A-M01","ubicacion_tecnica":"2893-12-LCB01-AP101--M01","unidad":"U1"}]},{"nombre":"BOMBA AGUA CONDENSADA -1B","unidad":"U1","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-12-LCB01-AP102-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.05P32B-M01","ubicacion_tecnica":"2893-12-LCB01-AP102--M01","unidad":"U1"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1A","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P11A","ubicacion_tecnica":"2893-13-PAC01-AP101-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-13-PAC01-AP101--M01","unidad":"U1"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -1B","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P11B","ubicacion_tecnica":"2893-13-PAC01-AP102-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-13-PAC01-AP102--M01","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO TURBINA U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083261","equipos":[{"nombre":"UNIDAD TURBINA A VAPOR- GENERADOR","unidad":"U1","componentes":[{"nombre":"SISTEMA TURBINA U1","ubicacion_tecnica":"2893-11-MAB","unidad":"U1"},{"nombre":"DESCANSOS GENERADOR U1","ubicacion_tecnica":"2893-11-MAK20-AE401","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U1 15D","unidad":"U1","frecuencia":"2S","plan":"5000083262","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U1","unidad":"U1","componentes":[{"nombre":"MOTOR ELECTRICO VAP","ubicacion_tecnica":"2893-15-HLB20-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HNF01-AN101--M01","unidad":"U1"}]},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U1","unidad":"U1","componentes":[{"nombre":"MOTOR ELECTRICO VRG","ubicacion_tecnica":"2893-15-HNF01-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HNF01-AN101-KN01","unidad":"U1"}]},{"nombre":"UNIDAD VENTILADOR VTI U1","unidad":"U1","componentes":[{"nombre":"MOTOR PRINCIPAL VENTILADOR","ubicacion_tecnica":"2893-15-HTC02-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR VTI HTC10AN001","ubicacion_tecnica":"2893-15-HTC02-AN101-KN03","unidad":"U1"}]},{"nombre":"VENTILADOR TIRO FORZADO VTF U1","unidad":"U1","componentes":[{"nombre":"MOTOR ELECTRICO VTF","ubicacion_tecnica":"2893-15-HLB10-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HLB10-AN101-KN01","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083269","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -2A","unidad":"U2","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11AM","ubicacion_tecnica":"2893-22-LAC01-AP101--M02","unidad":"U2"},{"nombre":"BOMBA AGUA G1-AA.07P11A","ubicacion_tecnica":"2893-22-LAC01-AP101-KP01","unidad":"U2"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-22-LAC01-AP101-MG01","unidad":"U2"},{"nombre":"MOTOR BBA LUBRICACION AUX","ubicacion_tecnica":"2893-22-LAC01-AP101--M01","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-22-LAC01-AP101-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-22-LAC01-AP101-KP03","unidad":"U2"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-22-LAC01-AP101-MU01","unidad":"U2"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-22-LAC01-AP101-MU02","unidad":"U2"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-22-LAC01-AP101-MU04","unidad":"U2"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-22-LAC01-AP101-MU05","unidad":"U2"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-22-LAC01-AP101-MU06","unidad":"U2"}]},{"nombre":"BOMBA AGUA ALIMENTACION -2B","unidad":"U2","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11BM","ubicacion_tecnica":"2893-22-LAC01-AP102--M02","unidad":"U2"},{"nombre":"BOMBA AGUA G1-AA.07P11B","ubicacion_tecnica":"2893-22-LAC01-AP102-KP01","unidad":"U2"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-22-LAC01-AP102-MG01","unidad":"U2"},{"nombre":"MOTOR BBA LUBRICACION AUX","ubicacion_tecnica":"2893-22-LAC01-AP102--M01","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-22-LAC01-AP102-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-22-LAC01-AP102-KP03","unidad":"U2"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-22-LAC01-AP102-MU01","unidad":"U2"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-22-LAC01-AP102-MU02","unidad":"U2"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-22-LAC01-AP102-MU04","unidad":"U2"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-22-LAC01-AP102-MU05","unidad":"U2"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-22-LAC01-AP102-MU06","unidad":"U2"}]},{"nombre":"BOMBA AGUA ALIMENTACION -2C","unidad":"U2","componentes":[{"nombre":"MOTOR BOMBA AGUA G1-AA.07P11CM","ubicacion_tecnica":"2893-22-LAC01-AP103--M02","unidad":"U2"},{"nombre":"BOMBA AGUA G1-AA.07P11C","ubicacion_tecnica":"2893-22-LAC01-AP103-KP01","unidad":"U2"},{"nombre":"AMPLIFICADOR REVOLUCIONES","ubicacion_tecnica":"2893-22-LAC01-AP103-MG01","unidad":"U2"},{"nombre":"BOMBA LUBRICACION AUXILIAR","ubicacion_tecnica":"2893-22-LAC01-AP103-KP02","unidad":"U2"},{"nombre":"BOMBA LUBRICACION PRINCIPAL","ubicacion_tecnica":"2893-22-LAC01-AP103-KP03","unidad":"U2"}]},{"nombre":"BOMBA AGUA CONDENSADA -2A","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.05P32A","ubicacion_tecnica":"2893-22-LCB01-AP101-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G2-11.05P32A-M01","ubicacion_tecnica":"2893-22-LCB01-AP101--M01","unidad":"U2"}]},{"nombre":"BOMBA AGUA CONDENSADA -2B","unidad":"U2","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-22-LCB01-AP102-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G2-11.05P32B-M01","ubicacion_tecnica":"2893-22-LCB01-AP102--M01","unidad":"U2"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2A","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P11A","ubicacion_tecnica":"2893-23-PAC01-AP101-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-23-PAC01-AP101--M01","unidad":"U2"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -2B","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P11B","ubicacion_tecnica":"2893-23-PAC01-AP102-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-23-PAC01-AP102--M01","unidad":"U2"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -2A","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P12A","ubicacion_tecnica":"2893-23-PAD01-AP101-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G1-11.09P12A-M","ubicacion_tecnica":"2893-23-PAD01-AP101--M01","unidad":"U2"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -2B","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P12B","ubicacion_tecnica":"2893-23-PAD01-AP102-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G1-11.09P12B-M","ubicacion_tecnica":"2893-23-PAD01-AP102--M01","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO TURBINA U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083270","equipos":[{"nombre":"UNIDAD TURBINA A VAPOR- GENERADOR","unidad":"U2","componentes":[{"nombre":"SISTEMA TURBINA U2","ubicacion_tecnica":"2893-21-MAB","unidad":"U2"},{"nombre":"DESCANSOS GENERADOR U2","ubicacion_tecnica":"2893-21-MAK20-AE401","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U2 15D","unidad":"U2","frecuencia":"2S","plan":"5000083271","equipos":[{"nombre":"VENTILADOR GASES RECIRCULACION VRG U2","unidad":"U2","componentes":[{"nombre":"MOTOR ELECTRICO VAP","ubicacion_tecnica":"2893-25-HLB40-AN101-MU02","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HLB20-AN101-KN01","unidad":"U2"}]},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U2","unidad":"U2","componentes":[{"nombre":"MOTOR ELECTRICO VRG","ubicacion_tecnica":"2893-25-HNF01-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HNF01-AN101-KN01","unidad":"U2"}]},{"nombre":"VENTILADOR TIRO FORZADO VTF U2","unidad":"U2","componentes":[{"nombre":"MOTOR ELECTRICO VTF","ubicacion_tecnica":"2893-25-HLB10-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HLB10-AN101-KN01","unidad":"U2"}]},{"nombre":"UNIDAD VENTILADOR VTI U2","unidad":"U2","componentes":[{"nombre":"MOTOR PRINCIPAL VENTILADOR","ubicacion_tecnica":"2893-25-HTC02-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR VTI HTC10AN001","ubicacion_tecnica":"2893-25-HTC02-AN101-KN03","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083278","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -3A","unidad":"U3","componentes":[{"nombre":"BOMBA AGUA LAC02AP101","ubicacion_tecnica":"2893-32-LAC01-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA AGUA LAC02AP101-M01","ubicacion_tecnica":"2893-32-LAC01-AP101--M03","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP301-M01","ubicacion_tecnica":"2893-32-LAC01-AP101--M02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A LAC02AP301","ubicacion_tecnica":"2893-32-LAC01-AP101-KP02","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP201-M01","ubicacion_tecnica":"2893-32-LAC01-AP101--M01","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B LAC02AP201","ubicacion_tecnica":"2893-32-LAC01-AP101-KP03","unidad":"U3"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-32-LAC01-AP101-MU02","unidad":"U3"},{"nombre":"DESCANSO EMPUJE","ubicacion_tecnica":"2893-32-LAC01-AP101-MU03","unidad":"U3"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-32-LAC01-AP101-MU04","unidad":"U3"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-32-LAC01-AP101-MU05","unidad":"U3"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-32-LAC01-AP101-MU06","unidad":"U3"}]},{"nombre":"BOMBA AGUA ALIMENTACION -3B","unidad":"U3","componentes":[{"nombre":"BOMBA AGUA LAC02AP102","ubicacion_tecnica":"2893-32-LAC01-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA AGUA LAC02AP102-M01","ubicacion_tecnica":"2893-32-LAC01-AP102--M03","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP302-M01","ubicacion_tecnica":"2893-32-LAC01-AP102--M02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -A LAC02AP302","ubicacion_tecnica":"2893-32-LAC01-AP102-KP02","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP202-M01","ubicacion_tecnica":"2893-32-LAC01-AP102--M01","unidad":"U3"},{"nombre":"BOMBA LUBRICACION -B LAC02AP202","ubicacion_tecnica":"2893-32-LAC01-AP102-KP03","unidad":"U3"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-32-LAC01-AP102-MU01","unidad":"U3"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-32-LAC01-AP102-MU02","unidad":"U3"},{"nombre":"DESCANSO EMPUJE","ubicacion_tecnica":"2893-32-LAC01-AP102-MU03","unidad":"U3"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-32-LAC01-AP102-MU04","unidad":"U3"}]},{"nombre":"BOMBA AGUA ALIMENTACION -3C","unidad":"U3","componentes":[{"nombre":"BOMBA AGUA LAC02AP103","ubicacion_tecnica":"2893-32-LAC01-AP103-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA AGUA LAC02AP103-M01","ubicacion_tecnica":"2893-32-LAC01-AP103--M03","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICAC PPAL LAC02AP203-M01","ubicacion_tecnica":"2893-32-LAC01-AP103--M01","unidad":"U3"},{"nombre":"BOMBA LUBRICACION PRINCIPAL LAC02AP203","ubicacion_tecnica":"2893-32-LAC01-AP103-KP03","unidad":"U3"},{"nombre":"MOTOR BBA LUBRICACION AUX LAC02AP303-M01","ubicacion_tecnica":"2893-32-LAC01-AP103--M02","unidad":"U3"},{"nombre":"BOMBA LUBRICACION AUXILIAR LAC02AP303","ubicacion_tecnica":"2893-32-LAC01-AP103-KP02","unidad":"U3"}]},{"nombre":"BOMBA AGUA CONDENSADA -3A","unidad":"U3","componentes":[{"nombre":"BOMBA LCB01AP101","ubicacion_tecnica":"2893-32-LCB01-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA LCB01AP101-M01","ubicacion_tecnica":"2893-32-LCB01-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA AGUA CONDENSADA -3B","unidad":"U3","componentes":[{"nombre":"BOMBA LCB01AP102","ubicacion_tecnica":"2893-32-LCB01-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA LCB01AP102-M01","ubicacion_tecnica":"2893-32-LCB01-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3A","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP101","ubicacion_tecnica":"2893-33-PAC01-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA PAC01AP101-M01","ubicacion_tecnica":"2893-33-PAC01-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -3B","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP102","ubicacion_tecnica":"2893-33-PAC01-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA PAC01AP102-M01","ubicacion_tecnica":"2893-33-PAC01-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -3A","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP601","ubicacion_tecnica":"2893-33-PAD01-AP101-KP02","unidad":"U3"},{"nombre":"MOTOR BOMBA PAC01AP601-M01","ubicacion_tecnica":"2893-33-PAD01-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -3B","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP602","ubicacion_tecnica":"2893-33-PAD01-AP102-KP02","unidad":"U3"},{"nombre":"MOTOR BOMBA PAC01AP602-M01","ubicacion_tecnica":"2893-33-PAD01-AP102--M01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO TURBINA U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083279","equipos":[{"nombre":"UNIDAD TURBINA A VAPOR- GENERADOR","unidad":"U3","componentes":[{"nombre":"SISTEMA TURBINA U3","ubicacion_tecnica":"2893-31-MAB","unidad":"U3"},{"nombre":"DESCANSOS GENERADOR U3","ubicacion_tecnica":"2893-31-MAK20-AE401","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U3 15D","unidad":"U3","frecuencia":"2S","plan":"5000083280","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U3","unidad":"U3","componentes":[{"nombre":"MOTOR ELECTRICO VAP","ubicacion_tecnica":"2893-35-HLB20-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB20-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U3","unidad":"U3","componentes":[{"nombre":"MOTOR ELECTRICO VRG","ubicacion_tecnica":"2893-35-HNF01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HNF01-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR TIRO FORZADO VTF U3","unidad":"U3","componentes":[{"nombre":"MOTOR ELECTRICO VTF","ubicacion_tecnica":"2893-35-HLB10-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB10-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U3","unidad":"U3","componentes":[{"nombre":"MOTOR ELECTRICO VTI","ubicacion_tecnica":"2893-35-HNC01-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HNC01-AN101-KN01","unidad":"U3"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-35-HNC01-AN101-MU01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083287","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -4A","unidad":"U4","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP101-M01","ubicacion_tecnica":"2893-42-LAC01-AP101--M03","unidad":"U4"},{"nombre":"BOMBA AGUA LAC02AP101","ubicacion_tecnica":"2893-42-LAC01-AP101-KP01","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP301-M01","ubicacion_tecnica":"2893-42-LAC01-AP101--M02","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -A LAC02AP301","ubicacion_tecnica":"2893-42-LAC01-AP101-KP02","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP201-M01","ubicacion_tecnica":"2893-42-LAC01-AP101--M01","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B LAC02AP201","ubicacion_tecnica":"2893-42-LAC01-AP101-KP03","unidad":"U4"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-42-LAC01-AP101-MU01","unidad":"U4"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-42-LAC01-AP101-MU02","unidad":"U4"},{"nombre":"DESCANSO EMPUJE","ubicacion_tecnica":"2893-42-LAC01-AP101-MU03","unidad":"U4"},{"nombre":"DESCANSO RADIAL LADO BOMBA","ubicacion_tecnica":"2893-42-LAC01-AP101-MU04","unidad":"U4"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-42-LAC01-AP101-MU05","unidad":"U4"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-42-LAC01-AP101-MU06","unidad":"U4"}]},{"nombre":"BOMBA AGUA ALIMENTACION -4B","unidad":"U4","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP102-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M03","unidad":"U4"},{"nombre":"BOMBA AGUA LAC02AP102","ubicacion_tecnica":"2893-42-LAC01-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP302-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M02","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -A LAC02AP302","ubicacion_tecnica":"2893-42-LAC01-AP102-KP02","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP202-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B LAC02AP202","ubicacion_tecnica":"2893-42-LAC01-AP102-KP03","unidad":"U4"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-42-LAC01-AP102-MU01","unidad":"U4"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-42-LAC01-AP102-MU02","unidad":"U4"},{"nombre":"DESCANSO EMPUJE","ubicacion_tecnica":"2893-42-LAC01-AP102-MU03","unidad":"U4"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-42-LAC01-AP102-MU05","unidad":"U4"}]},{"nombre":"BOMBA AGUA ALIMENTACION -4C","unidad":"U4","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP102-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M03","unidad":"U4"},{"nombre":"BOMBA AGUA LAC02AP102","ubicacion_tecnica":"2893-42-LAC01-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP302-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M02","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -A LAC02AP302","ubicacion_tecnica":"2893-42-LAC01-AP102-KP02","unidad":"U4"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP202-M01","ubicacion_tecnica":"2893-42-LAC01-AP102--M01","unidad":"U4"},{"nombre":"BOMBA LUBRICACION -B LAC02AP202","ubicacion_tecnica":"2893-42-LAC01-AP102-KP03","unidad":"U4"}]},{"nombre":"BOMBA AGUA CONDENSADA -4A","unidad":"U4","componentes":[{"nombre":"BOMBA LCB01AP101","ubicacion_tecnica":"2893-42-LCB01-AP101-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA LCB01AP101-M01","ubicacion_tecnica":"2893-42-LCB01-AP101-KP01","unidad":"U4"}]},{"nombre":"BOMBA AGUA CONDENSADA -4B","unidad":"U4","componentes":[{"nombre":"BOMBA LCB01AP102","ubicacion_tecnica":"2893-42-LCB01-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA LCB01AP102-M01","ubicacion_tecnica":"2893-42-LCB01-AP102--M01","unidad":"U4"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4A","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP101","ubicacion_tecnica":"2893-43-PAC01-AP101-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA PAC01AP101-M01","ubicacion_tecnica":"2893-43-PAC01-AP101--M01","unidad":"U4"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -4B","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP102","ubicacion_tecnica":"2893-43-PAC01-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA PAC01AP102-M01","ubicacion_tecnica":"2893-43-PAC01-AP102--M01","unidad":"U4"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -4A","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP601","ubicacion_tecnica":"2893-43-PAD01-AP101-KP02","unidad":"U4"},{"nombre":"MOTOR BOMBA PAC01AP601-M01","ubicacion_tecnica":"2893-43-PAD01-AP101--M01","unidad":"U4"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -4B","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP602","ubicacion_tecnica":"2893-43-PAD01-AP102-KP02","unidad":"U4"},{"nombre":"MOTOR BOMBA PAC01AP602-M01","ubicacion_tecnica":"2893-43-PAD01-AP102--M01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO TURBINA U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083288","equipos":[{"nombre":"UNIDAD TURBINA A VAPOR- GENERADOR","unidad":"U4","componentes":[{"nombre":"SISTEMA TURBINA U4","ubicacion_tecnica":"2893-41-MAB","unidad":"U4"},{"nombre":"DESCANSOS GENERADOR U4","ubicacion_tecnica":"2893-41-MAK20-AE401","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U4 15D","unidad":"U4","frecuencia":"2S","plan":"5000083289","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U4","unidad":"U4","componentes":[{"nombre":"MOTOR ELECTRICO VAP","ubicacion_tecnica":"2893-45-HLB20-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB20-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U4","unidad":"U4","componentes":[{"nombre":"MOTOR ELECTRICO VRG","ubicacion_tecnica":"2893-45-HNF01-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HNF01-AN101-KN02","unidad":"U4"}]},{"nombre":"VENTILADOR TIRO FORZADO VTF U4","unidad":"U4","componentes":[{"nombre":"MOTOR ELECTRICO VTF","ubicacion_tecnica":"2893-45-HLB10-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB10-AN101-KN01","unidad":"U4"}]},{"nombre":"UNIDAD VENTILADOR VTI U4","unidad":"U4","componentes":[{"nombre":"MOTOR PRINCIPAL VENTILADOR","ubicacion_tecnica":"2893-45-HTC02-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR VTI HTC10AN001","ubicacion_tecnica":"2893-45-HTC02-AN101-KN03","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083296","equipos":[{"nombre":"BOMBA AGUA ALIMENTACION -5A","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP101-M01","ubicacion_tecnica":"2893-52-LAC01-AP101--M03","unidad":"U5"},{"nombre":"BOMBA AGUA LAC02AP101","ubicacion_tecnica":"2893-52-LAC01-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP301-M01","ubicacion_tecnica":"2893-52-LAC01-AP101--M02","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -A LAC02AP301","ubicacion_tecnica":"2893-52-LAC01-AP101-KP02","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP201-M01","ubicacion_tecnica":"2893-52-LAC01-AP101--M01","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -B LAC02AP201","ubicacion_tecnica":"2893-52-LAC01-AP101-KP03","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-52-LAC01-AP101-MU01","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-52-LAC01-AP101-MU02","unidad":"U5"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP101-MU05","unidad":"U5"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP101-MU06","unidad":"U5"}]},{"nombre":"BOMBA AGUA ALIMENTACION -5B","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP102-M01","ubicacion_tecnica":"2893-52-LAC01-AP102--M03","unidad":"U5"},{"nombre":"BOMBA AGUA LAC02AP102","ubicacion_tecnica":"2893-52-LAC01-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP302-M01","ubicacion_tecnica":"2893-52-LAC01-AP102--M02","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -A LAC02AP302","ubicacion_tecnica":"2893-52-LAC01-AP102-KP02","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICAC -B LAC02AP202-M01","ubicacion_tecnica":"2893-52-LAC01-AP102--M01","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -B LAC02AP202","ubicacion_tecnica":"2893-52-LAC01-AP102-KP03","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-52-LAC01-AP102-MU01","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-52-LAC01-AP102-MU02","unidad":"U5"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP102-MU05","unidad":"U5"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP102-MU06","unidad":"U5"}]},{"nombre":"BOMBA AGUA ALIMENTACION -5C","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA AGUA LAC02AP103-M01","ubicacion_tecnica":"2893-52-LAC01-AP103--M03","unidad":"U5"},{"nombre":"BOMBA AGUA LAC02AP103","ubicacion_tecnica":"2893-52-LAC01-AP103-KP01","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICACION -A LAC02AP303-M01","ubicacion_tecnica":"2893-52-LAC01-AP103--M01","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -A LAC02AP303","ubicacion_tecnica":"2893-52-LAC01-AP103-KP02","unidad":"U5"},{"nombre":"MOTOR BBA LUBRICACION -B LAC02AP203-M01","ubicacion_tecnica":"2893-52-LAC01-AP103--M02","unidad":"U5"},{"nombre":"BOMBA LUBRICACION -B LAC02AP203","ubicacion_tecnica":"2893-52-LAC01-AP103-KP03","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -1","ubicacion_tecnica":"2893-52-LAC01-AP103-MU01","unidad":"U5"},{"nombre":"DESCANSO MOTOR RADIAL -2","ubicacion_tecnica":"2893-52-LAC01-AP103-MU02","unidad":"U5"},{"nombre":"DESCANSO RADIAL LADO MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP103-MU05","unidad":"U5"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-52-LAC01-AP103-MU06","unidad":"U5"}]},{"nombre":"BOMBA AGUA CONDENSADA -5A","unidad":"U5","componentes":[{"nombre":"BOMBA LCB01AP101","ubicacion_tecnica":"2893-52-LCB01-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA LCB01AP101-M01","ubicacion_tecnica":"2893-52-LCB01-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA AGUA CONDENSADA -5B","unidad":"U5","componentes":[{"nombre":"BOMBA LCB01AP102","ubicacion_tecnica":"2893-52-LCB01-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA LCB01AP102-M01","ubicacion_tecnica":"2893-52-LCB01-AP102--M01","unidad":"U5"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5A","unidad":"U5","componentes":[{"nombre":"BOMBA PAC01AP101","ubicacion_tecnica":"2893-53-PAC01-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA PAC01AP101-M01","ubicacion_tecnica":"2893-53-PAC01-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA CIRCULACION PRINCIPAL -5B","unidad":"U5","componentes":[{"nombre":"BOMBA PAC01AP102","ubicacion_tecnica":"2893-53-PAC01-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA PAC01AP102-M01","ubicacion_tecnica":"2893-53-PAC01-AP102--M01","unidad":"U5"}]}]},{"nombre":"MP MM MONITOREO TURBINA U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083297","equipos":[{"nombre":"UNIDAD TURBINA A VAPOR- GENERADOR","unidad":"U5","componentes":[{"nombre":"SISTEMA TURBINA U5","ubicacion_tecnica":"2893-51-MAB","unidad":"U5"},{"nombre":"DESCANSOS GENERADOR U5","ubicacion_tecnica":"2893-51-MAK20-AE401","unidad":"U5"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U5 15D","unidad":"U5","frecuencia":"2S","plan":"5000083298","equipos":[{"nombre":"VENTILADOR AIRE PRIMARIO VAP U5","unidad":"U5","componentes":[{"nombre":"MOTOR ELECTRICO VAP","ubicacion_tecnica":"2893-55-HLB20-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB20-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR GASES RECIRCULACION VRG U5","unidad":"U5","componentes":[{"nombre":"MOTOR ELECTRICO VRG","ubicacion_tecnica":"2893-55-HNF01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HNF01-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR TIRO FORZADO VTF U5","unidad":"U5","componentes":[{"nombre":"MOTOR ELECTRICO VTF","ubicacion_tecnica":"2893-55-HLB10-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB10-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR TIRO INDUCIDO VTI U5","unidad":"U5","componentes":[{"nombre":"MOTOR ELECTRICO VTI","ubicacion_tecnica":"2893-55-HNC01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HNC01-AN101-KN01","unidad":"U5"}]}]},{"nombre":"MP MM SISTEMAS COMUNES  BOMBAS PRETRA 90D","unidad":"SC","frecuencia":"3M","plan":"5000083306","equipos":[{"nombre":"BOMBA AGUA PRETRATADA -A U1-2","unidad":"SC","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD12-AP101-KP01","unidad":"SC"},{"nombre":"MOTOR G1-11.11P12A-M","ubicacion_tecnica":"2893-01-GAD12-AP101--M01","unidad":"SC"}]},{"nombre":"BOMBA AGUA PRETRATADA -B U1-2","unidad":"SC","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD12-AP102-KP01","unidad":"SC"},{"nombre":"MOTOR G1-11.11P12B-M","ubicacion_tecnica":"2893-01-GAD12-AP102--M01","unidad":"SC"}]},{"nombre":"BOMBA AGUA PRETRATADA -C U1-2","unidad":"SC","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD12-AP103-KP01","unidad":"SC"},{"nombre":"MOTOR G1-11.11P12C-M","ubicacion_tecnica":"2893-01-GAD12-AP103--M01","unidad":"SC"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U1  90 D","unidad":"U1","frecuencia":"3M","plan":"5000083264","equipos":[{"nombre":"BOMBA CIRCULACION AUXILIAR -1A","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P12A","ubicacion_tecnica":"2893-13-PAD01-AP101-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.09P12A-M","ubicacion_tecnica":"2893-13-PAD01-AP101--M01","unidad":"U1"}]},{"nombre":"BOMBA CIRCULACION AUXILIAR -1B","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P12B","ubicacion_tecnica":"2893-13-PAD01-AP102-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.09P12B-M","ubicacion_tecnica":"2893-13-PAD01-AP102--M01","unidad":"U1"}]},{"nombre":"BOMBA BOOSTER -1A","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P13A","ubicacion_tecnica":"2893-13-PAD04-AP101-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA BOOSTER -A G1-11.09P13A-M","ubicacion_tecnica":"2893-13-PAD04-AP101--M01","unidad":"U1"}]},{"nombre":"BOMBA BOOSTER -1B","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.09P13B","ubicacion_tecnica":"2893-13-PAD04-AP102-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA BOOSTER -B G1-11.09P13B-M","ubicacion_tecnica":"2893-13-PAD04-AP102--M01","unidad":"U1"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1A","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.10P11B","ubicacion_tecnica":"2893-13-PGH01-AP101-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.10P11A-M01","ubicacion_tecnica":"2893-13-PGH01-AP101--M01","unidad":"U1"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -1B","unidad":"U1","componentes":[{"nombre":"BOMBA G1-11.10P11B","ubicacion_tecnica":"2893-13-PGH01-AP102-KP01","unidad":"U1"},{"nombre":"MOTOR BOMBA G1-11.10P11B-M01","ubicacion_tecnica":"2893-13-PGH01-AP102--M01","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U2  90 D","unidad":"U2","frecuencia":"3M","plan":"5000083273","equipos":[{"nombre":"BOMBA BOOSTER -2A","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P13A","ubicacion_tecnica":"2893-23-PAD04-AP101-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA BOOSTER -A G1-11.09P13A-M","ubicacion_tecnica":"2893-23-PAD04-AP101--M01","unidad":"U2"}]},{"nombre":"BOMBA BOOSTER -2B","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.09P13B","ubicacion_tecnica":"2893-23-PAD04-AP102-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA BOOSTER -B G1-11.09P13B-M","ubicacion_tecnica":"2893-23-PAD04-AP102--M01","unidad":"U2"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2A","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.10P11A","ubicacion_tecnica":"2893-23-PGH01-AP101-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G1-11.10P11A-M01","ubicacion_tecnica":"2893-23-PGH01-AP101--M01","unidad":"U2"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -2B","unidad":"U2","componentes":[{"nombre":"BOMBA G1-11.10P11B","ubicacion_tecnica":"2893-23-PGH01-AP102-KP01","unidad":"U2"},{"nombre":"MOTOR BOMBA G1-11.10P11B-M01","ubicacion_tecnica":"2893-23-PGH01-AP102--M01","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U4  90 D","unidad":"U4","frecuencia":"3M","plan":"5000083291","equipos":[{"nombre":"BOMBA BOOSTER -4A","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP301","ubicacion_tecnica":"2893-43-PAD04-AP101-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA BOOSTER -A PAC01AP301-M01","ubicacion_tecnica":"2893-43-PAD04-AP101--M01","unidad":"U4"}]},{"nombre":"BOMBA BOOSTER -4B","unidad":"U4","componentes":[{"nombre":"BOMBA PAC01AP302","ubicacion_tecnica":"2893-43-PAD04-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA BOOSTER -B PAC01AP302-M01","ubicacion_tecnica":"2893-43-PAD04-AP102--M01","unidad":"U4"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4A","unidad":"U4","componentes":[{"nombre":"BOMBA PGA02AP101","ubicacion_tecnica":"2893-43-PGH01-AP101-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA PGA02AP101-M01","ubicacion_tecnica":"2893-43-PGH01-AP101--M01","unidad":"U4"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -4B","unidad":"U4","componentes":[{"nombre":"BOMBA PGA02AP102","ubicacion_tecnica":"2893-43-PGH01-AP102-KP01","unidad":"U4"},{"nombre":"MOTOR BOMBA PGA02AP102-M01","ubicacion_tecnica":"2893-43-PGH01-AP102--M01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO CAR U1  90D","unidad":"U1","frecuencia":"3M","plan":"5000083266","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U1","unidad":"U1","componentes":[{"nombre":"MOTOR ELECTRICO CALENTADOR","ubicacion_tecnica":"2893-15-HLD20-AC101--M01","unidad":"U1"},{"nombre":"REDUCTOR VELOCIDAD","ubicacion_tecnica":"2893-15-HLD20-AC101-MG01","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO CAR U2  90D","unidad":"U2","frecuencia":"3M","plan":"5000083275","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U2","unidad":"U2","componentes":[{"nombre":"MOTOR ELECTRICO CALENTADOR","ubicacion_tecnica":"2893-25-HLD20-AC101--M01","unidad":"U2"},{"nombre":"REDUCTOR VELOCIDAD","ubicacion_tecnica":"2893-25-HLD20-AC101-MG01","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO CAR U3  90D","unidad":"U3","frecuencia":"3M","plan":"5000083284","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U3","unidad":"U3","componentes":[{"nombre":"MOTOR ELECTRICO CALENTADOR","ubicacion_tecnica":"2893-35-HLD20-AC101--M01","unidad":"U3"},{"nombre":"REDUCTOR VELOCIDAD","ubicacion_tecnica":"2893-35-HLD20-AC101-MG01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO CAR U4  90D","unidad":"U4","frecuencia":"3M","plan":"5000083293","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U4","unidad":"U4","componentes":[{"nombre":"MOTOR ELECTRICO CALENTADOR","ubicacion_tecnica":"2893-45-HLD20-AC101--M01","unidad":"U4"},{"nombre":"REDUCTOR VELOCIDAD","ubicacion_tecnica":"2893-45-HLD20-AC101-MG01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO CAR U5  90D","unidad":"U5","frecuencia":"3M","plan":"5000083303","equipos":[{"nombre":"CALENTADOR AIRE REGENERATIVO U5","unidad":"U5","componentes":[{"nombre":"MOTOR ELECTRICO CALENTADOR","ubicacion_tecnica":"2893-55-HLD20-AC101--M02","unidad":"U5"},{"nombre":"REDUCTOR VELOCIDAD","ubicacion_tecnica":"2893-55-HLD20-AC101-MG01","unidad":"U5"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U3  180D","unidad":"U1-2","frecuencia":"6M","plan":"5000083282","equipos":[{"nombre":"BOMBA PETROLEO DIESEL -A U1-2","unidad":"U1-2","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-EGE03-AP101-KP01","unidad":"U1-2"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-01-EGE03-AP101--M01","unidad":"U1-2"}]},{"nombre":"BOMBA PETROLEO DIESEL -B U1-2","unidad":"U1-2","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-EGE03-AP102-KP01","unidad":"U1-2"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-01-EGE03-AP102--M01","unidad":"U1-2"}]},{"nombre":"BOMBA PETROLEO DIESEL -A U3-4-5","unidad":"U3-4-5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-EGE04-AP101-KP01","unidad":"U3-4-5"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-01-EGE04-AP101--M01","unidad":"U3-4-5"}]},{"nombre":"BOMBA PETROLEO DIESEL -B U3-4-5","unidad":"U3-4-5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-EGE04-AP102-KP01","unidad":"U3-4-5"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-01-EGE04-AP102--M01","unidad":"U3-4-5"}]},{"nombre":"BOMBA BOOSTER -3A","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP301","ubicacion_tecnica":"2893-33-PAD04-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA BOOSTER -A PAC01AP301-M01","ubicacion_tecnica":"2893-33-PAD04-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA BOOSTER -3B","unidad":"U3","componentes":[{"nombre":"BOMBA PAC01AP302","ubicacion_tecnica":"2893-33-PAD04-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA BOOSTER -B PAC01AP302-M01","ubicacion_tecnica":"2893-33-PAD04-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -A","unidad":"U3","componentes":[{"nombre":"BOMBA PGA02AP101","ubicacion_tecnica":"2893-33-PGH01-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA PGA02AP101-M01","ubicacion_tecnica":"2893-33-PGH01-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -B","unidad":"U3","componentes":[{"nombre":"BOMBA PGA02AP102","ubicacion_tecnica":"2893-33-PGH01-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA PGA02AP102-M01","ubicacion_tecnica":"2893-33-PGH01-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA YESO (CEBADO) A","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA01-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-35-HRA01-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA YESO (CEBADO) B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA01-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-35-HRA01-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA RECIRCULACION ABSORBER -A","unidad":"U3","componentes":[]},{"nombre":"BOMBA RECIRCULACION ABSORBER -B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA05-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA RECIRCULACION -B","ubicacion_tecnica":"2893-35-HRA05-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA ELIMINADOR NIEBLA -A","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA07-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR","ubicacion_tecnica":"2893-35-HRA07-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA ELIMINADOR NIEBLA -B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA07-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR","ubicacion_tecnica":"2893-35-HRA07-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA DE VACIO FILTRO BANDA A","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRB02-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA VACIO FILTRO BANDA -A","ubicacion_tecnica":"2893-35-HRB02-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA DE VACIO FILTRO BANDA B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRB03-AP101-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA VACIO FILTRO BANDA -B","ubicacion_tecnica":"2893-35-HRB03-AP101--M01","unidad":"U3"}]},{"nombre":"BOMBA FILTRADO -A","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRB04-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA FILTRADO -A","ubicacion_tecnica":"2893-35-HRB04-AP102--M01","unidad":"U3"}]},{"nombre":"BOMBA FILTRADO -B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRB04-AP202-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA FILTRADO -B","ubicacion_tecnica":"2893-35-HRB04-AP202--M01","unidad":"U3"}]},{"nombre":"BOMBAS RECICLADO -A","unidad":"U3","componentes":[]},{"nombre":"BOMBAS RECICLADO -B","unidad":"U3","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRD02-AP102-KP01","unidad":"U3"},{"nombre":"MOTOR BOMBA RECICLADO -B","ubicacion_tecnica":"2893-35-HRD02-AP102--M01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO BOMBAS U5  180D","unidad":"U5","frecuencia":"6M","plan":"5000083300","equipos":[{"nombre":"BOMBA BOOSTER -5A","unidad":"U5","componentes":[{"nombre":"BOMBA PAC01AP301","ubicacion_tecnica":"2893-53-PAD04-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA BOOSTER -A PAC01AP301-M01","ubicacion_tecnica":"2893-53-PAD04-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA BOOSTER -5B","unidad":"U5","componentes":[{"nombre":"BOMBA PAC01AP302","ubicacion_tecnica":"2893-53-PAD04-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA BOOSTER -B PAC01AP302-M01","ubicacion_tecnica":"2893-53-PAD04-AP102--M01","unidad":"U5"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5A","unidad":"U5","componentes":[{"nombre":"BOMBA PGA02AP101","ubicacion_tecnica":"2893-53-PGH01-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA PGA02AP101-M01","ubicacion_tecnica":"2893-53-PGH01-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA AGUA ENFRIAMIENTO -5B","unidad":"U5","componentes":[{"nombre":"BOMBA PGA02AP102","ubicacion_tecnica":"2893-53-PGH01-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA PGA02AP102-M01","ubicacion_tecnica":"2893-53-PGH01-AP102--M01","unidad":"U5"}]},{"nombre":"BOMBA YESO (CEBADO) 5A","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA01-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-55-HRA01-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA YESO (CEBADO) 5B","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA01-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-55-HRA01-AP102--M01","unidad":"U5"}]},{"nombre":"BOMBA ELIMINADOR NIEBLA -5A","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA07-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR","ubicacion_tecnica":"2893-55-HRA07-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA ELIMINADOR NIEBLA -5B","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA07-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR","ubicacion_tecnica":"2893-55-HRA07-AP102--M01","unidad":"U5"}]},{"nombre":"BOMBA ALIMENTACION LECHADA 5A","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRD03-AP101-KP01","unidad":"U5"},{"nombre":"MOTOR BBA ALIMENTACION LECHADA A","ubicacion_tecnica":"2893-55-HRD03-AP101--M01","unidad":"U5"}]},{"nombre":"BOMBA ALIMENTACION LECHADA 5B","unidad":"U5","componentes":[{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRD03-AP102-KP01","unidad":"U5"},{"nombre":"MOTOR BBA ALIMENTACION LECHADA B","ubicacion_tecnica":"2893-55-HRD03-AP102--M01","unidad":"U5"}]}]},{"nombre":"MP MM MONITOREO ESCORIA U1  180 D","unidad":"U1","frecuencia":"U1","plan":"5000083265","equipos":[{"nombre":"CADENA SUMERGIDA U1","unidad":"U1","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-16-ETA01-AT101--M01","unidad":"U1"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-16-ETA01-AT101-MG01","unidad":"U1"}]},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U1","unidad":"U1","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-16-ETA02-AF101--M01","unidad":"U1"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-16-ETA02-AF101-MG01","unidad":"U1"}]},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U1","unidad":"U1","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-16-ETA02-AF102--M01","unidad":"U1"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-16-ETA02-AF102-MG01","unidad":"U1"}]},{"nombre":"TRITURADOR DE ESCORIA U1","unidad":"U1","componentes":[{"nombre":"MOTOR TRITURADOR DE ESCORIA","ubicacion_tecnica":"2893-16-ETA01-AJ101--M01","unidad":"U1"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-16-ETA01-AJ101-MG01","unidad":"U1"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-16-ETA01-AJ101-MU01","unidad":"U1"}]},{"nombre":"BOMBA VACIO -1B","unidad":"U1","componentes":[{"nombre":"BOMBA VACIO -B","ubicacion_tecnica":"2893-16-ETG08-AP202","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO ESCORIA U2  180 D","unidad":"U2","frecuencia":"6M","plan":"5000083274","equipos":[{"nombre":"CADENA SUMERGIDA U2","unidad":"U2","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-26-ETA01-AT101--M01","unidad":"U2"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-26-ETA01-AT101-MG01","unidad":"U2"}]},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U2","unidad":"U2","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-26-ETA02-AF101--M01","unidad":"U2"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-26-ETA02-AF101-MG01","unidad":"U2"}]},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U2","unidad":"U2","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-26-ETA02-AF102--M01","unidad":"U2"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-26-ETA02-AF102-MG01","unidad":"U2"}]},{"nombre":"TRITURADOR DE ESCORIA U2","unidad":"U2","componentes":[{"nombre":"MOTOR TRITURADOR DE ESCORIA","ubicacion_tecnica":"2893-26-ETA01-AJ101--M01","unidad":"U2"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-26-ETA01-AJ101-MG01","unidad":"U2"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-26-ETA01-AJ101-MU01","unidad":"U2"}]},{"nombre":"BOMBA VACIO 2B","unidad":"U2","componentes":[{"nombre":"BOMBA VACIO -B","ubicacion_tecnica":"2893-26-ETG08-AP202","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO ESCORIA U3  180 D","unidad":"U3","frecuencia":"6M","plan":"5000083283","equipos":[{"nombre":"CADENA SUMERGIDA U3","unidad":"U3","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-36-ETA01-AT101--M01","unidad":"U3"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-36-ETA01-AT101-MG01","unidad":"U3"}]},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U3","unidad":"U3","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-36-ETA02-AF101--M01","unidad":"U3"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-36-ETA02-AF101-MG01","unidad":"U3"}]},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U3","unidad":"U3","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-36-ETA02-AF102--M01","unidad":"U3"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-36-ETA02-AF102-MG01","unidad":"U3"}]},{"nombre":"TRITURADOR DE ESCORIA U3","unidad":"U3","componentes":[{"nombre":"MOTOR TRITURADOR DE ESCORIA","ubicacion_tecnica":"2893-36-ETA01-AJ101--M01","unidad":"U3"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-36-ETA02-AF102-MG01","unidad":"U3"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-36-ETA01-AJ101-MU01","unidad":"U3"}]},{"nombre":"CORREA ALIM CALIZA AL MOLINO DE MARTILLO","unidad":"U3","componentes":[{"nombre":"MOTOR CORREA ALIMENTACION CALIZA","ubicacion_tecnica":"2893-35-HRD01-AF101--M01","unidad":"U3"},{"nombre":"REDUCTOR CORREA ALIM CALIZA","ubicacion_tecnica":"2893-35-HRD01-AF101-MU01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO ESCORIA U4  180 D","unidad":"U4","frecuencia":"6M","plan":"5000083292","equipos":[{"nombre":"CADENA SUMERGIDA U4","unidad":"U4","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-46-ETA01-AT101--M01","unidad":"U4"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-46-ETA01-AT101-MG01","unidad":"U4"}]},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U4","unidad":"U4","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-46-ETA02-AF101--M01","unidad":"U4"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-46-ETA02-AF101-MG01","unidad":"U4"}]},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U4","unidad":"U4","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-46-ETA02-AF102--M01","unidad":"U4"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-46-ETA02-AF102-MG01","unidad":"U4"}]},{"nombre":"TRITURADOR DE ESCORIA U4","unidad":"U4","componentes":[{"nombre":"MOTOR TRITURADOR DE ESCORIA","ubicacion_tecnica":"2893-46-ETA01-AJ101--M01","unidad":"U4"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-46-ETA01-AJ101-MG01","unidad":"U4"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-46-ETA01-AJ101-MU01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO ESCORIA U5  180 D","unidad":"U5","frecuencia":"6M","plan":"5000083302","equipos":[{"nombre":"CADENA SUMERGIDA U5","unidad":"U5","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-56-ETA01-AT101--M01","unidad":"U5"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-56-ETA01-AT101-MG01","unidad":"U5"}]},{"nombre":"CORREA TRANSPORTADORA -1 ESCORIA U5","unidad":"U5","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-56-ETA02-AF101--M01","unidad":"U5"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-56-ETA02-AF101-MG01","unidad":"U5"}]},{"nombre":"CORREA TRANSPORTADORA -2 ESCORIA U5","unidad":"U5","componentes":[{"nombre":"MOTOR CORREA","ubicacion_tecnica":"2893-56-ETA02-AF102--M01","unidad":"U5"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-56-ETA02-AF102-MG01","unidad":"U5"}]},{"nombre":"TRITURADOR DE ESCORIA U5","unidad":"U5","componentes":[{"nombre":"MOTOR TRITURADOR DE ESCORIA","ubicacion_tecnica":"2893-56-ETA01-AJ101--M01","unidad":"U5"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-56-ETA01-AJ101-MG01","unidad":"U5"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-56-ETA01-AJ101-MU01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO CONDICIONES LLENADO SILO","unidad":"SMC","frecuencia":"1M","plan":"5000083307","equipos":[{"nombre":"CORREA TRANSPORTADORA C4/5","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA02-AF003--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA02-AF003-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C6B","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA03-AF004--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA03-AF004-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C7","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA04-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA04-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C8","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA05-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA05-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C9","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA06-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA06-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C10","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA08-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA08-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C11","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA09-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA09-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C12","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA10-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA10-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C13","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA11-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA11-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRIPPER U1U2","unidad":"SMC","componentes":[{"nombre":"MOTOR CORREA TRIPPER","ubicacion_tecnica":"2893-01-ECA17-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR CORREA TRIPPER","ubicacion_tecnica":"2893-01-ECA17-AF001-MU01","unidad":"SMC"}]},{"nombre":"CORREA TRIPPER U3U4","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA17-AF002--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA17-AF002-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRIPPER U5","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-ECA17-AF003--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-ECA17-AF003-MG01","unidad":"SMC"}]}]},{"nombre":"MP MM MONITOREO CONDICIONES PUERTO 30D","unidad":"SMC","frecuencia":"1M","plan":"5000083310","equipos":[{"nombre":"MECANISMO ELEVACION GRUA PANTOGRAFICA -1","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO DE ELEVACION","ubicacion_tecnica":"2893-01-EAA02-AU001--M01","unidad":"SMC"},{"nombre":"REDUCTOR ELEVACION","ubicacion_tecnica":"2893-01-EAA02-AU001-MG01","unidad":"SMC"}]},{"nombre":"MECANISMO CIERRE GRUA PANTOGRAFICA -2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO DE CIERRE","ubicacion_tecnica":"2893-01-EAA02-AU002--M01","unidad":"SMC"},{"nombre":"REDUCTOR CIERRE","ubicacion_tecnica":"2893-01-EAA02-AU002-MG01","unidad":"SMC"}]},{"nombre":"MECANISMO GIRO GRUA PANTOGRAFICA -1","unidad":"SMC","componentes":[{"nombre":"MOTOR GIRO -A","ubicacion_tecnica":"2893-01-EAA02-AU003--M01","unidad":"SMC"},{"nombre":"MOTOR GIRO -B","ubicacion_tecnica":"2893-01-EAA02-AU003--M02","unidad":"SMC"},{"nombre":"REDUCTOR PLANETARIO -A","ubicacion_tecnica":"2893-01-EAA02-AU003-MG01","unidad":"SMC"},{"nombre":"REDUCTOR PLANETARIO -B","ubicacion_tecnica":"2893-01-EAA02-AU003-MG02","unidad":"SMC"}]},{"nombre":"MECANISMO PLUMA GRUA PANTOGRAFICA -1","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO PLUMA","ubicacion_tecnica":"2893-01-EAA02-AU004--M01","unidad":"SMC"},{"nombre":"REDUCTOR TIPO PIÑON CORONA","ubicacion_tecnica":"2893-01-EAA02-AU004-MU01","unidad":"SMC"}]},{"nombre":"MECANISMO ELEVACION GRUA PANTOGRAFICA -2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO DE ELEVACION","ubicacion_tecnica":"2893-01-EAA02-AU004--M01","unidad":"SMC"},{"nombre":"REDUCTOR ELEVACION","ubicacion_tecnica":"2893-01-EAA02-AU004-MU01","unidad":"SMC"}]},{"nombre":"MECANISMO ELEVACION GRUA 2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO DE ELEVACION","ubicacion_tecnica":"2893-01-EAA03-AU001--M01","unidad":"SMC"},{"nombre":"REDUCTOR ELEVACION","ubicacion_tecnica":"2893-01-EAA03-AU001-MG01","unidad":"SMC"}]},{"nombre":"MECANISMO CIERRE GRUA PANTOGRAFICA -2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO DE CIERRE","ubicacion_tecnica":"2893-01-EAA03-AU002--M01","unidad":"SMC"},{"nombre":"REDUCTOR CIERRE","ubicacion_tecnica":"2893-01-EAA03-AU002-MG01","unidad":"SMC"}]},{"nombre":"MECANISMO GIRO GRUA PANTOGRAFICA -2","unidad":"SMC","componentes":[{"nombre":"MOTOR GIRO -A","ubicacion_tecnica":"2893-01-EAA03-AU003--M01","unidad":"SMC"},{"nombre":"MOTOR GIRO -B","ubicacion_tecnica":"2893-01-EAA03-AU003--M02","unidad":"SMC"},{"nombre":"REDUCTOR PLANETARIO -A","ubicacion_tecnica":"2893-01-EAA03-AU003-MG01","unidad":"SMC"},{"nombre":"REDUCTOR PLANETARIO -B","ubicacion_tecnica":"2893-01-EAA03-AU003-MG02","unidad":"SMC"}]},{"nombre":"MECANISMO PLUMA GRUA PANTOGRAFICA -2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO PLUMA","ubicacion_tecnica":"2893-01-EAA03-AU004--M01","unidad":"SMC"},{"nombre":"REDUCTOR TIPO PIÑON CORONA","ubicacion_tecnica":"2893-01-EAA03-AU004-MU01","unidad":"SMC"}]},{"nombre":"ALIMENTADOR VIBRATORIO HACIA C9-1","unidad":"SMC","componentes":[{"nombre":"VIBRADOR -B MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF001--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF001--M02","unidad":"SMC"}]},{"nombre":"ALIMENTADOR VIBRATORIO HACIA C9-2","unidad":"SMC","componentes":[{"nombre":"VIBRADOR -B MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF002--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF002--M02","unidad":"SMC"}]},{"nombre":"ALIMENTADOR VIBRATORIO HACIA C9-3","unidad":"SMC","componentes":[{"nombre":"VIBRADOR -B MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF003--M01","unidad":"SMC"},{"nombre":"VIBRADOR -A MOTOR","ubicacion_tecnica":"2893-01-EAA06-AF003--M02","unidad":"SMC"}]},{"nombre":"TRANSPORTADOR 9-1","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-EAA07-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA07-AF001-MG01","unidad":"SMC"}]},{"nombre":"TRANSPORTADOR 9-2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-EAA07-AF002--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA07-AF002-MG01","unidad":"SMC"}]},{"nombre":"TRANSPORTADOR 9-3","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-EAA07-AF003--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA07-AF003-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C1","unidad":"SMC","componentes":[{"nombre":"MOTOR ACCIONAMIENTO","ubicacion_tecnica":"2893-01-EAA08-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA08-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C2","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-EAA09-AF001--M02","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA09-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA C3","unidad":"SMC","componentes":[{"nombre":"MOTOR ELECTRICO","ubicacion_tecnica":"2893-01-EAA10-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAA10-AF001-MG01","unidad":"SMC"}]},{"nombre":"CORREA TRANSPORTADORA APILADOR RADIAL","unidad":"SMC","componentes":[{"nombre":"TAMBOR MOTRIZ","ubicacion_tecnica":"2893-01-EAD01-AF001-KE02","unidad":"SMC"},{"nombre":"MOTOR","ubicacion_tecnica":"2893-01-EAD01-AF001--M01","unidad":"SMC"},{"nombre":"REDUCTOR","ubicacion_tecnica":"2893-01-EAD01-AF001-MG01","unidad":"SMC"}]}]},{"nombre":"MP MM  PLANTA DE AGUAS COMPRESORES 30D","unidad":"DESAL","frecuencia":"1M","plan":"5000083312","equipos":[{"nombre":"COMPRESOR VAPOR DESALADORA -1 (U1)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA01-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR DESALADORA -1 (U1)","ubicacion_tecnica":"2893-01-GAA01-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -2 (U2)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA02-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR DESALADORA -2 (U2)","ubicacion_tecnica":"2893-01-GAA02-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -3 (U3)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA03-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR 00GDB01AN101A-M01","ubicacion_tecnica":"2893-01-GAA03-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -4 (U3)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA04-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR","ubicacion_tecnica":"2893-01-GAA04-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -5 (U4)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA05-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR","ubicacion_tecnica":"2893-01-GAA05-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -6 (U5)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA06-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR","ubicacion_tecnica":"2893-01-GAA06-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR DESALADORA -7 (U5)","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR","ubicacion_tecnica":"2893-01-GAA07-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR","ubicacion_tecnica":"2893-01-GAA07-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES8","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR GBG20AN001","ubicacion_tecnica":"2893-01-GDB01-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR GBG20AN001-M01","ubicacion_tecnica":"2893-01-GDB01-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES9","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR GBG20AN001","ubicacion_tecnica":"2893-01-GDB02-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESOR GBG20AN001-M01","ubicacion_tecnica":"2893-01-GDB02-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES10","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR GBG20AN001 DES10","ubicacion_tecnica":"2893-01-GDB03-AN101","unidad":"DESAL"},{"nombre":"MOTOR COMPRESORMOTOR GBG20AN001-M01","ubicacion_tecnica":"2893-01-GDB03-AN101--M01","unidad":"DESAL"}]},{"nombre":"COMPRESOR VAPOR GBG20AN001 DES11","unidad":"DESAL","componentes":[{"nombre":"COMPRESOR VAPOR GBG20AN001","ubicacion_tecnica":"2893-01-GDB04-AN101-KN01","unidad":"DESAL"},{"nombre":"MOTOR COMPRESORMOTOR GBG20AN001-M01","ubicacion_tecnica":"2893-01-GDB04-AN101--M01","unidad":"DESAL"}]},{"nombre":"BOMBA ELECTRICA -A SCI","unidad":"DESAL","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-01-SGX01-AP101--M01","unidad":"DESAL"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-SGX01-AP101-KP01","unidad":"DESAL"}]},{"nombre":"BOMBA ELECTRICA -B SCI","unidad":"DESAL","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-01-SGX01-AP102--M01","unidad":"DESAL"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-SGX01-AP102-KP01","unidad":"DESAL"}]},{"nombre":"BOMBA DIESEL SCI","unidad":"DESAL","componentes":[{"nombre":"MOTOR DIESEL","ubicacion_tecnica":"2893-01-SGX01-AP201--M01","unidad":"DESAL"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-SGX01-AP201-KP01","unidad":"DESAL"}]},{"nombre":"BOMBA JOCKEY","unidad":"DESAL","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-01-SGX01-AP202--M01","unidad":"DESAL"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-SGX01-AP202-KP01","unidad":"DESAL"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U1  60 D","unidad":"U1","frecuencia":"2M","plan":"5000083263","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -1A","unidad":"U1","componentes":[{"nombre":"MOTOR VAS -A","ubicacion_tecnica":"2893-15-HLB30-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HLB30-AN101-KN01","unidad":"U1"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -1B","unidad":"U1","componentes":[{"nombre":"MOTOR VAS -B","ubicacion_tecnica":"2893-15-HLB31-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HLB31-AN101-KN01","unidad":"U1"}]},{"nombre":"VENTILADOR DILUCION -1 QEH05AN001 U1","unidad":"U1","componentes":[{"nombre":"MOTOR VENTILADOR -1 QEH05AN001-M01","ubicacion_tecnica":"2893-15-HSD01-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -1 QEH05AN001","ubicacion_tecnica":"2893-15-HSD01-AN101","unidad":"U1"}]},{"nombre":"VENTILADOR DILUCION -2 QEH08AN001 U1","unidad":"U1","componentes":[{"nombre":"MOTOR VENTILADOR -2 QEH08AN001-M01","ubicacion_tecnica":"2893-15-HSD01-AN102--M01","unidad":"U1"},{"nombre":"VENTILADOR DILUCION -2 QEH08AN001","ubicacion_tecnica":"2893-15-HSD01-AN102","unidad":"U1"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1A","unidad":"U1","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -A","ubicacion_tecnica":"2893-15-HLB50-AN101--M01","unidad":"U1"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -1B","unidad":"U1","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -B","ubicacion_tecnica":"2893-15-HLB51-AN101--M01","unidad":"U1"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-15-HLB51-AN101-MU01","unidad":"U1"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-15-HLB51-AN101-MU02","unidad":"U1"}]},{"nombre":"VENTILADOR AIRE IGNITORES U1","unidad":"U1","componentes":[{"nombre":"MOTOR VAI","ubicacion_tecnica":"2893-15-HLB40-AN101--M01","unidad":"U1"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-15-HLB40-AN101-KN01","unidad":"U1"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U2  60 D","unidad":"U2","frecuencia":"2M","plan":"5000083272","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -2A","unidad":"U2","componentes":[{"nombre":"MOTOR VAS -A","ubicacion_tecnica":"2893-25-HLB30-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HLB30-AN101-KN01","unidad":""}]},{"nombre":"VENTILADOR AIRE SELLO VAS -2B","unidad":"U2","componentes":[{"nombre":"MOTOR VAS -B","ubicacion_tecnica":"2893-25-HLB31-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HLB31-AN101-KN01","unidad":"U2"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-25-HLB31-AN101-MU02","unidad":"U2"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2A","unidad":"U2","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -A","ubicacion_tecnica":"2893-25-HLB50-AN101--M01","unidad":"U2"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -2B","unidad":"U2","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -B","ubicacion_tecnica":"2893-25-HLB51-AN101--M01","unidad":"U2"},{"nombre":"DESCANSOS","ubicacion_tecnica":"2893-25-HLB51-AN101-MU01","unidad":"U2"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-25-HLB51-AN101-MU02","unidad":"U2"}]},{"nombre":"VENTILADOR AIRE IGNITORES U2","unidad":"U2","componentes":[{"nombre":"MOTOR VAI","ubicacion_tecnica":"2893-25-HLB40-AN101--M01","unidad":"U2"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-25-HLB40-AN101-KN01","unidad":"U2"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-25-HLB40-AN101-MU02","unidad":"U2"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U3  60 D","unidad":"U3","frecuencia":"2M","plan":"5000083281","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -3A","unidad":"U3","componentes":[{"nombre":"MOTOR VAS -A","ubicacion_tecnica":"2893-35-HLB30-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB30-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -3B","unidad":"U3","componentes":[{"nombre":"MOTOR VAS -B","ubicacion_tecnica":"2893-35-HLB31-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB31-AN101-KN01","unidad":"U3"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-35-HLB31-AN101-MU02","unidad":"U3"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3A","unidad":"U3","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -A","ubicacion_tecnica":"2893-35-HLB50-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB50-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -3B","unidad":"U3","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -B","ubicacion_tecnica":"2893-35-HLB51-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB51-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -3A FGD","unidad":"U3","componentes":[{"nombre":"MOTOR VAS -A FGD","ubicacion_tecnica":"2893-35-HNC02-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR VAS -A FGD","ubicacion_tecnica":"2893-35-HNC02-AN101-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -3B FGD","unidad":"U3","componentes":[{"nombre":"MOTOR VAS -B FGD","ubicacion_tecnica":"2893-35-HNC03-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR VAS -B FGD","ubicacion_tecnica":"2893-35-HNC03-AN101-KN01","unidad":"U3"}]},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3A","unidad":"U3","componentes":[{"nombre":"SOPLADOR AIRE PURGA CAMPO A","ubicacion_tecnica":"2893-35-HNF02-BB101-KN01","unidad":"U3"}]},{"nombre":"SOPLADOR AIRE PURGA CAMPO 3B","unidad":"U3","componentes":[{"nombre":"SOPLADOR AIRE PURGA CAMPO B","ubicacion_tecnica":"2893-35-HNF02-BB102-KN01","unidad":"U3"}]},{"nombre":"VENTILADOR AIRE IGNITORES U3","unidad":"U3","componentes":[{"nombre":"MOTOR VAI","ubicacion_tecnica":"2893-35-HLB40-AN101--M01","unidad":"U3"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-35-HLB40-AN101-KN01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U4  60 D","unidad":"U4","frecuencia":"2M","plan":"5000083290","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -4A","unidad":"U4","componentes":[{"nombre":"MOTOR VAS -A","ubicacion_tecnica":"2893-45-HLB30-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB30-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -4B","unidad":"U4","componentes":[{"nombre":"MOTOR VAS -B","ubicacion_tecnica":"2893-45-HLB31-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB31-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR DILUCION AMON -4A HSA02AN101","unidad":"U4","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-45-HSD01-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HSD01-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR DILUCION AMON -4B HSA02AN102","unidad":"U4","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-45-HSD01-AN102--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HSD01-AN102-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4A","unidad":"U4","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -A","ubicacion_tecnica":"2893-45-HLB50-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB50-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -4B","unidad":"U4","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -B","ubicacion_tecnica":"2893-45-HLB51-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB51-AN101-KN01","unidad":"U4"}]},{"nombre":"VENTILADOR AIRE IGNITORES U4","unidad":"U4","componentes":[{"nombre":"MOTOR VAI","ubicacion_tecnica":"2893-45-HLB40-AN101--M01","unidad":"U4"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-45-HLB40-AN101-KN01","unidad":"U4"}]}]},{"nombre":"MP MM MONITOREO VENTILADORES U5  60 D","unidad":"U5","frecuencia":"2M","plan":"5000083299","equipos":[{"nombre":"VENTILADOR AIRE SELLO VAS -5A","unidad":"U5","componentes":[{"nombre":"MOTOR VAS -A","ubicacion_tecnica":"2893-55-HLB30-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB30-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -5B","unidad":"U5","componentes":[{"nombre":"MOTOR VAS -B","ubicacion_tecnica":"2893-55-HLB31-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB31-AN101-KN01","unidad":"U5"},{"nombre":"DESCANSOS MOTOR","ubicacion_tecnica":"2893-55-HLB31-AN101-MU02","unidad":"U5"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5A","unidad":"U5","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -A","ubicacion_tecnica":"2893-55-HLB50-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB50-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR DETECTOR LLAMA VDLL -5B","unidad":"U5","componentes":[{"nombre":"MOTOR VENTILADOR VDLL -B","ubicacion_tecnica":"2893-55-HLB51-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB51-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -5A FGD","unidad":"U5","componentes":[{"nombre":"MOTOR VAS -A FGD","ubicacion_tecnica":"2893-55-HNC02-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR VAS -A FGD","ubicacion_tecnica":"2893-55-HNC02-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE SELLO VAS -5B FGD","unidad":"U5","componentes":[{"nombre":"MOTOR VAS -B FGD","ubicacion_tecnica":"2893-55-HNC03-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR VAS -B FGD","ubicacion_tecnica":"2893-55-HNC03-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE PURGA 5A","unidad":"U5","componentes":[{"nombre":"SOPLADOR AIRE PURGA CAMPO A","ubicacion_tecnica":"2893-55-HNF02-BB101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE PURGA 5B","unidad":"U5","componentes":[{"nombre":"SOPLADOR AIRE PURGA CAMPO B","ubicacion_tecnica":"2893-55-HNF02-BB102-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR DILUCION AMON -5A HSA02AN101","unidad":"U5","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-55-HSD01-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HSD01-AN101-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR DILUCION AMON -5B HSA02AN102","unidad":"U5","componentes":[{"nombre":"MOTOR","ubicacion_tecnica":"2893-55-HSD01-AN102--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HSD01-AN102-KN01","unidad":"U5"}]},{"nombre":"VENTILADOR AIRE IGNITORES U5","unidad":"U5","componentes":[{"nombre":"MOTOR VAI","ubicacion_tecnica":"2893-55-HLB40-AN101--M01","unidad":"U5"},{"nombre":"VENTILADOR","ubicacion_tecnica":"2893-55-HLB40-AN101-KN01","unidad":"U5"}]}]},{"nombre":"MP MM MONITOREO FGD U3  90 D","unidad":"U3","frecuencia":"3M","plan":"5000083314","equipos":[{"nombre":"MOTOR BOMBA RECIRCULACION -A","unidad":"U3","componentes":[{"nombre":"MOTOR BOMBA RECIRCULACION -A","ubicacion_tecnica":"2893-35-HRA05-AP101--M01","unidad":"U3"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA05-AP101-KP01","unidad":"U3"}]},{"nombre":"MOTOR BOMBA RECIRCULACION -B","unidad":"U3","componentes":[{"nombre":"MOTOR BOMBA RECIRCULACION -B","ubicacion_tecnica":"2893-35-HRA05-AP102--M01","unidad":"U3"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-35-HRA05-AP102-KP01","unidad":"U3"}]},{"nombre":"MOTOR FILTRO BANDA -A","unidad":"U3","componentes":[{"nombre":"MOTOR FILTRO BANDA -A","ubicacion_tecnica":"2893-35-HRB02-AT101--M01","unidad":"U3"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-35-HRB02-AT101-MG01","unidad":"U3"}]},{"nombre":"MOTOR FILTRO BANDA -B","unidad":"U3","componentes":[{"nombre":"MOTOR FILTRO BANDA -B","ubicacion_tecnica":"2893-35-HRB03-AT101--M01","unidad":"U3"},{"nombre":"REDUCTOR DE VELOCIDAD","ubicacion_tecnica":"2893-35-HRB03-AT101-MG01","unidad":"U3"}]},{"nombre":"MOTOR SOPLADOR OXIDACION -A","unidad":"U3","componentes":[{"nombre":"MOTOR SOPLADOR OXIDACION -A","ubicacion_tecnica":"2893-35-HRA08-AN201--M01","unidad":"U3"},{"nombre":"SOPLADOR OXIDACION -A","ubicacion_tecnica":"2893-35-HRA08-AN201-KN01","unidad":"U3"}]},{"nombre":"MOTOR SOPLADOR OXIDACION -B","unidad":"U3","componentes":[{"nombre":"MOTOR SOPLADOR OXIDACION -B","ubicacion_tecnica":"2893-35-HRA08-AN202--M01","unidad":"U3"},{"nombre":"SOPLADOR OXIDACION -B","ubicacion_tecnica":"2893-35-HRA08-AN202-KN01","unidad":"U3"}]}]},{"nombre":"MP MM MONITOREO FGD U5  90 D","unidad":"U5","frecuencia":"3M","plan":"5000083316","equipos":[{"nombre":"BOMBA RECIRCULACION ABSORBER -A","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-55-HRA05-AP101--M01","unidad":"U5"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA05-AP101-KP01","unidad":"U5"}]},{"nombre":"BOMBA RECIRCULACION ABSORBER -B","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA","ubicacion_tecnica":"2893-55-HRA05-AP102--M01","unidad":"U5"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-55-HRA05-AP102-KP01","unidad":"U5"}]},{"nombre":"SOPLADOR DE OXIDACION -A","unidad":"U5","componentes":[{"nombre":"MOTOR SOPLADOR OXIDACION -A","ubicacion_tecnica":"2893-55-HRA08-AN201--M01","unidad":"U5"},{"nombre":"SOPLADOR OXIDACION -A","ubicacion_tecnica":"2893-55-HRA08-AN201-KN01","unidad":"U5"}]},{"nombre":"SOPLADOR DE OXIDACION -B","unidad":"U5","componentes":[{"nombre":"MOTOR SOPLADOR OXIDACION -B","ubicacion_tecnica":"2893-55-HRA08-AN202--M01","unidad":"U5"},{"nombre":"SOPLADOR OXIDACION -B","ubicacion_tecnica":"2893-55-HRA08-AN202-KN01","unidad":"U5"}]}]},{"nombre":"MONITOREO COND LAVADO U1-5 1M","unidad":"U1","frecuencia":"1M","plan":"5000083812","equipos":[{"nombre":"BOMBA -A LAVADO REJA MOVIL U1","unidad":"U1","componentes":[{"nombre":"MOTOR BOMBA -A G1-11.08P21A-M","ubicacion_tecnica":"2893-13-PUA02-AP101--M01","unidad":"U1"},{"nombre":"BOMBA G1-11.08P21A","ubicacion_tecnica":"2893-13-PUA02-AP101-KP01","unidad":"U1"}]},{"nombre":"BOMBA -B LAVADO REJA MOVIL U1","unidad":"U1","componentes":[{"nombre":"MOTOR BOMBA -B G1-11.08P21B-M","ubicacion_tecnica":"2893-13-PUA02-AP102--M01","unidad":"U1"},{"nombre":"BOMBA G1-11.08P21B","ubicacion_tecnica":"2893-13-PUA02-AP102-KP01","unidad":"U1"}]},{"nombre":"BOMBA -A LAVADO REJA MOVIL U2","unidad":"U2","componentes":[{"nombre":"MOTOR BOMBA -A G1-11.08P21A-M","ubicacion_tecnica":"2893-23-PUA02-AP101--M01","unidad":"U2"},{"nombre":"BOMBA G1-11.08P21A","ubicacion_tecnica":"2893-23-PUA02-AP101-KP01","unidad":"U2"}]},{"nombre":"BOMBA -B LAVADO REJA MOVIL U2","unidad":"U2","componentes":[{"nombre":"MOTOR BOMBA -B G1-11.08P21B-M","ubicacion_tecnica":"2893-23-PUA02-AP102--M01","unidad":"U2"},{"nombre":"BOMBA G1-11.08P21B","ubicacion_tecnica":"2893-23-PUA02-AP102-KP01","unidad":"U2"}]},{"nombre":"BOMBA -A LAVADO REJA MOVIL U3","unidad":"U3","componentes":[{"nombre":"MOTOR BOMBA -A PAA01AP101-M01","ubicacion_tecnica":"2893-33-PUA02-AP101--M01","unidad":"U3"},{"nombre":"BOMBA PAA01AP101","ubicacion_tecnica":"2893-33-PUA02-AP101-KP01","unidad":"U3"}]},{"nombre":"BOMBA -B LAVADO REJA MOVIL U3","unidad":"U3","componentes":[{"nombre":"MOTOR BOMBA -B PAA01AP102-M01","ubicacion_tecnica":"2893-33-PUA02-AP102--M01","unidad":"U3"},{"nombre":"BOMBA PAA01AP102","ubicacion_tecnica":"2893-33-PUA02-AP102-KP01","unidad":"U3"}]},{"nombre":"BOMBA -A LAVADO REJA MOVIL U4","unidad":"U4","componentes":[{"nombre":"MOTOR BOMBA -A PAA01AP101-M01","ubicacion_tecnica":"2893-43-PUA02-AP101--M01","unidad":"U4"},{"nombre":"BOMBA PAA01AP101","ubicacion_tecnica":"2893-43-PUA02-AP101-KP01","unidad":"U4"}]},{"nombre":"BOMBA -B LAVADO REJA MOVIL U4","unidad":"U4","componentes":[{"nombre":"MOTOR BOMBA -B PAA01AP102-M01","ubicacion_tecnica":"2893-43-PUA02-AP102--M01","unidad":"U4"},{"nombre":"BOMBA PAA01AP102","ubicacion_tecnica":"2893-43-PUA02-AP102-KP01","unidad":"U4"}]},{"nombre":"BOMBA -A LAVADO REJA MOVIL U5","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA -A PAA01AP101-M01","ubicacion_tecnica":"2893-53-PUA02-AP101--M01","unidad":"U5"},{"nombre":"BOMBA PAA01AP101","ubicacion_tecnica":"2893-53-PUA02-AP101-KP01","unidad":"U5"}]},{"nombre":"BOMBA -B LAVADO REJA MOVIL U5","unidad":"U5","componentes":[{"nombre":"MOTOR BOMBA -B PAA01AP102-M01","ubicacion_tecnica":"2893-53-PUA02-AP102--M01","unidad":"U5"},{"nombre":"BOMBA PAA01AP102","ubicacion_tecnica":"2893-53-PUA02-AP102-KP01","unidad":"U5"}]}]},{"nombre":"MM MONITOREO BOMBAS RETROFIT 90D","unidad":"SC","frecuencia":"3M","plan":"5000083308","equipos":[{"nombre":"BBA DESCARGA HUMEDA HTQ41AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA DESCARGA HUMEDA HTQ41AP001-M01","ubicacion_tecnica":"2893-01-GDL12-AP101--M01","unidad":"SC"},{"nombre":"BOMBA HUMECTACION -1 HTQ41AP001","ubicacion_tecnica":"2893-01-GDL12-AP101--M01","unidad":"SC"}]},{"nombre":"BOMBA HUMECTACION -2 HTQ42AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA DESCARGA HUMEDA HTQ42AP001-M01","ubicacion_tecnica":"2893-01-GDL12-AP102--M01","unidad":"SC"},{"nombre":"BOMBA HUMECTACION -2 HTQ42AP001","ubicacion_tecnica":"2893-01-GDL12-AP102-KP01","unidad":"SC"}]},{"nombre":"BOMBA AGUA PROCESO U1 01HTQ15AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA AGUA PROCESO HTQ15AP001-M01","ubicacion_tecnica":"2893-01-GDL14-AP101--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U1 01HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP101-KP01","unidad":"SC"}]},{"nombre":"BOMBA AGUA PROCESO U2 02HTQ15AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA AGUA PROCESO HTQ15AP001-M01","ubicacion_tecnica":"2893-01-GDL14-AP102--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U2 02HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP102-KP01","unidad":"SC"}]},{"nombre":"BOMBA AGUA PROCESO U4 04HTQ15AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA AGUA PROCESO HTQ15AP001-M01","ubicacion_tecnica":"2893-01-GDL14-AP104--M01","unidad":"SC"},{"nombre":"BOMBA AGUA PROCESO U4 04HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP104-KP01","unidad":"SC"}]},{"nombre":"BOMBA AGUAPROCESO HTQ15AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA AGUA PROCESO HTQ15AP001-M01","ubicacion_tecnica":"2893-01-GDL14-AP105--M01","unidad":"SC"},{"nombre":"BOMBA AGUAPROCESO HTQ15AP001","ubicacion_tecnica":"2893-01-GDL14-AP105-KP01","unidad":"SC"}]},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA HTQ37AP001-M01","ubicacion_tecnica":"2893-01-HTJ02-AP001--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","ubicacion_tecnica":"2893-01-HTJ02-AP001-KP01","unidad":"SC"}]},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA HTQ38AP001-M01","ubicacion_tecnica":"2893-01-HTJ02-AP002--M01","unidad":"SC"},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","ubicacion_tecnica":"2893-01-HTJ02-AP002-KP01","unidad":"SC"}]},{"nombre":"MOTOR BOMBA -1 VTI HTQ62AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA -1 VTI HTQ62AP001-M01","ubicacion_tecnica":"2893-15-HTC02-AP104--M01","unidad":"SC"},{"nombre":"BOMBA MULTIETAPA -1 VTI HTQ62AP001","ubicacion_tecnica":"2893-15-HTC02-AP104-KP01","unidad":"SC"}]},{"nombre":"BOMBA DE TORNILLO - 1 HTP13AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA HUSILLO HTP13AP001-M01","ubicacion_tecnica":"2893-15-HTL02-AP102--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO - 1 HTP13AP001","ubicacion_tecnica":"2893-15-HTL02-AP102-KP01","unidad":"SC"}]},{"nombre":"BOMBA -1 VTI HTQ62AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA -1 VTI HTQ62AP001-M01","ubicacion_tecnica":"2893-25-HTC02-AP104--M01","unidad":"SC"},{"nombre":"BOMBA MULTIETAPA -1 VTI HTQ62AP001","ubicacion_tecnica":"2893-25-HTC02-AP104-KP01","unidad":"SC"}]},{"nombre":"BOMBA DE TORNILLO - 1 HTP13AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA HUSILLO HTP13AP001-M01","ubicacion_tecnica":"2893-25-HTL02-AP102--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO - 1 HTP13AP001","ubicacion_tecnica":"2893-25-HTL02-AP102-KP01","unidad":"SC"}]},{"nombre":"BOMBA HUSILLO SUBPRODUCTO2 HTP23AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA HUSILLO HTP23AP001-M01","ubicacion_tecnica":"2893-25-HTL02-AP103--M01","unidad":"SC"},{"nombre":"BOMBA HUSILLO SUBPRODUCTO2 HTP23AP001","ubicacion_tecnica":"2893-25-HTL02-AP103-KP02","unidad":"SC"}]},{"nombre":"BOMBA -1 VTI HTQ62AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BOMBA -1 VTI HTQ62AP001-M01","ubicacion_tecnica":"2893-45-HTC02-AP104--M01","unidad":"SC"},{"nombre":"BOMBA MULTIETAPA -1 VTI HTQ62AP001","ubicacion_tecnica":"2893-45-HTC02-AP104-KP01","unidad":"SC"}]},{"nombre":"BOMBA DE TORNILLO - 1","unidad":"SC","componentes":[{"nombre":"MOTOR BBA HUSILLO HTP13AP001-M01","ubicacion_tecnica":"2893-45-HTL02-AP102--M01","unidad":"SC"},{"nombre":"BOMBA DE TORNILLO - 1 HTP13AP001","ubicacion_tecnica":"2893-45-HTL02-AP102-KP01","unidad":"SC"}]},{"nombre":"BOMBA HUSILLO SUBPRODUCTO2 HTP23AP001","unidad":"SC","componentes":[{"nombre":"MOTOR BBA HUSILLO HTP23AP001-M01","ubicacion_tecnica":"2893-45-HTL02-AP103--M01","unidad":"SC"},{"nombre":"BOMBA HUSILLO SUBPRODUCTO2 HTP23AP001","ubicacion_tecnica":"2893-45-HTL02-AP103-KP02","unidad":"SC"}]}]},{"nombre":"MP MM MONITOREO CONDIC TRANSP RETRO  90","unidad":"SC","frecuencia":"3M","plan":"5000083330","equipos":[{"nombre":"ALIMENTADOR ROTATORIO SILO 1 HTJ11AF001","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTJ11AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTJ11AN001-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR ENFRIAMIENTO HTJ31AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTJ31AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTJ31AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRASPORTADOR HTK13AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRANSPORTADOR HTK33AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRANSPORTADOR HTK19AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TORNILLO HTK15AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TORNILLO HTK35AF001-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR FILTRO AIRE SALIDA HTK17AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENT FILTRO SALIDA HTK17AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK17AM001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK17AM002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK17AM003-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR FILTRO HTK37AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTK37AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK37AM001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK37AM002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR HIDRATADOR HTK37AM003-M01","unidad":"SC","componentes":[]},{"nombre":"BOMBA HIDRATACION -1 HTQ37AP001","unidad":"SC","componentes":[]},{"nombre":"MOTOR BOMBA HTQ37AP001-M01","unidad":"SC","componentes":[]},{"nombre":"BOMBA HIDRATACION -2 HTQ38AP001","unidad":"SC","componentes":[]},{"nombre":"MOTOR BOMBA HTQ38AP001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTP33AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTP43AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTP63AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTP73AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR DESCARGADOR HTP35AM001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR DESCARGADOR HTP45AM001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR DESCARGADOR HTP65AM001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR DESCARGADOR HTP75AM001-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK51AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","unidad":"SC","componentes":[]},{"nombre":"VENTILADOR ENFRIAMIENTO HTK51AN001","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK51AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR VENTILADOR HTK51AN001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK52AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR TRANSPORTADOR HTK55AF001-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR ALIMENTADOR HTK55AF002-M01","unidad":"SC","componentes":[]},{"nombre":"MOTOR FILTRO VENTILADOR HTK50AN001-M01","unidad":"SC","componentes":[]}]},{"nombre":"MP MM  PLANTA DE AGUAS BOMBAS 180D","unidad":"PA","frecuencia":"6M","plan":"5000083311","equipos":[{"nombre":"BOMBA DE AGUA POTABLE -A","unidad":"PA","componentes":[{"nombre":"MOTOR G1-11.19P13A-M01","ubicacion_tecnica":"2893-01-GKB01-AP101--M01","unidad":"PA"}]},{"nombre":"BOMBA DE AGUA POTABLE -B","unidad":"PA","componentes":[{"nombre":"MOTOR G1-11.19P13B-M01","ubicacion_tecnica":"2893-01-GKB01-AP102--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GKB01-AP102-KP01","unidad":"PA"}]},{"nombre":"BOMBA DE AGUA POTABLE -C","unidad":"PA","componentes":[{"nombre":"MOTOR G1-11.19P13C-M01","ubicacion_tecnica":"2893-01-GKB01-AP103--M01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -A (PARA U 1-2)","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA DOSIFICACION","ubicacion_tecnica":"2893-01-GAD33-AP101--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD33-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -A (DE GBB01BB101)","unidad":"PA","componentes":[{"nombre":"MOTOR 03GHA01AP101-M01","ubicacion_tecnica":"2893-01-GAD33-AP103--M01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -B (DE GBB01BB101)","unidad":"PA","componentes":[]},{"nombre":"BOMBA AGUA SERV. -A (PARA U5)","unidad":"PA","componentes":[{"nombre":"MOTOR 05GHA01AP101-M01","ubicacion_tecnica":"2893-01-GAD33-AP108--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD33-AP108-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -B (PARA U 1-2)","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA DOSIFICACION","ubicacion_tecnica":"2893-01-GAD33-AP102--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD33-AP102-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -B (DE GBB01BB101)","unidad":"PA","componentes":[{"nombre":"MOTOR 03GHA01AP102-M01","ubicacion_tecnica":"2893-01-GAD33-AP104--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD33-AP104-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA SERV. -B (PARA U5)","unidad":"PA","componentes":[{"nombre":"MOTOR GHA01AP102-M01","ubicacion_tecnica":"2893-01-GAD33-AP109--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAD33-AP109-KP01","unidad":"PA"}]},{"nombre":"BOMBA BOOSTER -A DESALADORA 1-2","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA BOOSTER -A G1-11.09P13A-M01","ubicacion_tecnica":"2893-01-GAF11-AP101-KP01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -A DESALADORA 1-2","ubicacion_tecnica":"2893-01-GAF11-AP101--M01","unidad":"PA"}]},{"nombre":"BOMBA BOOSTER -B DESALADORA 3-4","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA BOOSTER -A 03PAC01AP701-M01","ubicacion_tecnica":"2893-01-GAF12-AP101--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -A DESALADORA 3-4","ubicacion_tecnica":"2893-01-GAF12-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA BOOSTER -B DESALADORA 6-7","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA BOOSTER -B 05PAC01AP702-M01","ubicacion_tecnica":"2893-01-GAF14-AP102--M01","unidad":"PA"},{"nombre":"BOMBA BOOSTER -B DESALADORA 6-7","ubicacion_tecnica":"2893-01-GAF14-AP102-KP01","unidad":"PA"}]},{"nombre":"BOMBA RECIRCULACION DESALADORA -1 (U1)","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA RECIRCULACION","ubicacion_tecnica":"2893-01-GAA01-AP101--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAA01-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA CIRCULACION GBG20AP001 DES10","unidad":"PA","componentes":[{"nombre":"MOTOR BBA CIRCULACION GBG20AP001-M01","ubicacion_tecnica":"2893-01-GDB03-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001","ubicacion_tecnica":"2893-01-GDB03-AP112-KP01","unidad":"PA"}]},{"nombre":"BOMBA CIRCULACION GBG20AP001","unidad":"PA","componentes":[{"nombre":"MOTOR BBA CIRCULACION GBG20AP001-M01","ubicacion_tecnica":"2893-01-GDB04-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001","ubicacion_tecnica":"2893-01-GDB04-AP112-KP01","unidad":"PA"}]},{"nombre":"BOMBA RECIRCULACION DESALADORA -2 (U2)","unidad":"PA","componentes":[{"nombre":"MOTOR BOMBA RECIRCULACION","ubicacion_tecnica":"2893-01-GAA02-AP101--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GAA02-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA CIRCULACION GBG20AP001 DESA 8","unidad":"PA","componentes":[{"nombre":"MOTOR BBA CIRCULACION GBG20AP001-M01","ubicacion_tecnica":"2893-01-GDB01-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001","ubicacion_tecnica":"2893-01-GDB01-AP112-KP01","unidad":"PA"}]},{"nombre":"BOMBA CIRCULACION GBG20AP001 DES9","unidad":"PA","componentes":[{"nombre":"MOTOR BBA CIRCULACION GBG20AP001-M01","ubicacion_tecnica":"2893-01-GDB02-AP112--M01","unidad":"PA"},{"nombre":"BOMBA CIRCULACION GBG20AP001","ubicacion_tecnica":"2893-01-GDB02-AP112-KP01","unidad":"PA"}]},{"nombre":"BOMBA PRODUCTO GBG25AP001 DES10","unidad":"PA","componentes":[{"nombre":"MOTOR BBAPRODUCTO- MOTOR GBG25AP001-M01","ubicacion_tecnica":"2893-01-GDB03-AP113--M01","unidad":"PA"},{"nombre":"BOMBA PRODUCTO GBG25AP001","ubicacion_tecnica":"2893-01-GDB03-AP113-KP01","unidad":"PA"}]},{"nombre":"BOMBA FGD MAKE-UP -A (DE GBB01BB101)","unidad":"PA","componentes":[{"nombre":"MOTOR GBB01AP201-M01","ubicacion_tecnica":"2893-01-GAD33-AP105--M01","unidad":"PA"},{"nombre":"BOMBA FGD MAKE-UP -A (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP105-KP01","unidad":"PA"}]},{"nombre":"BOMBA -A MAKEUP","unidad":"PA","componentes":[{"nombre":"MOTOR G1-11.12P11A-M","ubicacion_tecnica":"2893-01-GCL12-AP101--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GCL12-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA MAKEUP-A","unidad":"PA","componentes":[{"nombre":"MOTOR GHC01AP101-M01","ubicacion_tecnica":"2893-01-GCL14-AP101--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GCL14-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA FGD MAKEUP-A","unidad":"PA","componentes":[{"nombre":"MOTOR GBB01AP201-M01","ubicacion_tecnica":"2893-01-GCL15-AP101--M01","unidad":"PA"},{"nombre":"BOMBA 05GBB01AP201","ubicacion_tecnica":"2893-01-GCL15-AP101-KP01","unidad":"PA"}]},{"nombre":"BOMBA FGD MAKE-UP -B (DE GBB01BB101)","unidad":"PA","componentes":[{"nombre":"MOTOR GBB01AP202-M01","ubicacion_tecnica":"2893-01-GAD33-AP106--M01","unidad":"PA"},{"nombre":"BOMBA FGD MAKE-UP -B (DE GBB01BB101)","ubicacion_tecnica":"2893-01-GAD33-AP106-KP01","unidad":"PA"}]},{"nombre":"BOMBA AGUA FGD MAKEUP-B","unidad":"PA","componentes":[{"nombre":"MOTOR 05GBB01AP202-M01","ubicacion_tecnica":"2893-01-GCL15-AP102--M01","unidad":"PA"},{"nombre":"BOMBA 05GBB01AP202","ubicacion_tecnica":"2893-01-GCL15-AP102-KP01","unidad":"PA"}]},{"nombre":"BOMBA -B MAKEUP","unidad":"PA","componentes":[{"nombre":"MOTOR G1-11.12P11B-M","ubicacion_tecnica":"2893-01-GCL12-AP102--M01","unidad":"PA"},{"nombre":"BOMBA","ubicacion_tecnica":"2893-01-GCL12-AP102-KP01","unidad":"PA"}]}]}];
 
 // ═══════════════════════════════════════════════════════════════════════════
 // MÓDULO RUTAS DE VIBRACIÓN
@@ -11621,6 +12075,240 @@ function labelFrecuencia(frec) {
 }
 
 // ── Vista principal ───────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Vista ITO Guacolda — solo lectura, foco en avances/porcentajes.
+// El ITO supervisa el cumplimiento global sin acceso al detalle ni a
+// las acciones operativas (iniciar/cerrar/editar).
+// ─────────────────────────────────────────────────────────────────────
+function renderItoView() {
+    const host = mainContent || document.getElementById('main-content');
+    if (!host) return;
+
+    // --- Datos: avances de rutas (ejecuciones activas + historial) ---
+    const ejecuciones = (typeof getRutasEjecuciones === 'function') ? getRutasEjecuciones() : {};
+    let historialRutas = [];
+    try { historialRutas = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch(e){}
+
+    const todasRutas = typeof RUTAS_VIBRACION_SEED !== 'undefined' ? RUTAS_VIBRACION_SEED : [];
+    const totalRutas = todasRutas.length;
+    let totalCompTodas = 0, totalCompListos = 0, totalCompNoEjec = 0;
+    todasRutas.forEach((r, idx) => {
+        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
+        totalCompTodas += comps;
+        const ej = ejecuciones[idx];
+        if (ej?.componentesEstado) {
+            Object.values(ej.componentesEstado).forEach(st => {
+                if (st === 'listo') totalCompListos++;
+                else if (st === 'no-ejecutado') totalCompNoEjec++;
+            });
+        }
+    });
+    // Sumar componentes cerrados (del historial)
+    historialRutas.forEach(h => {
+        totalCompListos += (h.completados || 0);
+        totalCompNoEjec += (h.noEjecutados || 0);
+    });
+    const pctGlobal = totalCompTodas ? Math.round((totalCompListos / totalCompTodas) * 100) : 0;
+    const rutasActivas = Object.keys(ejecuciones).length;
+    const rutasCerradas = historialRutas.length;
+
+    // Avance por unidad
+    const unidadesMap = new Map(); // unidad -> { total, listos, noEjec }
+    todasRutas.forEach((r, idx) => {
+        const u = r.unidad || 'Otros';
+        if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
+        const slot = unidadesMap.get(u);
+        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
+        slot.total += comps;
+        const ej = ejecuciones[idx];
+        if (ej?.componentesEstado) {
+            Object.values(ej.componentesEstado).forEach(st => {
+                if (st === 'listo') slot.listos++;
+                else if (st === 'no-ejecutado') slot.noEjec++;
+            });
+        }
+    });
+    historialRutas.forEach(h => {
+        const u = h.unidad || 'Otros';
+        if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
+        const slot = unidadesMap.get(u);
+        slot.total += (h.totalComponentes || 0);
+        slot.listos += (h.completados || 0);
+        slot.noEjec += (h.noEjecutados || 0);
+    });
+    const porUnidad = [...unidadesMap.entries()]
+        .map(([u, x]) => ({
+            unidad: u,
+            total: x.total,
+            listos: x.listos,
+            noEjec: x.noEjec,
+            pct: x.total ? Math.round((x.listos / x.total) * 100) : 0
+        }))
+        .sort((a, b) => String(a.unidad).localeCompare(String(b.unidad), 'es'));
+
+    // Avance por ruta (solo las que tienen ejecucion activa o ya cerrada)
+    const rutasAvance = [];
+    todasRutas.forEach((r, idx) => {
+        const ej = ejecuciones[idx];
+        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
+        let listos = 0, noEjec = 0;
+        if (ej?.componentesEstado) {
+            Object.values(ej.componentesEstado).forEach(st => {
+                if (st === 'listo') listos++; else if (st === 'no-ejecutado') noEjec++;
+            });
+        }
+        if (ej) {
+            rutasAvance.push({
+                nombre: r.nombre, unidad: r.unidad, plan: r.plan, ot: ej.ot,
+                fechaInicio: ej.fechaInicio,
+                total: comps, listos, noEjec,
+                pct: comps ? Math.round((listos / comps) * 100) : 0,
+                estado: 'activa'
+            });
+        }
+    });
+    // Historial reciente
+    historialRutas.slice().reverse().slice(0, 20).forEach(h => {
+        rutasAvance.push({
+            nombre: h.rutaNombre, unidad: h.unidad, plan: h.plan, ot: h.ot,
+            fechaInicio: h.fechaInicio,
+            fechaCierre: h.fechaCierre,
+            total: h.totalComponentes || h.totalEquipos || 0,
+            listos: h.completados || 0,
+            noEjec: h.noEjecutados || 0,
+            pct: (h.totalComponentes || 0) ? Math.round(((h.completados || 0) / h.totalComponentes) * 100) : 0,
+            estado: 'cerrada'
+        });
+    });
+
+    // KPI: trabajos cerrados últimos 30 días
+    const ahora = Date.now();
+    const hace30 = ahora - 30 * 86400000;
+    const cierres30 = (estado.historialTareas || []).filter(t => {
+        const d = new Date(t.created_at || t.fecha_completada || 0).getTime();
+        return d >= hace30;
+    }).length;
+
+    const colorUnidadIto = u => (typeof colorUnidad === 'function') ? colorUnidad(u) : '#64748b';
+    const fmtFecha = s => { const m=String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}-${m[2]}-${m[1]}`:s||'—'; };
+
+    host.innerHTML = `
+        <div class="fade-in" style="padding:1.1rem; max-width:1400px; margin:0 auto;">
+            <section class="panel" style="background:linear-gradient(135deg, #ecfeff 0%, #f0f9ff 60%); border-color:rgba(14,165,233,0.25); margin-bottom:1.2rem;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+                    <div>
+                        <div style="font-size:0.72rem; font-weight:800; color:#0369a1; text-transform:uppercase; letter-spacing:0.06em;">Inspección Técnica de Obra</div>
+                        <h1 style="margin:0.3rem 0; color:#0f172a;"><i class="fa-solid fa-shield-check" style="color:#0ea5e9;"></i> ITO Guacolda</h1>
+                        <p style="margin:0; color:#475569;">Resumen de avances y cumplimiento global. Vista solo lectura — sin acceso a edición ni operación.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                        <span style="background:#fff; color:#0369a1; border:1px solid rgba(14,165,233,0.3); border-radius:999px; padding:0.4rem 0.85rem; font-weight:700; font-size:0.85rem;"><i class="fa-solid fa-route"></i> ${totalRutas} rutas configuradas</span>
+                        <span style="background:#fff; color:#15803d; border:1px solid rgba(22,163,74,0.3); border-radius:999px; padding:0.4rem 0.85rem; font-weight:700; font-size:0.85rem;"><i class="fa-solid fa-circle-play"></i> ${rutasActivas} en progreso</span>
+                        <span style="background:#fff; color:#475569; border:1px solid #e5e7eb; border-radius:999px; padding:0.4rem 0.85rem; font-weight:700; font-size:0.85rem;"><i class="fa-solid fa-flag-checkered"></i> ${rutasCerradas} cerradas</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- KPIs principales: porcentajes -->
+            <section style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:1rem; margin-bottom:1.2rem;">
+                <article style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; text-align:center;">
+                    <div style="font-size:0.7rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Avance global</div>
+                    <div style="font-size:2.6rem; font-weight:900; color:#0ea5e9; line-height:1.05; margin:0.4rem 0;">${pctGlobal}%</div>
+                    <div style="font-size:0.78rem; color:#64748b;">${totalCompListos} de ${totalCompTodas} componentes</div>
+                    <div style="height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-top:0.7rem;">
+                        <div style="height:100%; width:${pctGlobal}%; background:#0ea5e9;"></div>
+                    </div>
+                </article>
+                <article style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; text-align:center;">
+                    <div style="font-size:0.7rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Listos</div>
+                    <div style="font-size:2.6rem; font-weight:900; color:#16a34a; line-height:1.05; margin:0.4rem 0;">${totalCompListos}</div>
+                    <div style="font-size:0.78rem; color:#64748b;">componentes ejecutados</div>
+                </article>
+                <article style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; text-align:center;">
+                    <div style="font-size:0.7rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">No ejecutados</div>
+                    <div style="font-size:2.6rem; font-weight:900; color:#dc2626; line-height:1.05; margin:0.4rem 0;">${totalCompNoEjec}</div>
+                    <div style="font-size:0.78rem; color:#64748b;">requieren justificación</div>
+                </article>
+                <article style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; text-align:center;">
+                    <div style="font-size:0.7rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Trabajos últimos 30 d</div>
+                    <div style="font-size:2.6rem; font-weight:900; color:#f59e0b; line-height:1.05; margin:0.4rem 0;">${cierres30}</div>
+                    <div style="font-size:0.78rem; color:#64748b;">cierres en planify</div>
+                </article>
+            </section>
+
+            <!-- Avance por unidad -->
+            <section class="panel" style="padding:1.1rem; margin-bottom:1.2rem;">
+                <h2 style="margin:0 0 0.8rem; font-size:1rem; color:#0f172a;"><i class="fa-solid fa-layer-group" style="color:#0ea5e9;"></i> Avance por unidad</h2>
+                ${porUnidad.length ? `
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:0.7rem;">
+                        ${porUnidad.map(u => `
+                            <article style="border:1px solid #e5e7eb; border-radius:10px; padding:0.8rem 0.95rem;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                                    <span style="background:${colorUnidadIto(u.unidad)}; color:#fff; font-size:0.74rem; font-weight:800; padding:0.2rem 0.6rem; border-radius:999px;">${escapeHtml(u.unidad)}</span>
+                                    <strong style="font-size:1.2rem; color:${colorUnidadIto(u.unidad)};">${u.pct}%</strong>
+                                </div>
+                                <div style="display:flex; height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.4rem;">
+                                    <div style="height:100%; width:${u.total ? (u.listos/u.total)*100 : 0}%; background:#16a34a;"></div>
+                                    <div style="height:100%; width:${u.total ? (u.noEjec/u.total)*100 : 0}%; background:#dc2626;"></div>
+                                </div>
+                                <div style="font-size:0.74rem; color:#64748b;">${u.listos} listos · ${u.noEjec} no ejec. · ${u.total - u.listos - u.noEjec} pend. <span style="float:right;">${u.total} comp.</span></div>
+                            </article>
+                        `).join('')}
+                    </div>
+                ` : `<p style="color:#94a3b8; text-align:center; padding:1rem; margin:0;">Sin avances registrados todavía.</p>`}
+            </section>
+
+            <!-- Avance por ruta -->
+            <section class="panel" style="padding:1.1rem;">
+                <h2 style="margin:0 0 0.8rem; font-size:1rem; color:#0f172a;"><i class="fa-solid fa-route" style="color:#0ea5e9;"></i> Detalle por ruta (${rutasAvance.length})</h2>
+                ${rutasAvance.length ? `
+                    <div style="overflow:auto; border:1px solid #e5e7eb; border-radius:10px;">
+                        <table style="width:100%; border-collapse:separate; border-spacing:0; font-size:0.84rem;">
+                            <thead>
+                                <tr style="background:#f8fafc;">
+                                    <th style="text-align:left; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">Ruta</th>
+                                    <th style="text-align:left; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">Unidad</th>
+                                    <th style="text-align:left; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">OT</th>
+                                    <th style="text-align:left; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">Estado</th>
+                                    <th style="text-align:right; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">Listos</th>
+                                    <th style="text-align:right; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">No ejec.</th>
+                                    <th style="text-align:right; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb;">Total</th>
+                                    <th style="text-align:right; padding:0.55rem 0.7rem; font-size:0.72rem; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; border-bottom:2px solid #e5e7eb; min-width:140px;">% avance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${rutasAvance.map(x => `
+                                    <tr style="border-bottom:1px solid #f1f5f9;">
+                                        <td style="padding:0.55rem 0.7rem; color:#0f172a;">${escapeHtml(x.nombre)}</td>
+                                        <td style="padding:0.55rem 0.7rem;"><span style="background:${colorUnidadIto(x.unidad)}; color:#fff; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;">${escapeHtml(x.unidad || '—')}</span></td>
+                                        <td style="padding:0.55rem 0.7rem; font-family:ui-monospace,monospace; color:#0369a1; font-size:0.8rem;">${escapeHtml(x.ot || '—')}</td>
+                                        <td style="padding:0.55rem 0.7rem;">
+                                            ${x.estado === 'activa'
+                                                ? `<span style="background:#dbeafe; color:#1e40af; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;"><i class="fa-solid fa-circle-play"></i> Activa</span>`
+                                                : `<span style="background:#f1f5f9; color:#475569; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;"><i class="fa-solid fa-flag-checkered"></i> Cerrada</span>`}
+                                        </td>
+                                        <td style="padding:0.55rem 0.7rem; text-align:right; color:#16a34a; font-weight:700;">${x.listos}</td>
+                                        <td style="padding:0.55rem 0.7rem; text-align:right; color:#dc2626; font-weight:700;">${x.noEjec || 0}</td>
+                                        <td style="padding:0.55rem 0.7rem; text-align:right; color:#475569;">${x.total}</td>
+                                        <td style="padding:0.55rem 0.7rem; text-align:right;">
+                                            <div style="display:flex; align-items:center; gap:0.5rem; justify-content:flex-end;">
+                                                <div style="flex:1; max-width:80px; height:6px; background:#f1f5f9; border-radius:999px; overflow:hidden;">
+                                                    <div style="height:100%; width:${x.pct}%; background:${colorUnidadIto(x.unidad)};"></div>
+                                                </div>
+                                                <strong style="min-width:42px; text-align:right; color:${colorUnidadIto(x.unidad)};">${x.pct}%</strong>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                ` : `<p style="color:#94a3b8; text-align:center; padding:1rem; margin:0;">Sin ejecuciones registradas todavía.</p>`}
+            </section>
+        </div>
+    `;
+}
+
 function renderRutasView() {
     if (!vistaRutasEstado.seccionActiva) {
         renderVibracionesHub();
@@ -11723,8 +12411,14 @@ function renderRutasLista() {
 
     const renderCard = (r) => {
         const ej = ejecuciones[r.idx];
-        const total = r.equipos.length;
-        const completados = ej?.equiposCompletados?.length || 0;
+        const totalEquipos = r.equipos.length;
+        // Total de COMPONENTES en la ruta
+        const totalComponentes = (r.equipos || []).reduce((acc, eq) => acc + (eq.componentes?.length || 0), 0);
+        // Componentes con estado en la ejecución activa
+        const estados = ej?.componentesEstado || {};
+        let completados = 0;
+        Object.values(estados).forEach(st => { if (st === 'listo') completados++; });
+        const total = totalComponentes;
         const pct = total ? Math.round((completados / total) * 100) : 0;
         const color = colorUnidad(r.unidad);
         const tieneEjecucion = !!ej;
@@ -11740,7 +12434,7 @@ function renderRutasLista() {
             </div>
             <div style="font-size:0.94rem; font-weight:700; color:#0f172a; line-height:1.3; margin-bottom:0.35rem;">${escapeHtml(r.nombre)}</div>
             <div style="font-size:0.78rem; color:#64748b; margin-bottom:0.6rem;">
-                <i class="fa-solid fa-clipboard-check"></i> Plan ${escapeHtml(r.plan || '—')} · ${total} equipo${total !== 1 ? 's' : ''}
+                <i class="fa-solid fa-clipboard-check"></i> Plan ${escapeHtml(r.plan || '—')} · ${totalEquipos} equipo${totalEquipos !== 1 ? 's' : ''} · ${total} comp.
             </div>
             ${tieneEjecucion ? `
                 <div style="margin-top:0.45rem;">
@@ -11894,85 +12588,126 @@ function renderRutasDetalle(idx) {
     if (!r) { vistaRutasEstado.rutaActivaIdx = null; renderRutasView(); return; }
     const isAdmin = esRolGestion();
     const ej = getEjecucionActiva(idx);
-    const completadosSet = new Set(ej?.equiposCompletados || []);
-    const noEjecutadosSet = new Set(ej?.equiposNoEjecutados || []);
-    const total = r.equipos.length;
-    const completados = completadosSet.size;
-    const noEjecutados = noEjecutadosSet.size;
-    const pendientes = total - completados - noEjecutados;
+    const estados = ej?.componentesEstado || {};
+    const observaciones = ej?.observaciones || {};
+    const cnt = rutasContarComponentes(idx, ej);
+    const total = cnt.total;
+    const completados = cnt.listos;
+    const noEjecutados = cnt.noEjec;
+    const pendientes = cnt.pend;
     const pct = total ? Math.round((completados / total) * 100) : 0;
     const color = colorUnidad(r.unidad);
-    const observaciones = ej?.observaciones || {};
 
-    const renderEquipo = (eq, eqIdx) => {
-        const done = completadosSet.has(eqIdx);
-        const skipped = noEjecutadosSet.has(eqIdx);
-        const obs = observaciones[eqIdx] || '';
-        const equipoVinculado = obtenerEquipoPorUT(eq.ubicacion_tecnica);
-        const tieneFicha = !!equipoVinculado?.id;
-        const partesEquipo = obtenerPartesEquipoVinculado(equipoVinculado);
-        const totalPartes = partesEquipo.length;
-        const fichaTitle = totalPartes > 1 ? 'Elegir parte del equipo para abrir su ficha' : 'Click para abrir la ficha del equipo';
-        const fichaLabel = totalPartes > 1 ? `Ver partes (${totalPartes})` : 'Ver ficha';
-        const datosGuardados = Array.isArray(ej?.mediciones?.[eqIdx]) ? ej.mediciones[eqIdx] : [];
+    const renderComponente = (eq, eqIdx, comp, compIdx) => {
+        const k = rutasCompKey(eqIdx, compIdx);
+        const est = estados[k];
+        const done = est === 'listo';
+        const skipped = est === 'no-ejecutado';
+        const obs = observaciones[k] || '';
+        const componenteVinculado = obtenerEquipoPorUT(comp.ubicacion_tecnica);
+        const tieneFicha = !!componenteVinculado?.id;
+        const datosGuardados = Array.isArray(ej?.mediciones?.[k]) ? ej.mediciones[k] : [];
         const borderColor = done ? '#bbf7d0' : skipped ? '#fecaca' : '#e5e7eb';
         const bgColor = done ? '#f0fdf4' : skipped ? '#fef2f2' : '#fff';
-        const disabledAttr = !ej ? 'disabled' : '';
         const titleStyle = done
             ? 'text-decoration:line-through; color:#64748b;'
             : skipped
                 ? 'color:#7f1d1d;'
                 : '';
-        // Pills clickeables: Listo (verde) y No ejecutado (rojo)
+        const disabledAttr = !ej ? 'disabled' : '';
         const pillListo = `
             <button type="button" ${disabledAttr}
-                onclick="event.stopPropagation(); window.rutasMarcarEquipo(${idx}, ${eqIdx}, ${done ? "'pendiente'" : "'listo'"})"
-                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.7rem; border-radius:999px;
-                    font-size:0.78rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
+                onclick="event.stopPropagation(); window.rutasMarcarComponente(${idx}, ${eqIdx}, ${compIdx}, ${done ? "'pendiente'" : "'listo'"})"
+                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.3rem 0.65rem; border-radius:999px;
+                    font-size:0.74rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
                     border:1px solid ${done ? '#16a34a' : '#cbd5e1'};
                     background:${done ? '#16a34a' : '#fff'}; color:${done ? '#fff' : '#475569'};
                     transition:all 120ms;"
-                title="Marcar como listo / ejecutado">
+                title="Marcar componente como listo">
                 <i class="fa-solid fa-check"></i> Listo
             </button>`;
         const pillNoEjec = `
             <button type="button" ${disabledAttr}
-                onclick="event.stopPropagation(); window.rutasMarcarEquipo(${idx}, ${eqIdx}, ${skipped ? "'pendiente'" : "'no-ejecutado'"})"
-                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.35rem 0.7rem; border-radius:999px;
-                    font-size:0.78rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
+                onclick="event.stopPropagation(); window.rutasMarcarComponente(${idx}, ${eqIdx}, ${compIdx}, ${skipped ? "'pendiente'" : "'no-ejecutado'"})"
+                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.3rem 0.65rem; border-radius:999px;
+                    font-size:0.74rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
                     border:1px solid ${skipped ? '#dc2626' : '#cbd5e1'};
                     background:${skipped ? '#dc2626' : '#fff'}; color:${skipped ? '#fff' : '#475569'};
                     transition:all 120ms;"
-                title="Marcar como no ejecutado">
+                title="Marcar componente como no ejecutado">
                 <i class="fa-solid fa-xmark"></i> No ejecutado
             </button>`;
-        return `<article class="ruta-equipo" style="border:1px solid ${borderColor}; background:${bgColor}; border-radius:10px; padding:0.7rem 0.9rem; margin-bottom:0.5rem; transition:all 150ms;">
-            <div style="display:flex; align-items:flex-start; gap:0.65rem;">
+        return `<div style="border:1px solid ${borderColor}; background:${bgColor}; border-radius:8px; padding:0.55rem 0.75rem; margin-bottom:0.4rem; transition:all 150ms;">
+            <div style="display:flex; align-items:flex-start; gap:0.5rem;">
                 <div style="flex:1; min-width:0; ${tieneFicha ? 'cursor:pointer;' : ''}"
-                    ${tieneFicha ? `onclick="window.rutasAbrirFichaEquipo('${equipoVinculado.id}')" title="${fichaTitle}"` : ''}>
-                    <div style="font-weight:600; color:#0f172a; font-size:0.92rem; line-height:1.35; ${titleStyle} display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
-                        <span>${escapeHtml(eq.nombre)}</span>
+                    ${tieneFicha ? `onclick="window.rutasAbrirFichaEquipo('${componenteVinculado.id}')" title="Ver ficha del componente"` : ''}>
+                    <div style="font-weight:600; color:#0f172a; font-size:0.85rem; line-height:1.3; ${titleStyle} display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                        <span>${escapeHtml(comp.nombre)}</span>
                         ${tieneFicha
-                            ? `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#dbeafe; color:#1e40af; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;"><i class="fa-solid fa-link"></i> ${fichaLabel}</span>`
-                            : `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#fef3c7; color:#92400e; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;" title="Equipo no encontrado en el maestro"><i class="fa-solid fa-circle-question"></i> Sin vincular</span>`
+                            ? `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#dbeafe; color:#1e40af; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid fa-link"></i> Ficha</span>`
+                            : `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#fef3c7; color:#92400e; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;" title="No vinculado al maestro"><i class="fa-solid fa-circle-question"></i> Sin vincular</span>`
                         }
-                        ${datosGuardados.length ? `<span style="display:inline-flex; align-items:center; gap:0.25rem; font-size:0.68rem; font-weight:700; background:#dcfce7; color:#047857; padding:0.15rem 0.5rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.04em;"><i class="fa-solid fa-floppy-disk"></i> Datos ${datosGuardados.length}</span>` : ''}
+                        ${datosGuardados.length ? `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#dcfce7; color:#047857; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid fa-floppy-disk"></i> ${datosGuardados.length}</span>` : ''}
                     </div>
-                    <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.75rem; color:#64748b; margin-top:0.15rem;">
-                        <i class="fa-solid fa-diagram-project"></i> ${escapeHtml(eq.ubicacion_tecnica || '—')}
+                    <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.7rem; color:#64748b; margin-top:0.1rem;">
+                        ${escapeHtml(comp.ubicacion_tecnica || '—')}
                     </div>
                 </div>
             </div>
             ${ej ? `
-                <div style="display:flex; gap:0.4rem; margin-top:0.6rem; flex-wrap:wrap;">
+                <div style="display:flex; gap:0.35rem; margin-top:0.45rem; flex-wrap:wrap;">
                     ${pillListo}
                     ${pillNoEjec}
                 </div>
                 <input type="text" class="form-control" placeholder="Observación (opcional)"
                     value="${escapeHtml(obs)}"
-                    oninput="window.rutasSetObservacion(${idx}, ${eqIdx}, this.value)"
-                    style="margin-top:0.5rem; font-size:0.82rem; padding:0.4rem 0.6rem;">
+                    oninput="window.rutasSetObservacionComp(${idx}, ${eqIdx}, ${compIdx}, this.value)"
+                    style="margin-top:0.4rem; font-size:0.78rem; padding:0.35rem 0.55rem;">
             ` : ''}
+        </div>`;
+    };
+
+    const renderEquipo = (eq, eqIdx) => {
+        const comps = Array.isArray(eq.componentes) ? eq.componentes : [];
+        // Contar estados de los componentes de este equipo
+        let listosEq = 0, noEjecEq = 0;
+        comps.forEach((_, ci) => {
+            const st = estados[rutasCompKey(eqIdx, ci)];
+            if (st === 'listo') listosEq++;
+            else if (st === 'no-ejecutado') noEjecEq++;
+        });
+        const totalEq = comps.length;
+        const pendEq = totalEq - listosEq - noEjecEq;
+        const equipoCompleto = listosEq === totalEq;
+        const sinTocar = listosEq === 0 && noEjecEq === 0;
+        return `<article class="ruta-equipo" style="border:1px solid ${equipoCompleto ? '#bbf7d0' : '#e5e7eb'}; background:#fff; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.7rem;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; min-width:0;">
+                    <i class="fa-solid fa-gears" style="color:#64748b;"></i>
+                    <span style="font-weight:800; color:#0f172a; font-size:0.95rem;">${escapeHtml(eq.nombre)}</span>
+                    <span style="font-size:0.72rem; color:#64748b;">${totalEq} comp.</span>
+                </div>
+                ${ej ? `
+                    <div style="display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                        <span style="background:#dcfce7; color:#15803d; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;">✓ ${listosEq}</span>
+                        ${noEjecEq ? `<span style="background:#fee2e2; color:#b91c1c; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;">✕ ${noEjecEq}</span>` : ''}
+                        ${pendEq ? `<span style="background:#f1f5f9; color:#475569; font-size:0.7rem; font-weight:800; padding:0.15rem 0.5rem; border-radius:999px;">○ ${pendEq}</span>` : ''}
+                        ${sinTocar ? `
+                            <button type="button" onclick="window.rutasMarcarEquipo(${idx}, ${eqIdx}, 'listo')"
+                                style="border:1px solid #cbd5e1; background:#fff; color:#16a34a; border-radius:999px; padding:0.2rem 0.55rem; font-size:0.7rem; font-weight:800; cursor:pointer;"
+                                title="Marcar todos los componentes como listos">
+                                <i class="fa-solid fa-check-double"></i> Marcar todos
+                            </button>` : ''}
+                    </div>
+                ` : ''}
+            </div>
+            <div style="display:flex; height:5px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.6rem;">
+                <div style="height:100%; width:${totalEq ? (listosEq/totalEq)*100 : 0}%; background:#16a34a;"></div>
+                <div style="height:100%; width:${totalEq ? (noEjecEq/totalEq)*100 : 0}%; background:#dc2626;"></div>
+            </div>
+            <div>
+                ${comps.map((c, ci) => renderComponente(eq, eqIdx, c, ci)).join('')}
+            </div>
         </article>`;
     };
 
@@ -12010,6 +12745,7 @@ function renderRutasDetalle(idx) {
                         <div style="text-align:right;">
                             <div style="font-size:1.6rem; font-weight:800; color:${color};">${pct}%</div>
                             <div style="font-size:0.78rem; color:#64748b;">${completados} listo${completados!==1?'s':''} · ${noEjecutados} no ejec. · ${pendientes} pend.</div>
+                            <div style="font-size:0.72rem; color:#94a3b8;">de ${total} componentes en ${(r.equipos||[]).length} equipo(s)</div>
                         </div>
                     </div>
                     <div style="display:flex; height:10px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-bottom:0.7rem;">
@@ -12340,45 +13076,65 @@ Ingresa el número de OT (Orden de Trabajo):`, '');
     setEjecucionActiva(idx, {
         ot: otTrim,
         fechaInicio: new Date().toISOString().slice(0, 10),
-        equiposCompletados: [],
-        equiposCompletadosAt: {},
-        equiposNoEjecutados: [],
-        equiposNoEjecutadosAt: {},
-        observaciones: {}
+        componentesEstado: {},   // { "eqIdx.compIdx": "listo" | "no-ejecutado" }
+        componentesAt: {},        // timestamp por componente
+        observaciones: {},        // observación por componente
+        mediciones: {}            // datos guardados por componente
     });
     renderRutasView();
 };
 
-// Marca un equipo con un estado: 'listo' | 'no-ejecutado' | 'pendiente'.
-// Solo uno puede estar activo: marcar Listo limpia No-Ejecutado y viceversa.
-window.rutasMarcarEquipo = function(idx, eqIdx, estado) {
-    const ej = getEjecucionActiva(idx);
+// Clave única para identificar un componente dentro de una ruta
+function rutasCompKey(eqIdx, compIdx) { return `${eqIdx}.${compIdx}`; }
+
+// Marca un COMPONENTE con un estado: 'listo' | 'no-ejecutado' | 'pendiente'.
+window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
+    const ej = getEjecucionActiva(rutaIdx);
     if (!ej) return;
-    ej.equiposCompletados = Array.isArray(ej.equiposCompletados) ? ej.equiposCompletados : [];
-    ej.equiposNoEjecutados = Array.isArray(ej.equiposNoEjecutados) ? ej.equiposNoEjecutados : [];
-    ej.equiposCompletadosAt = ej.equiposCompletadosAt || {};
-    ej.equiposNoEjecutadosAt = ej.equiposNoEjecutadosAt || {};
-    const yaListo = ej.equiposCompletados.includes(eqIdx);
-    // Quitar siempre de ambos primero
-    ej.equiposCompletados = ej.equiposCompletados.filter(x => x !== eqIdx);
-    ej.equiposNoEjecutados = ej.equiposNoEjecutados.filter(x => x !== eqIdx);
-    delete ej.equiposCompletadosAt[eqIdx];
-    delete ej.equiposNoEjecutadosAt[eqIdx];
-    if (estado === 'listo') {
-        ej.equiposCompletados.push(eqIdx);
-        ej.equiposCompletadosAt[eqIdx] = new Date().toISOString();
-    } else if (estado === 'no-ejecutado') {
-        ej.equiposNoEjecutados.push(eqIdx);
-        ej.equiposNoEjecutadosAt[eqIdx] = new Date().toISOString();
+    ej.componentesEstado = ej.componentesEstado || {};
+    ej.componentesAt = ej.componentesAt || {};
+    const k = rutasCompKey(eqIdx, compIdx);
+    const yaListo = ej.componentesEstado[k] === 'listo';
+    if (estado === 'pendiente' || !estado) {
+        delete ej.componentesEstado[k];
+        delete ej.componentesAt[k];
+    } else {
+        ej.componentesEstado[k] = estado;
+        ej.componentesAt[k] = new Date().toISOString();
     }
-    setEjecucionActiva(idx, ej);
+    setEjecucionActiva(rutaIdx, ej);
     renderRutasView();
     if (estado === 'listo' && !yaListo) {
-        setTimeout(() => window.rutasAbrirCapturaEquipo?.(idx, eqIdx), 0);
+        setTimeout(() => window.rutasAbrirCapturaComponente?.(rutaIdx, eqIdx, compIdx), 0);
     }
 };
 
-// Compat con versiones anteriores: el viejo toggle redirige a marcarEquipo
+// Marca TODOS los componentes de un equipo con el mismo estado (atajo).
+window.rutasMarcarEquipo = function(rutaIdx, eqIdx, estado) {
+    const r = RUTAS_VIBRACION_SEED[rutaIdx];
+    const equipo = r?.equipos?.[eqIdx];
+    const comps = Array.isArray(equipo?.componentes) ? equipo.componentes : [];
+    if (!comps.length) return;
+    const ej = getEjecucionActiva(rutaIdx);
+    if (!ej) return;
+    ej.componentesEstado = ej.componentesEstado || {};
+    ej.componentesAt = ej.componentesAt || {};
+    const now = new Date().toISOString();
+    comps.forEach((_, compIdx) => {
+        const k = rutasCompKey(eqIdx, compIdx);
+        if (estado === 'pendiente' || !estado) {
+            delete ej.componentesEstado[k];
+            delete ej.componentesAt[k];
+        } else {
+            ej.componentesEstado[k] = estado;
+            ej.componentesAt[k] = now;
+        }
+    });
+    setEjecucionActiva(rutaIdx, ej);
+    renderRutasView();
+};
+
+// Compat con versiones anteriores
 window.rutasToggleEquipo = function(idx, eqIdx, checked) {
     window.rutasMarcarEquipo(idx, eqIdx, checked ? 'listo' : 'pendiente');
 };
@@ -12400,26 +13156,45 @@ window.rutasGuardarEjecucion = function(idx) {
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 1800);
 };
-window.rutasSetObservacion = function(idx, eqIdx, valor) {
-    const ej = getEjecucionActiva(idx);
+// Observación por COMPONENTE (la key es "eqIdx.compIdx")
+window.rutasSetObservacionComp = function(rutaIdx, eqIdx, compIdx, valor) {
+    const ej = getEjecucionActiva(rutaIdx);
     if (!ej) return;
     ej.observaciones = ej.observaciones || {};
-    if (valor) ej.observaciones[eqIdx] = valor;
-    else delete ej.observaciones[eqIdx];
-    setEjecucionActiva(idx, ej);
-    // No re-render para no perder el foco del input
+    const k = rutasCompKey(eqIdx, compIdx);
+    if (valor) ej.observaciones[k] = valor;
+    else delete ej.observaciones[k];
+    setEjecucionActiva(rutaIdx, ej);
 };
+// Compat (firma vieja con sólo eqIdx)
+window.rutasSetObservacion = function(rutaIdx, eqIdx, valor) {
+    window.rutasSetObservacionComp(rutaIdx, eqIdx, 0, valor);
+};
+
+// Cuenta componentes de una ruta según su estado en la ejecución activa
+function rutasContarComponentes(rutaIdx, ej) {
+    const r = RUTAS_VIBRACION_SEED[rutaIdx];
+    if (!r) return { total:0, listos:0, noEjec:0, pend:0 };
+    let total = 0, listos = 0, noEjec = 0;
+    (r.equipos || []).forEach((eq, eqIdx) => {
+        (eq.componentes || []).forEach((_, compIdx) => {
+            total++;
+            const st = ej?.componentesEstado?.[rutasCompKey(eqIdx, compIdx)];
+            if (st === 'listo') listos++;
+            else if (st === 'no-ejecutado') noEjec++;
+        });
+    });
+    return { total, listos, noEjec, pend: total - listos - noEjec };
+}
+
 window.rutasCerrarEjecucion = function(idx) {
     const r = RUTAS_VIBRACION_SEED[idx];
     const ej = getEjecucionActiva(idx);
     if (!ej || !r) return;
-    const total = r.equipos.length;
-    const completados = (ej.equiposCompletados || []).length;
-    const noEjecutados = (ej.equiposNoEjecutados || []).length;
-    const sinTocar = total - completados - noEjecutados;
-    let resumen = `Listos: ${completados} · No ejecutados: ${noEjecutados}`;
-    if (sinTocar > 0) resumen += ` · Sin marcar: ${sinTocar}`;
-    const msg = `¿Cerrar la ruta "${r.nombre}" (OT ${ej.ot})?\n\n${resumen}\n\nQuedará archivada en "Rutas cerradas" y se podrá iniciar una nueva ejecución.`;
+    const c = rutasContarComponentes(idx, ej);
+    let resumen = `Listos: ${c.listos} · No ejecutados: ${c.noEjec}`;
+    if (c.pend > 0) resumen += ` · Sin marcar: ${c.pend}`;
+    const msg = `¿Cerrar la ruta "${r.nombre}" (OT ${ej.ot})?\n\n${resumen} de ${c.total} componente(s)\n\nQuedará archivada en "Rutas cerradas" y se podrá iniciar una nueva ejecución.`;
     if (!confirm(msg)) return;
     try {
         const histRaw = localStorage.getItem('planify_rutas_historial');
@@ -12433,14 +13208,13 @@ window.rutasCerrarEjecucion = function(idx) {
             ot: ej.ot,
             fechaInicio: ej.fechaInicio,
             fechaCierre: new Date().toISOString().slice(0, 10),
-            totalEquipos: total,
-            completados,
-            noEjecutados,
-            sinMarcar: sinTocar,
-            equiposCompletados: ej.equiposCompletados || [],
-            equiposCompletadosAt: ej.equiposCompletadosAt || {},
-            equiposNoEjecutados: ej.equiposNoEjecutados || [],
-            equiposNoEjecutadosAt: ej.equiposNoEjecutadosAt || {},
+            totalEquipos: (r.equipos || []).length,
+            totalComponentes: c.total,
+            completados: c.listos,
+            noEjecutados: c.noEjec,
+            sinMarcar: c.pend,
+            componentesEstado: ej.componentesEstado || {},
+            componentesAt: ej.componentesAt || {},
             mediciones: ej.mediciones || {},
             observaciones: ej.observaciones || {}
         });
@@ -12471,6 +13245,7 @@ const navConfig = {
     'nav-trabajadores': 'trabajadores',
     'nav-horas-extra-admin': 'horas_extra_admin',
     'nav-insumos': 'insumos',
+    'nav-ito': 'ito',
     'nav-mobile-dashboard': 'dashboard',
     'nav-mobile-semanal': 'semanal',
     'nav-mobile-hours': 'mis_horas',
@@ -12530,6 +13305,9 @@ function renderizarVistaActual() {
             break;
         case 'rutas':
             renderRutasView();
+            break;
+        case 'ito':
+            renderItoView();
             break;
         case 'avisos-sap':
             if (typeof window.renderAvisosSapView === 'function') {
@@ -15346,9 +16124,15 @@ const pinLabel = document.getElementById('pin-label');
 let pinLoginTarget = 'admin';
 
 function abrirLoginPin(targetRol) {
-    pinLoginTarget = targetRol === 'administrador' ? 'administrador' : 'admin';
+    const rolesValidos = ['administrador', 'ito', 'admin'];
+    pinLoginTarget = rolesValidos.includes(targetRol) ? targetRol : 'admin';
+    const etiquetas = {
+        'administrador': 'Administrador',
+        'ito': 'ITO Guacolda',
+        'admin': 'Planificador'
+    };
     if (pinLabel) {
-        pinLabel.innerHTML = `<i class="fa-solid fa-key"></i> PIN de ${pinLoginTarget === 'administrador' ? 'Administrador' : 'Planificador'}`;
+        pinLabel.innerHTML = `<i class="fa-solid fa-key"></i> PIN de ${etiquetas[pinLoginTarget] || 'Planificador'}`;
     }
     const err = document.getElementById('pin-error');
     if (err) {
@@ -15373,6 +16157,11 @@ document.getElementById('btn-login-administrador')?.addEventListener('click', ()
     abrirLoginPin('administrador');
 });
 
+// Boton ITO Guacolda — vista solo lectura con porcentajes de avance
+document.getElementById('btn-login-ito')?.addEventListener('click', () => {
+    abrirLoginPin('ito');
+});
+
 // Cancelar PIN planificador
 document.getElementById('btn-cancel-pin')?.addEventListener('click', () => {
     pinModal.style.display = 'none';
@@ -15392,7 +16181,8 @@ pinInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') validarPi
 
 function validarPin() {
     const pin = pinInput?.value || '';
-    const pinEsperado = pinLoginTarget === 'administrador' ? '1808' : '2025';
+    const pines = { 'administrador': '1808', 'ito': '2011', 'admin': '2025' };
+    const pinEsperado = pines[pinLoginTarget] || '2025';
     if (pin === pinEsperado) {
         accederApp(pinLoginTarget);
         pinModal.style.display = 'none';
@@ -15536,6 +16326,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-checkin':            ['admin'],
         'nav-horas-extra-admin':  ['admin', 'administrador'],
         'nav-insumos':            ['admin', 'trabajador'],
+        'nav-ito':                ['ito'],
         'nav-mobile-dashboard':   ['admin', 'trabajador', 'visita'],
         'nav-mobile-semanal':     ['admin', 'trabajador'],
         'nav-mobile-hours':       ['trabajador'],
@@ -15544,7 +16335,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mobile-menu':        [],
         'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin'],
-        'btn-logout':             ['admin', 'administrador', 'trabajador', 'visita']
+        'btn-logout':             ['admin', 'administrador', 'trabajador', 'visita', 'ito']
     };
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
@@ -15588,7 +16379,9 @@ function accederApp(rol, trabajadorObj = null) {
     const esPantallaMovil = window.matchMedia('(max-width: 768px)').matches;
     let vistaInicial = rol === 'administrador'
         ? 'control'
-        : (rol === 'admin' ? (esPantallaMovil ? 'dashboard' : 'control') : 'dashboard');
+        : rol === 'ito'
+            ? 'ito'
+            : (rol === 'admin' ? (esPantallaMovil ? 'dashboard' : 'control') : 'dashboard');
     // Si hay una vista guardada de la sesión anterior, restaurarla
     // siempre que esté permitida para el rol actual.
     try {
@@ -15598,7 +16391,12 @@ function accederApp(rol, trabajadorObj = null) {
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
                 const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos'];
                 const permitidoVisita = ['dashboard','semanal','historial','equipos'];
-                const lista = rol === 'admin' ? permitidoAdmin : (rol === 'administrador' ? permitidoAdministrador : (rol === 'trabajador' ? permitidoTrabajador : permitidoVisita));
+                const permitidoIto = ['ito'];
+                const lista = rol === 'admin' ? permitidoAdmin
+                    : rol === 'administrador' ? permitidoAdministrador
+                    : rol === 'trabajador' ? permitidoTrabajador
+                    : rol === 'ito' ? permitidoIto
+                    : permitidoVisita;
                 if (lista.includes(vistaGuardada)) vistaInicial = vistaGuardada;
             }
     } catch (e) { /* noop */ }

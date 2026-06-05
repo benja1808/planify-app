@@ -159,6 +159,11 @@
         return eq.activo + (eq.componente ? ` · ${eq.componente}` : '');
     }
 
+    // Solo el planificador / administrador puede eliminar avisos
+    function puedeEliminar() {
+        return typeof window.esRolGestion === 'function' ? window.esRolGestion() : true;
+    }
+
     function renderFila(a) {
         const parado = a.parada ? `<span class="avisos-pill avisos-pill--parada"><i class="fa-solid fa-triangle-exclamation"></i> PARADA</span>` : '';
         const eqLink = a.equipo_id
@@ -169,6 +174,9 @@
             <span class="avisos-cell-mono">${esc(a.ubicacion_tecnica || '')}</span>
             ${nombreEq ? `<div style="margin-top:0.2rem; font-size:0.78rem; color:#475569; font-weight:600;">${esc(nombreEq)}</div>` : ''}
         `;
+        const eliminarBtn = puedeEliminar()
+            ? `<button type="button" class="btn btn-outline btn-icon" data-eliminar-aviso="${esc(a.id)}" title="Eliminar aviso" style="border-color:#fecaca; color:#dc2626; background:#fff5f5; padding:0.3rem 0.5rem;"><i class="fa-solid fa-trash"></i></button>`
+            : '';
         return `
             <tr data-aviso-id="${esc(a.id)}">
                 <td><span class="avisos-cell-mono">${esc(a.nro_notificacion)}</span></td>
@@ -182,8 +190,47 @@
                 <td>${a.orden ? `<span class="avisos-cell-mono">${esc(a.orden)}</span>` : '<span style="color:#94a3b8;">—</span>'}</td>
                 <td><span class="${stCls(a.status_usuario)}">${esc(a.status_usuario || '—')}</span></td>
                 <td>${eqLink}</td>
+                <td style="text-align:center;">${eliminarBtn}</td>
             </tr>`;
     }
+
+    // ───────────────────────────────────────────────────────────────────
+    // ELIMINAR aviso: pide confirmación, borra en Supabase y actualiza
+    // el state local. Identificamos el aviso por id (PK) — más robusto
+    // que usar nro_notificacion porque admite múltiples avisos manuales.
+    // ───────────────────────────────────────────────────────────────────
+    async function eliminarAviso(id, opts = {}) {
+        if (!id) return;
+        if (!puedeEliminar()) { alert('No tienes permiso para eliminar avisos.'); return; }
+        if (!window.supabaseClient) { alert('Sin conexión a la base de datos.'); return; }
+
+        const aviso = state.avisos.find(a => a.id === id);
+        const etiqueta = aviso ? `${aviso.nro_notificacion}${aviso.descripcion_original ? ` — ${String(aviso.descripcion_original).slice(0, 60)}` : ''}` : id;
+        const confirmar = opts.silent || window.confirm(`¿Eliminar este aviso?\n\n${etiqueta}\n\nEsta acción no se puede deshacer.`);
+        if (!confirmar) return;
+
+        try {
+            const { error } = await window.supabaseClient.from(TABLA).delete().eq('id', id);
+            if (error) throw error;
+            // Actualizar state + UI sin recargar todo desde Supabase
+            state.avisos = state.avisos.filter(a => a.id !== id);
+            // Cerrar modal de detalle si estaba abierto sobre este aviso
+            document.getElementById('aviso-detail-modal')?.classList.remove('is-open');
+            renderTablaInPlace();
+            // Actualizar chip contador
+            const chip = document.getElementById('avisos-vinculados-chip');
+            if (chip) {
+                const vinc = state.avisos.filter(a => a.equipo_id).length;
+                if (vinc) { chip.style.display = ''; chip.querySelector('span').textContent = vinc; }
+                else chip.style.display = 'none';
+            }
+        } catch (e) {
+            console.error('[avisos] eliminar:', e);
+            alert('No se pudo eliminar el aviso: ' + e.message);
+        }
+    }
+    // Exponer por si se necesita desde otros módulos / consola
+    window.eliminarAvisoSap = eliminarAviso;
 
     async function render() {
         const host = document.getElementById('main-content') || (typeof mainContent !== 'undefined' ? mainContent : null);
@@ -298,6 +345,7 @@
                         <th>Orden</th>
                         <th>Status</th>
                         <th>Equipo</th>
+                        <th style="text-align:center;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -306,9 +354,18 @@
             </table>
         `;
         host.querySelectorAll('tr[data-aviso-id]').forEach(tr => {
-            tr.addEventListener('click', () => {
+            tr.addEventListener('click', (ev) => {
+                // No abrir detalle si el click vino del botón eliminar
+                if (ev.target.closest('[data-eliminar-aviso]')) return;
                 const aviso = state.avisos.find(a => a.id === tr.dataset.avisoId);
                 if (aviso) abrirDetalle(aviso);
+            });
+        });
+        // Botón eliminar (delegación: cada fila puede tenerlo o no)
+        host.querySelectorAll('[data-eliminar-aviso]').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                eliminarAviso(btn.dataset.eliminarAviso);
             });
         });
     }
@@ -355,6 +412,11 @@
                     <button class="btn btn-outline" data-mejorar-aviso="${esc(a.id)}" title="Próximamente: mejorar descripción con IA">
                         <i class="fa-solid fa-wand-magic-sparkles"></i> Mejorar con IA
                     </button>
+                    ${puedeEliminar() ? `
+                        <button class="btn" data-eliminar-aviso-modal="${esc(a.id)}" style="background:#fff5f5; color:#dc2626; border:1px solid #fecaca;" title="Eliminar este aviso">
+                            <i class="fa-solid fa-trash"></i> Eliminar aviso
+                        </button>
+                    ` : ''}
                     <button class="btn" data-close-aviso="1" style="background:transparent; color:#64748b; border:1px solid #e5e7eb;">Cerrar</button>
                 </div>
             </div>
@@ -364,6 +426,10 @@
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('is-open'); }, { once: true });
         modal.querySelector('[data-mejorar-aviso]')?.addEventListener('click', () => {
             alert('La mejora de descripción con IA aún no está disponible. Pasa la especificación de prompts y se activa.');
+        });
+        modal.querySelector('[data-eliminar-aviso-modal]')?.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            eliminarAviso(ev.currentTarget.dataset.eliminarAvisoModal);
         });
     }
 
