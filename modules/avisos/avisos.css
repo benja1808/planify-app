@@ -128,6 +128,11 @@
 .avisos-pill--st-default { background: #f1f5f9; color: #475569; }
 .avisos-pill--parada { background: #fef2f2; color: #b91c1c; border:1px solid #fecaca; }
 
+/* Estado del sistema SAP (columna P) */
+.avisos-pill--sys-cerrado     { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-weight: 700; }
+.avisos-pill--sys-tratamiento { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; font-weight: 700; }
+.avisos-pill--sys-abierto     { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; font-weight: 700; }
+
 .avisos-cell-mono {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 0.78rem;

@@ -53,6 +53,30 @@
             : 'avisos-pill avisos-pill--st-default';
     }
 
+    // Status del sistema (columna P del Excel SAP). Interpretamos los
+    // códigos más comunes y devolvemos { label, cls } para el chip visual.
+    // Prioridad de detección: lo más "tarde" en el ciclo gana.
+    //   MECE = aviso cerrado (Cerrado)
+    //   METR = mensaje en tratamiento (En tratamiento)
+    //   MEAB = mensaje abierto (Abierto)
+    //   Cualquier otro: se muestra tal cual con estilo neutral.
+    function sistemaChip(v) {
+        const tokens = String(v || '').toUpperCase().split(/\s+/).filter(Boolean);
+        if (tokens.includes('MECE')) {
+            return { label: 'Cerrado', code: 'MECE', cls: 'avisos-pill avisos-pill--sys-cerrado' };
+        }
+        if (tokens.includes('METR')) {
+            return { label: 'En tratamiento', code: 'METR', cls: 'avisos-pill avisos-pill--sys-tratamiento' };
+        }
+        if (tokens.includes('MEAB')) {
+            return { label: 'Abierto', code: 'MEAB', cls: 'avisos-pill avisos-pill--sys-abierto' };
+        }
+        if (!tokens.length) {
+            return { label: '—', code: '', cls: 'avisos-pill avisos-pill--st-default' };
+        }
+        return { label: tokens.join(' '), code: tokens[0], cls: 'avisos-pill avisos-pill--st-default' };
+    }
+
     async function cargarAvisos(force = false) {
         if (state.loaded && !force) return state.avisos;
         if (state.loading) return state.avisos;
@@ -91,7 +115,8 @@
         return items.filter(a => {
             if (state.filtroPrioridad && a.prioridad !== state.filtroPrioridad) return false;
             if (state.filtroStatus) {
-                const st = String(a.status_usuario || '').toUpperCase();
+                // Filtro por status_sistema (columna P del Excel): MECE / METR / etc.
+                const st = String(a.status_sistema || '').toUpperCase();
                 if (!st.includes(state.filtroStatus)) return false;
             }
             if (state.filtroParada && !a.parada) return false;
@@ -116,10 +141,10 @@
                     <option value="Baja"  ${state.filtroPrioridad === 'Baja'  ? 'selected' : ''}>Baja</option>
                 </select>
                 <select id="avisos-status" class="form-control">
-                    <option value="">Status: todos</option>
-                    <option value="CRTD" ${state.filtroStatus === 'CRTD' ? 'selected' : ''}>CRTD (creado)</option>
-                    <option value="OUTR" ${state.filtroStatus === 'OUTR' ? 'selected' : ''}>OUTR</option>
-                    <option value="TOPV" ${state.filtroStatus === 'TOPV' ? 'selected' : ''}>TOPV</option>
+                    <option value="">Estado: todos</option>
+                    <option value="MEAB" ${state.filtroStatus === 'MEAB' ? 'selected' : ''}>Abierto (MEAB)</option>
+                    <option value="METR" ${state.filtroStatus === 'METR' ? 'selected' : ''}>En tratamiento (METR)</option>
+                    <option value="MECE" ${state.filtroStatus === 'MECE' ? 'selected' : ''}>Cerrado (MECE)</option>
                 </select>
                 <label style="display:inline-flex; align-items:center; gap:0.35rem; padding:0.4rem 0.65rem; border:1px solid #e5e7eb; border-radius:8px; background:#fff; cursor:pointer; font-size:0.85rem;">
                     <input id="avisos-parada" type="checkbox" ${state.filtroParada ? 'checked' : ''}>
@@ -177,6 +202,7 @@
         const eliminarBtn = puedeEliminar()
             ? `<button type="button" class="btn btn-outline btn-icon" data-eliminar-aviso="${esc(a.id)}" title="Eliminar aviso" style="border-color:#fecaca; color:#dc2626; background:#fff5f5; padding:0.3rem 0.5rem;"><i class="fa-solid fa-trash"></i></button>`
             : '';
+        const sis = sistemaChip(a.status_sistema);
         return `
             <tr data-aviso-id="${esc(a.id)}">
                 <td><span class="avisos-cell-mono">${esc(a.nro_notificacion)}</span></td>
@@ -187,8 +213,8 @@
                 <td>${esc(a.pto_trabajo || '')}</td>
                 <td style="min-width:240px;">${utCell}</td>
                 <td style="max-width:280px;">${esc(a.descripcion_original || '')}</td>
+                <td><span class="${sis.cls}" title="${esc(a.status_sistema || '')}">${esc(sis.label)}</span></td>
                 <td>${a.orden ? `<span class="avisos-cell-mono">${esc(a.orden)}</span>` : '<span style="color:#94a3b8;">—</span>'}</td>
-                <td><span class="${stCls(a.status_usuario)}">${esc(a.status_usuario || '—')}</span></td>
                 <td>${eqLink}</td>
                 <td style="text-align:center;">${eliminarBtn}</td>
             </tr>`;
@@ -342,8 +368,8 @@
                         <th>Pto. Tbjo.</th>
                         <th>Ubic. Técnica</th>
                         <th>Descripción</th>
+                        <th>Estado</th>
                         <th>Orden</th>
-                        <th>Status</th>
                         <th>Equipo</th>
                         <th style="text-align:center;">Acciones</th>
                     </tr>
@@ -390,9 +416,9 @@
                     <div class="aviso-detail-item"><label>Prioridad</label><span><span class="${prioCls(a.prioridad)}">${esc(a.prioridad || '—')}</span></span></div>
                     <div class="aviso-detail-item"><label>Clase aviso</label><span>${esc(a.clase_aviso || '—')}</span></div>
                     <div class="aviso-detail-item"><label>Parada</label><span>${a.parada ? 'Sí — equipo parado' : 'No'}</span></div>
+                    <div class="aviso-detail-item"><label>Estado</label><span>${(() => { const s = sistemaChip(a.status_sistema); return `<span class="${s.cls}" title="${esc(a.status_sistema || '')}">${esc(s.label)}</span>`; })()}</span></div>
                     <div class="aviso-detail-item"><label>Orden</label><span class="avisos-cell-mono">${esc(a.orden || '—')}</span></div>
-                    <div class="aviso-detail-item"><label>Status sistema</label><span>${esc(a.status_sistema || '—')}</span></div>
-                    <div class="aviso-detail-item"><label>Status usuario</label><span><span class="${stCls(a.status_usuario)}">${esc(a.status_usuario || '—')}</span></span></div>
+                    <div class="aviso-detail-item"><label>Código SAP</label><span style="font-family:ui-monospace,monospace; color:#64748b; font-size:0.8rem;">${esc(a.status_sistema || '—')}</span></div>
                     <div class="aviso-detail-item"><label>Autor</label><span>${esc(a.autor || '—')}</span></div>
                     <div class="aviso-detail-item"><label>Autor del aviso</label><span>${esc(a.autor_aviso || '—')}</span></div>
                     <div class="aviso-detail-item"><label>Fe. creación</label><span>${fmtFecha(a.fecha_creacion)}</span></div>

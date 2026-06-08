@@ -4913,9 +4913,11 @@ async function actualizarBadgeRutasTrabajador() {
         try { await refrescarRutasEjecucionesDesdeSupabase(); } catch (e) {}
     }
     const ejs = getRutasEjecuciones() || {};
+    const _esTecnico = (ej) =>
+        (Array.isArray(ej.tecnicosIds) && ej.tecnicosIds.includes(trabajadorId)) ||
+        ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId;
     const n = Object.values(ejs).filter(ej =>
-        ej && ej.estado !== 'cerrada' && ej.estado !== 'cancelada' &&
-        (ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId)
+        ej && ej.estado !== 'cerrada' && ej.estado !== 'cancelada' && _esTecnico(ej)
     ).length;
 
     if (n > 0) { badge.textContent = n; badge.style.display = 'inline-block'; }
@@ -12063,6 +12065,17 @@ function setEjecucionActiva(rutaIdx, ejecucion, opts = {}) {
 async function _pushEjecucionASupabase(rutaIdx, ej) {
     if (!window.supabaseClient || !ej) return;
     const r = (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED[rutaIdx] : null;
+
+    // Construir tecnicos a partir de la fuente que esté disponible:
+    // 1) array tecnicosIds explícito (nuevo formato)
+    // 2) [liderId, ayudanteId] (compat retro)
+    const tecnicosIds = Array.isArray(ej.tecnicosIds) && ej.tecnicosIds.length
+        ? ej.tecnicosIds.filter(Boolean)
+        : [ej.liderId, ej.ayudanteId].filter(Boolean);
+    const tecnicosNombres = Array.isArray(ej.tecnicosNombres) && ej.tecnicosNombres.length
+        ? ej.tecnicosNombres.filter(Boolean)
+        : [ej.liderNombre, ej.ayudanteNombre].filter(Boolean);
+
     const payload = {
         ruta_idx: rutaIdx,
         ruta_nombre: r?.nombre || ej.rutaNombre || `Ruta #${rutaIdx}`,
@@ -12072,22 +12085,40 @@ async function _pushEjecucionASupabase(rutaIdx, ej) {
         fecha_inicio: ej.fechaInicio || new Date().toISOString().slice(0, 10),
         fecha_cierre: ej.fechaCierre || null,
         estado: ej.estado || 'activa',
-        lider_id: ej.liderId || null,
-        lider_nombre: ej.liderNombre || null,
-        ayudante_id: ej.ayudanteId || null,
-        ayudante_nombre: ej.ayudanteNombre || null,
+        // Mantenemos lider_id/ayudante_id para compatibilidad con código viejo
+        lider_id: tecnicosIds[0] || null,
+        lider_nombre: tecnicosNombres[0] || null,
+        ayudante_id: tecnicosIds[1] || null,
+        ayudante_nombre: tecnicosNombres[1] || null,
+        // Formato nuevo: array completo (puede tener N técnicos)
+        tecnicos_ids: tecnicosIds,
+        tecnicos_nombres: tecnicosNombres,
         componentes_estado: ej.componentesEstado || {},
         componentes_at: ej.componentesAt || {},
         observaciones: ej.observaciones || {},
         mediciones: ej.mediciones || {}
     };
+    // Si las columnas tecnicos_ids/tecnicos_nombres aún no existen en la
+    // tabla (migración no corrida) reintentamos sin esos campos para que
+    // el push siga funcionando.
+    const _stripTecnicos = (p) => { const c = { ...p }; delete c.tecnicos_ids; delete c.tecnicos_nombres; return c; };
+    const _esErrorColumnaFaltante = (err) =>
+        err && (err.code === '42703' || /column .*(tecnicos_ids|tecnicos_nombres).* does not exist/i.test(err.message || ''));
+
     if (ej.id) {
-        const { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id);
+        let { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id);
+        if (error && _esErrorColumnaFaltante(error)) {
+            console.warn('[rutas] tecnicos_ids no existe todavía — push sin ellos. Corre el SQL de migración.');
+            ({ error } = await window.supabaseClient.from('rutas_ejecuciones').update(_stripTecnicos(payload)).eq('id', ej.id));
+        }
         if (error) throw error;
     } else {
-        const { data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([payload]).select('id').single();
+        let { data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([payload]).select('id').single();
+        if (error && _esErrorColumnaFaltante(error)) {
+            console.warn('[rutas] tecnicos_ids no existe todavía — insert sin ellos. Corre el SQL de migración.');
+            ({ data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([_stripTecnicos(payload)]).select('id').single());
+        }
         if (error) throw error;
-        // Guardamos el id devuelto en el cache local para próximos updates
         if (data?.id) {
             const all = getRutasEjecuciones();
             if (all[rutaIdx]) {
@@ -12118,6 +12149,15 @@ async function refrescarRutasEjecucionesDesdeSupabase() {
         const porIdx = {};
         for (const row of data || []) {
             if (porIdx[row.ruta_idx]) continue; // ya tenemos la más reciente
+            // Si la fila trae tecnicos_ids (formato nuevo), lo usamos.
+            // Si no, lo armamos desde lider/ayudante (compat retro).
+            const tecnicosIds = Array.isArray(row.tecnicos_ids) && row.tecnicos_ids.length
+                ? row.tecnicos_ids.filter(Boolean)
+                : [row.lider_id, row.ayudante_id].filter(Boolean);
+            const tecnicosNombres = Array.isArray(row.tecnicos_nombres) && row.tecnicos_nombres.length
+                ? row.tecnicos_nombres.filter(Boolean)
+                : [row.lider_nombre, row.ayudante_nombre].filter(Boolean);
+
             porIdx[row.ruta_idx] = {
                 id: row.id,
                 ot: row.ot,
@@ -12126,6 +12166,8 @@ async function refrescarRutasEjecucionesDesdeSupabase() {
                 liderNombre: row.lider_nombre,
                 ayudanteId: row.ayudante_id,
                 ayudanteNombre: row.ayudante_nombre,
+                tecnicosIds: tecnicosIds,
+                tecnicosNombres: tecnicosNombres,
                 componentesEstado: row.componentes_estado || {},
                 componentesAt: row.componentes_at || {},
                 observaciones: row.observaciones || {},
@@ -12263,12 +12305,15 @@ function renderTrabajadorRutasView() {
     const pintarLista = (ejecuciones) => {
         const cont = document.getElementById('trab-rutas-lista');
         if (!cont) return;
-        // Filtramos: este trabajador como líder o ayudante, y activa
+        // Filtramos: este trabajador en cualquier posición del array tecnicosIds
+        // (incluye los antiguos líder/ayudante para compatibilidad).
+        const esTecnico = (ej) =>
+            (Array.isArray(ej.tecnicosIds) && ej.tecnicosIds.includes(trabajadorId)) ||
+            ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId;
         const misRutas = Object.entries(ejecuciones || {})
             .map(([idxStr, ej]) => ({ idx: Number(idxStr), ej }))
             .filter(({ ej }) =>
-                ej && ej.estado !== 'cerrada' &&
-                (ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId)
+                ej && ej.estado !== 'cerrada' && esTecnico(ej)
             );
 
         if (!misRutas.length) {
@@ -12292,7 +12337,19 @@ function renderTrabajadorRutasView() {
             if (!r) return '';
             const stats = rutasContarComponentes(idx, ej);
             const pct = stats.total ? Math.round((stats.listos / stats.total) * 100) : 0;
-            const compañero = ej.liderId === trabajadorId ? ej.ayudanteNombre : ej.liderNombre;
+            // Compañeros: todos los demás técnicos en la ruta
+            let compañeros = [];
+            if (Array.isArray(ej.tecnicosNombres) && ej.tecnicosNombres.length) {
+                compañeros = ej.tecnicosNombres.filter((nom, i) =>
+                    nom && (ej.tecnicosIds?.[i] !== trabajadorId));
+            } else {
+                compañeros = [ej.liderId === trabajadorId ? ej.ayudanteNombre : ej.liderNombre].filter(Boolean);
+            }
+            const compañero = compañeros.length === 1
+                ? compañeros[0]
+                : compañeros.length > 1
+                    ? `${compañeros[0]} +${compañeros.length - 1}`
+                    : '';
             const unidadColor = colorUnidad(r.unidad);
             const pctColor = pct >= 100 ? '#16a34a' : pct >= 50 ? unidadColor : '#475569';
             return `
@@ -12412,6 +12469,21 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
           </div>
         </section>
 
+        <!-- ── KIZEO: Notificado o no ─────────────────────────────────────── -->
+        <section style="background:#f5f3ff; border:1px solid #ddd6fe; border-radius:12px; padding:0.85rem; margin-bottom:0.85rem;">
+          <div style="font-weight:800; color:#5b21b6; font-size:0.85rem; margin-bottom:0.5rem;">
+            <i class="fa-solid fa-mobile-screen-button"></i> Notificado en Kizeo
+          </div>
+          <div style="display:flex; gap:0.4rem; margin-bottom:0.6rem;">
+            <button type="button" class="cap-kizeo-modo btn" data-modo="si" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #7c3aed; background:${prev.kizeo && prev.kizeo.notificado ? '#7c3aed' : '#fff'}; color:${prev.kizeo && prev.kizeo.notificado ? '#fff' : '#7c3aed'}; font-weight:700; font-size:0.85rem; min-height:42px;">Sí, notificado</button>
+            <button type="button" class="cap-kizeo-modo btn" data-modo="no" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #94a3b8; background:${prev.kizeo && prev.kizeo.notificado === false ? '#475569' : '#fff'}; color:${prev.kizeo && prev.kizeo.notificado === false ? '#fff' : '#475569'}; font-weight:700; font-size:0.85rem; min-height:42px;">No notificado</button>
+          </div>
+          <div id="cap-kizeo-campos" style="display:${prev.kizeo && prev.kizeo.notificado ? 'block' : 'none'};">
+            <label style="display:block; font-size:0.72rem; color:#5b21b6; font-weight:700; margin-bottom:0.2rem;">Detalle del mensaje</label>
+            <textarea id="cap-kizeo-detalle" rows="2" class="form-control" placeholder="Ej: Vibración aumentada, derivado a inspección." style="font-size:0.9rem; resize:vertical;">${escapeHtml(prev.kizeo && prev.kizeo.detalle ? prev.kizeo.detalle : '')}</textarea>
+          </div>
+        </section>
+
         <p id="cap-med-error" style="display:none; color:#dc2626; font-size:0.82rem; margin:0 0 0.5rem;"></p>
 
         <button id="cap-med-guardar" class="btn btn-primary" style="width:100%; padding:0.85rem; font-size:0.95rem; font-weight:800;">
@@ -12421,29 +12493,42 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
     `;
     document.body.appendChild(overlay);
 
-    let vibModo  = prev.vibracion === 'N/A' ? 'na' : (prev.vibracion ? 'si' : null);
-    let tempModo = prev.temperatura === 'N/A' ? 'na' : (prev.temperatura ? 'si' : null);
+    let vibModo   = prev.vibracion === 'N/A' ? 'na' : (prev.vibracion ? 'si' : null);
+    let tempModo  = prev.temperatura === 'N/A' ? 'na' : (prev.temperatura ? 'si' : null);
+    // 'si' = notificado, 'no' = no notificado, null = no respondido
+    let kizeoModo = prev.kizeo
+        ? (prev.kizeo.notificado ? 'si' : (prev.kizeo.notificado === false ? 'no' : null))
+        : null;
+
+    const ACENTOS_SI = {
+        'cap-vib':   '#FF6900',
+        'cap-temp':  '#2563eb',
+        'cap-kizeo': '#7c3aed',
+    };
+    const ACENTO_NA = '#475569';
 
     const pintarModo = (grupo, modo) => {
         overlay.querySelectorAll(`.${grupo}-modo`).forEach(btn => {
             const m = btn.dataset.modo;
-            const accentSi  = grupo === 'cap-vib' ? '#FF6900' : '#2563eb';
-            const accentNa  = '#475569';
-            const isActive  = m === modo;
-            const color     = m === 'si' ? accentSi : accentNa;
+            const accentSi = ACENTOS_SI[grupo] || '#FF6900';
+            const isActive = m === modo;
+            const isSiBtn  = m === 'si';
+            const color    = isSiBtn ? accentSi : ACENTO_NA;
             btn.style.background = isActive ? color : '#fff';
             btn.style.color      = isActive ? '#fff' : color;
-            btn.style.borderColor= m === 'si' ? accentSi : '#94a3b8';
+            btn.style.borderColor= isSiBtn ? accentSi : '#94a3b8';
         });
         const campos = overlay.querySelector(`#${grupo}-campos`);
         if (campos) campos.style.display = modo === 'si' ? (grupo === 'cap-vib' ? 'grid' : 'block') : 'none';
         if (modo === 'si') {
-            setTimeout(() => overlay.querySelector(`#${grupo}-valor`)?.focus(), 50);
+            const fieldId = grupo === 'cap-kizeo' ? '#cap-kizeo-detalle' : `#${grupo}-valor`;
+            setTimeout(() => overlay.querySelector(fieldId)?.focus(), 50);
         }
     };
 
     overlay.querySelectorAll('.cap-vib-modo').forEach(b => b.addEventListener('click', () => { vibModo = b.dataset.modo; pintarModo('cap-vib', vibModo); }));
     overlay.querySelectorAll('.cap-temp-modo').forEach(b => b.addEventListener('click', () => { tempModo = b.dataset.modo; pintarModo('cap-temp', tempModo); }));
+    overlay.querySelectorAll('.cap-kizeo-modo').forEach(b => b.addEventListener('click', () => { kizeoModo = b.dataset.modo; pintarModo('cap-kizeo', kizeoModo); }));
 
     const cerrar = (saved) => {
         overlay.remove();
@@ -12475,15 +12560,30 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
             temperatura = 'N/A';
         }
 
+        // Kizeo: si dijo "Sí notificado", requerimos detalle
+        let kizeoData = null;
+        if (kizeoModo === 'si') {
+            const detalle = (overlay.querySelector('#cap-kizeo-detalle').value || '').trim();
+            if (!detalle) return showErr('Escribe el detalle del mensaje notificado en Kizeo, o marca "No notificado".');
+            kizeoData = { notificado: true, detalle, ts: new Date().toISOString() };
+        } else if (kizeoModo === 'no') {
+            kizeoData = { notificado: false, detalle: '', ts: new Date().toISOString() };
+        }
+
         const ejCur = getEjecucionActiva(rutaIdx);
         if (!ejCur) return cerrar(false);
         ejCur.mediciones = ejCur.mediciones || {};
-        // Solo guardamos si capturó al menos uno
-        if (vibracion !== null || temperatura !== null) {
+        // Si hay datos previos para esa key, mergeamos para no perder lo no editado
+        const previo = ejCur.mediciones[key] && typeof ejCur.mediciones[key] === 'object' && !Array.isArray(ejCur.mediciones[key])
+            ? ejCur.mediciones[key] : {};
+        // Solo guardamos si capturó al menos uno de los tres
+        if (vibracion !== null || temperatura !== null || kizeoData !== null) {
             ejCur.mediciones[key] = {
-                vibracion: vibracion,
-                punto: punto,
-                temperatura: temperatura,
+                ...previo,
+                vibracion: vibracion !== null ? vibracion : previo.vibracion,
+                punto: punto !== null ? punto : previo.punto,
+                temperatura: temperatura !== null ? temperatura : previo.temperatura,
+                kizeo: kizeoData !== null ? kizeoData : previo.kizeo,
                 ts: new Date().toISOString()
             };
         }
@@ -12597,7 +12697,7 @@ function renderTrabajadorRutaDetalle() {
                     const isListo = st === 'listo';
                     const isNoEjec = st === 'no-ejecutado';
                     const med = ejActual.mediciones?.[k] || null;
-                    const tieneMed = med && (med.vibracion != null || med.temperatura != null);
+                    const tieneMed = med && (med.vibracion != null || med.temperatura != null || med.kizeo);
                     return `
                     <div class="trab-comp-item" data-comp-idx="${ci}" style="
                         padding:0.7rem 0.95rem; border-top:1px solid #f8fafc;
@@ -12631,6 +12731,10 @@ function renderTrabajadorRutaDetalle() {
                             <div class="trab-comp-med-chip" style="margin-top:0.5rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
                                 ${med.vibracion != null ? `<span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-wave-square"></i> ${escapeHtml(String(med.vibracion))}${med.vibracion !== 'N/A' && med.punto ? ` · ${escapeHtml(med.punto)}` : ''}</span>` : ''}
                                 ${med.temperatura != null ? `<span style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-temperature-half"></i> ${escapeHtml(String(med.temperatura))}${med.temperatura !== 'N/A' ? '°C' : ''}</span>` : ''}
+                                ${med.kizeo ? (med.kizeo.notificado
+                                    ? `<span title="${escapeHtml(med.kizeo.detalle || '')}" style="background:#f5f3ff; color:#5b21b6; border:1px solid #ddd6fe; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-mobile-screen-button"></i> Kizeo${med.kizeo.detalle ? ': ' + escapeHtml(med.kizeo.detalle.slice(0, 28)) + (med.kizeo.detalle.length > 28 ? '…' : '') : ''}</span>`
+                                    : `<span style="background:#f1f5f9; color:#64748b; border:1px solid #e2e8f0; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-mobile-screen-button"></i> Sin Kizeo</span>`
+                                ) : ''}
                                 <button type="button" class="trab-comp-editar-med" style="margin-left:auto; background:transparent; border:none; color:#64748b; font-size:0.72rem; cursor:pointer; padding:0.1rem 0.3rem;"><i class="fa-solid fa-pen"></i></button>
                             </div>
                         ` : ''}
@@ -13466,6 +13570,10 @@ function renderRutasDetalle(idx) {
                         ${datosGuardados.length ? `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#dcfce7; color:#047857; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid fa-floppy-disk"></i> ${datosGuardados.length}</span>` : ''}
                         ${medObj && medObj.vibracion != null ? `<span title="Vibración" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#fff7ed; color:#9a3412; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #fed7aa;"><i class="fa-solid fa-wave-square"></i> ${escapeHtml(String(medObj.vibracion))}${medObj.vibracion !== 'N/A' && medObj.punto ? ` · ${escapeHtml(medObj.punto)}` : ''}</span>` : ''}
                         ${medObj && medObj.temperatura != null ? `<span title="Temperatura" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#eff6ff; color:#1e40af; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #bfdbfe;"><i class="fa-solid fa-temperature-half"></i> ${escapeHtml(String(medObj.temperatura))}${medObj.temperatura !== 'N/A' ? '°C' : ''}</span>` : ''}
+                        ${medObj && medObj.kizeo ? (medObj.kizeo.notificado
+                            ? `<span title="Kizeo: ${escapeHtml(medObj.kizeo.detalle || '')}" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#f5f3ff; color:#5b21b6; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #ddd6fe;"><i class="fa-solid fa-mobile-screen-button"></i> Kizeo</span>`
+                            : `<span title="No notificado en Kizeo" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#f1f5f9; color:#64748b; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #e2e8f0;"><i class="fa-solid fa-mobile-screen-button"></i> Sin Kizeo</span>`
+                        ) : ''}
                     </div>
                     <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.7rem; color:#64748b; margin-top:0.1rem;">
                         ${escapeHtml(comp.ubicacion_tecnica || '—')}

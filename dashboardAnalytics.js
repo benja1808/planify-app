@@ -1690,19 +1690,51 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 const completedAt = source?.equiposCompletadosAt || {};
                 const measurements = source?.mediciones || {};
                 const candidates = [completedAt[eqIdx]];
+                // Formato NUEVO: timestamp más reciente de componentesAt["eqIdx.X"]
+                const compAt = source?.componentesAt || {};
+                if (compAt && typeof compAt === 'object') {
+                    const prefix = `${eqIdx}.`;
+                    let latest = null;
+                    Object.entries(compAt).forEach(([k, v]) => {
+                        if (k.startsWith(prefix)) {
+                            if (!latest || String(v) > String(latest)) latest = v;
+                        }
+                    });
+                    if (latest) candidates.push(latest);
+                }
                 const measurementRows = Array.isArray(measurements[eqIdx]) ? measurements[eqIdx] : [];
                 measurementRows.forEach(row => candidates.push(row?.fecha));
                 candidates.push(source?.fechaCierre, source?.fechaInicio);
                 return candidates.map(parseRouteDateValue).find(Boolean) || null;
             };
             const getRouteEquipmentKey = (route, eq, routeIdx, eqIdx) => `${route?.plan || route?.nombre || routeIdx}::${eq?.ubicacion_tecnica || eq?.nombre || eqIdx}`;
+
+            // Determina qué eqIdx están "hechos" en una ejecución. En el formato
+            // NUEVO, un equipo está hecho cuando todos sus componentes están
+            // 'listo' en componentesEstado. En el formato VIEJO, usa el flat
+            // array equiposCompletados (compatibilidad con históricos).
+            const eqIdxsHechos = (route, source) => {
+                if (!source) return [];
+                const estados = source.componentesEstado || null;
+                if (estados && typeof estados === 'object' && Object.keys(estados).length) {
+                    const out = [];
+                    (route.equipos || []).forEach((eq, eqIdx) => {
+                        const comps = eq.componentes || [];
+                        if (!comps.length) return;
+                        const todosListos = comps.every((_, ci) => estados[`${eqIdx}.${ci}`] === 'listo');
+                        if (todosListos) out.push(eqIdx);
+                    });
+                    return out;
+                }
+                return (source.equiposCompletados || []).map(Number);
+            };
+
             const routeActivity = [];
             Object.entries(routeExecutions).forEach(([routeIdxRaw, execution]) => {
                 const routeIdx = Number(routeIdxRaw);
                 const route = routeCatalog[routeIdx];
                 if (!route || !execution) return;
-                (execution.equiposCompletados || []).forEach(eqIdxRaw => {
-                    const eqIdx = Number(eqIdxRaw);
+                eqIdxsHechos(route, execution).forEach(eqIdx => {
                     const eq = route.equipos?.[eqIdx] || {};
                     const date = getRouteCompletionDate(execution, eqIdx);
                     if (!date) return;
@@ -1720,10 +1752,9 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             routeHistory.forEach((item, histIdx) => {
                 const routeIdx = Number(item.rutaIdx);
                 const route = routeCatalog[routeIdx] || {};
-                const completed = Array.isArray(item.equiposCompletados) ? item.equiposCompletados : [];
+                const completed = eqIdxsHechos(route, item);
                 if (completed.length) {
-                    completed.forEach(eqIdxRaw => {
-                        const eqIdx = Number(eqIdxRaw);
+                    completed.forEach(eqIdx => {
                         const eq = route.equipos?.[eqIdx] || {};
                         const date = getRouteCompletionDate(item, eqIdx);
                         if (!date) return;
