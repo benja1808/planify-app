@@ -82,6 +82,20 @@ GRAY_LINE   = HexColor("#E2E8F0")   # tono entre SURFACE e INK_SOFT, solo para l
 RED         = ACCENT
 RED_L       = SURFACE
 
+# ---------------------------------------------------------------------------
+# Paleta para gráficos (tortas / barras agrupadas) — usa TINTES de la
+# paleta base. Permite distinguir slices/segmentos sin introducir hues
+# nuevos ni romper la sensación minimalista. Orden de uso pensado para
+# que las series más importantes queden con el acento naranja.
+# ---------------------------------------------------------------------------
+CHART_PALETTE = [
+    ACCENT,                  # 1º — naranja sólido (énfasis principal)
+    INK,                     # 2º — azul oscuro casi negro
+    HexColor("#FDBA74"),     # 3º — tint claro de ACCENT (orange-300)
+    INK_SOFT,                # 4º — gris medio
+    HexColor("#CBD5E1"),     # 5º — gris claro (slate-300)
+]
+
 PAGE_W, PAGE_H = A4   # 595.27 x 841.89 pt
 CONTENT_W = PAGE_W - 72  # margins 36 each side
 
@@ -977,7 +991,7 @@ def build_page2(data):
     )
 
     especialidad = dist.get("especialidad", [])
-    esp_colors   = [ORANGE, TEAL, GREEN, YELLOW]
+    esp_colors   = CHART_PALETTE
     d_pie_esp    = _make_pie_drawing(
         especialidad, esp_colors[:len(especialidad)],
         d_w, ROW_H,
@@ -1054,7 +1068,7 @@ def build_page2(data):
     # Row 3: Pie mix mediciones  +  Leaders table
     # -----------------------------------------------------------------------
     mix_items  = dist.get("mixMediciones", [])
-    mix_colors = [ORANGE, TEAL, GREEN, YELLOW]
+    mix_colors = CHART_PALETTE
     d_pie_mix  = _make_pie_drawing(
         mix_items, mix_colors[:len(mix_items)],
         d_w, ROW_H,
@@ -1379,7 +1393,7 @@ def build_page5(data):
         return s, ""
 
     act_w       = (CONTENT_W - 4) / 2
-    act_accents = [ORANGE, TEAL, HexColor("#EA6005"), SLATE_MID]
+    act_accents = CHART_PALETTE
     act_rows_data = []
     for i, item in enumerate(action_items):
         ttl, bdy = _action_text(item)
