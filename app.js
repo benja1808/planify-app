@@ -12549,11 +12549,16 @@ function renderTrabajadorRutaDetalle() {
         try { localStorage.setItem(EXP_KEY, JSON.stringify([...expandidos])); } catch (e) {}
     };
 
+    // Helper que devuelve SIEMPRE la ejecución más reciente del cache local
+    // (no se queda con el snapshot del render inicial).
+    const ejFresca = () => getEjecucionActiva(idx) || ej;
+
     // ── HEADER renderer ──────────────────────────────────────────────────
     const renderEquipoHeader = (eq, eqIdx) => {
+        const ejActual = ejFresca();
         const comps = eq.componentes || [];
-        const listos = comps.filter((_, ci) => ej.componentesEstado?.[`${eqIdx}.${ci}`] === 'listo').length;
-        const noEjec = comps.filter((_, ci) => ej.componentesEstado?.[`${eqIdx}.${ci}`] === 'no-ejecutado').length;
+        const listos = comps.filter((_, ci) => ejActual.componentesEstado?.[`${eqIdx}.${ci}`] === 'listo').length;
+        const noEjec = comps.filter((_, ci) => ejActual.componentesEstado?.[`${eqIdx}.${ci}`] === 'no-ejecutado').length;
         const total = comps.length;
         const completo = listos + noEjec === total && total > 0;
         const isOpen = expandidos.has(eqIdx);
@@ -12581,16 +12586,17 @@ function renderTrabajadorRutaDetalle() {
 
     // ── BODY (componentes) renderer ─────────────────────────────────────
     const renderEquipoBody = (eq, eqIdx) => {
+        const ejActual = ejFresca();
         const comps = eq.componentes || [];
         return `
             <div class="trab-eq-body" style="border-top:1px solid #f1f5f9;">
                 ${comps.map((c, ci) => {
                     const k = `${eqIdx}.${ci}`;
-                    const st = ej.componentesEstado?.[k] || '';
-                    const obs = ej.observaciones?.[k] || '';
+                    const st = ejActual.componentesEstado?.[k] || '';
+                    const obs = ejActual.observaciones?.[k] || '';
                     const isListo = st === 'listo';
                     const isNoEjec = st === 'no-ejecutado';
-                    const med = ej.mediciones?.[k] || null;
+                    const med = ejActual.mediciones?.[k] || null;
                     const tieneMed = med && (med.vibracion != null || med.temperatura != null);
                     return `
                     <div class="trab-comp-item" data-comp-idx="${ci}" style="

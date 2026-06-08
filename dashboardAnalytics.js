@@ -508,6 +508,13 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
         return date.toISOString().slice(0, 10);
     }
 
+    // Nombre corto en español para archivos: "8 junio"
+    function nombreFechaCorta(date) {
+        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+        const d = new Date(date);
+        return `${d.getDate()} ${meses[d.getMonth()]}`;
+    }
+
     function formatDate(date) {
         return new Date(date).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
     }
@@ -1758,8 +1765,35 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 : 0;
             const routeStats = routeCatalog.map((route, index) => {
                 const execution = routeExecutions[index] || null;
-                const total = Array.isArray(route.equipos) ? route.equipos.length : 0;
-                const done = execution ? new Set(execution.equiposCompletados || []).size : 0;
+                // Contamos COMPONENTES (no equipos). Así el avance se ve en
+                // cuanto el trabajador tickea uno solo, no espera al equipo
+                // completo. Compatibilidad: si la ejecución antigua trae
+                // equiposCompletados, lo usamos como fallback.
+                const total = Array.isArray(route.equipos)
+                    ? route.equipos.reduce((acc, eq) => acc + ((eq.componentes || []).length), 0)
+                    : 0;
+                let done = 0;
+                let equiposHechos = 0;
+                const totalEquipos = Array.isArray(route.equipos) ? route.equipos.length : 0;
+                if (execution?.componentesEstado && typeof execution.componentesEstado === 'object') {
+                    const estados = execution.componentesEstado;
+                    Object.values(estados).forEach(st => { if (st === 'listo') done++; });
+                    // Equipo "hecho" = todos sus componentes están listos (≥1 comp)
+                    (route.equipos || []).forEach((eq, eqIdx) => {
+                        const comps = eq.componentes || [];
+                        if (comps.length === 0) return;
+                        const todosListos = comps.every((_, ci) => estados[`${eqIdx}.${ci}`] === 'listo');
+                        if (todosListos) equiposHechos++;
+                    });
+                } else if (execution?.equiposCompletados) {
+                    // Estimación para ejecuciones viejas: cada equipo completo
+                    // equivale a sus componentes.
+                    const set = new Set(execution.equiposCompletados);
+                    equiposHechos = set.size;
+                    (route.equipos || []).forEach((eq, eqIdx) => {
+                        if (set.has(eqIdx)) done += (eq.componentes || []).length;
+                    });
+                }
                 const pct = total ? Math.round((done / total) * 100) : 0;
                 return {
                     index,
@@ -1767,6 +1801,8 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                     execution,
                     total,
                     done,
+                    equiposHechos,
+                    totalEquipos,
                     pct,
                     active: !!execution,
                     color: getRouteColor(route.unidad)
@@ -1775,11 +1811,13 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             const activeRouteStats = routeStats.filter(item => item.active);
             const routesByUnit = [...activeRouteStats.reduce((acc, item) => {
                 const unit = item.route.unidad || 'Sin unidad';
-                if (!acc.has(unit)) acc.set(unit, { unit, routes: 0, active: 0, total: 0, done: 0, color: getRouteColor(unit) });
+                if (!acc.has(unit)) acc.set(unit, { unit, routes: 0, active: 0, total: 0, done: 0, equipos: 0, equiposHechos: 0, color: getRouteColor(unit) });
                 const stat = acc.get(unit);
                 stat.routes += 1;
                 stat.total += item.total;
                 stat.done += item.done;
+                stat.equipos += item.totalEquipos;
+                stat.equiposHechos += item.equiposHechos;
                 if (item.active) stat.active += 1;
                 return acc;
             }, new Map()).values()].sort((a, b) => (b.active - a.active) || (b.done - a.done) || a.unit.localeCompare(b.unit, 'es', { numeric: true }));
@@ -1806,7 +1844,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
   </div>
   <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${item.pct}%;background:${item.color};"></div></div>
   <div class="analytics-route-card-foot">
-    <span>${formatNumber(item.done)} / ${formatNumber(item.total)} equipo(s)</span>
+    <span>${formatNumber(item.done)} / ${formatNumber(item.total)} comp. · ${formatNumber(item.equiposHechos)}/${formatNumber(item.totalEquipos)} eq.</span>
     <span>${item.execution?.ot ? `OT ${esc(item.execution.ot)}` : esc(item.route.plan || 'Sin OT activa')}</span>
   </div>
 </article>`).join('')
@@ -1818,7 +1856,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
 <article class="analytics-route-unit">
   <strong style="color:${item.color};">${esc(item.unit)}</strong>
   <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${pct}%;background:${item.color};"></div></div>
-  <span>${formatNumber(item.active)} en curso · ${formatNumber(item.done)}/${formatNumber(item.total)} equipos</span>
+  <span>${formatNumber(item.active)} en curso · ${formatNumber(item.done)}/${formatNumber(item.total)} comp. · ${formatNumber(item.equiposHechos)}/${formatNumber(item.equipos)} eq.</span>
 </article>`;
                 }).join('')
                 : '<p class="analytics-empty">Sin unidades de ruta disponibles.</p>';
@@ -1848,7 +1886,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
           <span class="analytics-type-badge" style="${buildAccentVars(activeRouteStats.length ? '#10b981' : '#64748b', 0.12, 0.22)}">${formatNumber(activeRouteStats.length)} en curso</span>
         </div>
         <div class="analytics-route-bar"><div class="analytics-route-bar-fill" style="width:${routeOverallPct}%;"></div></div>
-        <small>${formatNumber(routeDoneEquipment)} de ${formatNumber(routeTotalEquipment)} equipo(s) medidos en rutas activas.</small>
+        <small>${formatNumber(routeDoneEquipment)} de ${formatNumber(routeTotalEquipment)} componente(s) marcados en rutas activas.</small>
       </article>
       <article class="analytics-route-stat">
         <div class="analytics-route-stat-top"><span class="analytics-route-label">Equipos hechos</span><i class="fa-solid fa-gears" style="color:#0ea5e9;"></i></div>
@@ -3403,7 +3441,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 }));
 
                 const payload = {
-                    fileName: `Planify_Control_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.xlsx`,
+                    fileName: `datos applus+ ${nombreFechaCorta(new Date())}.xlsx`,
                     rango: {
                         desde: formatDate(rangeStart),
                         hasta: formatDate(rangeEnd),
@@ -4000,7 +4038,7 @@ ${conditionKpiHtml}
                     }));
 
                     const pdfPayload = {
-                        fileName: `Planify_Informe_${isoDate(rangeStart)}_${isoDate(rangeEnd)}.pdf`,
+                        fileName: `informe applus+ ${nombreFechaCorta(new Date())}.pdf`,
                         rango: {
                             desde: formatDate(rangeStart),
                             hasta: formatDate(rangeEnd),

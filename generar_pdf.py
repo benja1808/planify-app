@@ -3,15 +3,29 @@
 generar_pdf.py
 Usage: python generar_pdf.py input.json output.pdf
 
-Generates a 5-page PDF report from Planify dashboard JSON data.
-Requires: reportlab
+Generates a 6-page PDF report (cover + 5 content pages) from Planify
+dashboard JSON data. Requires: reportlab.
 
-NOTE: All text intentionally avoids accented characters and special chars
-to prevent encoding issues in subprocess execution.
+Layout overview:
+  Page 1 — Portada (cover) con título grande, período y resumen rápido.
+  Page 2 — Resumen Ejecutivo (KPIs vs período anterior).
+  Page 3 — Distribuciones y Gráficos.
+  Page 4 — Alertas y Hallazgos.
+  Page 5 — Trabajos Cerrados.
+  Page 6 — Lectura para Reunión.
+
+Las páginas de contenido usan un header refinado (línea naranja delgada +
+branding compacto) y un footer minimalista. La portada usa solo una banda
+delgada superior y branding suave para impacto visual.
+
+Helvetica admite caracteres acentuados de Latin-1 (á, é, í, ó, ú, ñ) sin
+necesidad de registrar fuentes externas.
 """
 
 import sys
 import json
+import datetime
+import calendar
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -27,39 +41,56 @@ from reportlab.graphics.charts.barcharts import VerticalBarChart, HorizontalBarC
 from reportlab.graphics.charts.piecharts import Pie
 
 # ---------------------------------------------------------------------------
-# Colour constants
+# Paleta de 5 colores (estricta) — evita sobrecarga visual
 # ---------------------------------------------------------------------------
-ORANGE      = HexColor("#F97316")
-ORANGE_L    = HexColor("#FEF3E7")
-ORANGE_BD   = HexColor("#FED7AA")
-ORANGE_D    = HexColor("#C2410C")
-TEAL        = HexColor("#0D9488")
-TEAL_L      = HexColor("#CCFBF1")
-SLATE_DARK  = HexColor("#1E293B")
-SLATE_MID   = HexColor("#334155")
-SLATE_LIGHT = HexColor("#F1F5F9")
-SLATE_TEXT  = HexColor("#475569")
-MUTED       = HexColor("#94A3B8")
-WHITE       = colors.white
-GREEN       = HexColor("#16A34A")
-GREEN_L     = HexColor("#DCFCE7")
-YELLOW      = HexColor("#F59E0B")
-YELLOW_L    = HexColor("#FEF9C3")
-YELLOW_T    = HexColor("#A16207")
-YELLOW_DARK = HexColor("#FFFBEB")
-GRAY_LINE   = HexColor("#E2E8F0")
-RED         = HexColor("#DC2626")
-RED_L       = HexColor("#FEE2E2")
+# 1. INK      → texto principal, headings, números importantes
+# 2. INK_SOFT → texto secundario, etiquetas, divisores (con stroke fino)
+# 3. ACCENT   → marca Applus+, énfasis único, datos clave
+# 4. SURFACE  → fondos de tarjetas/cajas/bandas sutiles
+# 5. PAPER    → fondo de página (blanco)
+# ---------------------------------------------------------------------------
+INK         = HexColor("#0F172A")   # slate-900
+INK_SOFT    = HexColor("#64748B")   # slate-500
+ACCENT      = HexColor("#F97316")   # orange-500 (la marca)
+SURFACE     = HexColor("#F1F5F9")   # slate-100
+PAPER       = colors.white
+
+# ---------------------------------------------------------------------------
+# Aliases de compatibilidad — todo el código heredado se redirige a la paleta
+# de 5. Cualquier matiz que antes era "rojo crítico" o "verde bueno" ahora
+# se distingue por peso tipográfico + el ACCENT naranja, no por color.
+# ---------------------------------------------------------------------------
+ORANGE      = ACCENT
+ORANGE_L    = SURFACE
+ORANGE_BD   = INK_SOFT
+ORANGE_D    = ACCENT
+TEAL        = ACCENT
+TEAL_L      = SURFACE
+SLATE_DARK  = INK
+SLATE_MID   = INK_SOFT
+SLATE_LIGHT = SURFACE
+SLATE_TEXT  = INK_SOFT
+MUTED       = INK_SOFT
+WHITE       = PAPER
+GREEN       = ACCENT
+GREEN_L     = SURFACE
+YELLOW      = INK_SOFT
+YELLOW_L    = SURFACE
+YELLOW_T    = INK_SOFT
+YELLOW_DARK = SURFACE
+GRAY_LINE   = HexColor("#E2E8F0")   # tono entre SURFACE e INK_SOFT, solo para líneas finas
+RED         = ACCENT
+RED_L       = SURFACE
 
 PAGE_W, PAGE_H = A4   # 595.27 x 841.89 pt
 CONTENT_W = PAGE_W - 72  # margins 36 each side
 
 PAGE_SUBTITLES = [
     "Resumen Ejecutivo",
-    "Distribuciones y Graficos",
-    "Alertas",
+    "Distribuciones y Gráficos",
+    "Alertas y Hallazgos",
     "Trabajos Cerrados",
-    "Lectura para Reunion",
+    "Lectura para Reunión",
 ]
 
 # ---------------------------------------------------------------------------
@@ -96,60 +127,75 @@ def _trunc_fit(text, font, size, max_w):
 
 
 # ---------------------------------------------------------------------------
-# Page header/footer callback
+# Page header/footer callbacks
 # ---------------------------------------------------------------------------
+def draw_cover_frame(canvas, doc):
+    """Portada sin marco — el Flowable CoverHero compone todo internamente."""
+    # Intencionalmente vacío. Mantenemos la página totalmente limpia para que
+    # el bloque del título respire sin compitencia visual.
+    pass
+
+
 def draw_page_frame(canvas, doc):
+    """Header/footer para páginas de contenido (post-portada)."""
     canvas.saveState()
 
-    # --- HEADER ---
+    # --- HEADER refinado: barra delgada con borde naranja ---
+    header_h = 28
+    canvas.setFillColor(WHITE)
+    canvas.rect(36, PAGE_H - header_h - 6, CONTENT_W, header_h, fill=1, stroke=0)
+    # Línea naranja inferior (más elegante que un bloque sólido)
+    canvas.setFillColor(ORANGE)
+    canvas.rect(36, PAGE_H - header_h - 6, CONTENT_W, 1.5, fill=1, stroke=0)
+
+    # Marca compacta a la izquierda
     canvas.setFillColor(SLATE_DARK)
-    canvas.rect(36, PAGE_H - 38, CONTENT_W, 38, fill=1, stroke=0)
-
-    # Orange left bar
+    canvas.setFont("Helvetica-Bold", 11)
+    canvas.drawString(36, PAGE_H - 22, "Planify")
     canvas.setFillColor(ORANGE)
-    canvas.rect(36, PAGE_H - 38, 5, 38, fill=1, stroke=0)
+    canvas.setFont("Helvetica-Bold", 11)
+    canvas.drawString(36 + stringWidth("Planify", "Helvetica-Bold", 11) + 4, PAGE_H - 22, "Applus+")
 
-    # PLANIFY label
-    canvas.setFillColor(ORANGE)
-    canvas.setFont("Helvetica-Bold", 15)
-    canvas.drawString(48, PAGE_H - 20, "PLANIFY")
-
-    # Subtitle
-    idx = min(doc.page - 1, len(PAGE_SUBTITLES) - 1)
+    # Subtítulo (compensamos índice porque la página 1 es la portada)
+    idx = min(max(doc.page - 2, 0), len(PAGE_SUBTITLES) - 1)
     subtitle = PAGE_SUBTITLES[idx]
-    canvas.setFillColor(MUTED)
-    canvas.setFont("Helvetica", 7.5)
-    canvas.drawString(48, PAGE_H - 32, subtitle)
+    canvas.setFillColor(SLATE_TEXT)
+    canvas.setFont("Helvetica", 8)
+    sub_x = 36 + stringWidth("Planify", "Helvetica-Bold", 11) + stringWidth("Applus+", "Helvetica-Bold", 11) + 16
+    # Pequeño separador entre marca y subtítulo
+    canvas.setFillColor(GRAY_LINE)
+    canvas.rect(sub_x - 8, PAGE_H - 26, 0.5, 14, fill=1, stroke=0)
+    canvas.setFillColor(SLATE_TEXT)
+    canvas.drawString(sub_x, PAGE_H - 22, subtitle)
 
-    # Date range right-aligned
+    # Rango de fechas y número de página a la derecha
     date_range = getattr(doc, '_planify_daterange', "")
     if date_range:
-        canvas.setFillColor(WHITE)
+        canvas.setFillColor(SLATE_MID)
         canvas.setFont("Helvetica", 8)
-        sw = stringWidth(date_range, "Helvetica", 8)
-        canvas.drawString(36 + CONTENT_W - sw - 4, PAGE_H - 20, date_range)
+        canvas.drawRightString(36 + CONTENT_W, PAGE_H - 22, date_range)
 
-    # Page number
-    page_str = "Pagina %d" % doc.page
+    # Número de página (debajo del rango)
+    total_pages = getattr(doc, '_planify_total_pages', 0)
+    if total_pages:
+        page_str = "Página %d de %d" % (doc.page - 1, total_pages - 1)
+    else:
+        page_str = "Página %d" % (doc.page - 1)
     canvas.setFillColor(MUTED)
     canvas.setFont("Helvetica", 7)
-    sw2 = stringWidth(page_str, "Helvetica", 7)
-    canvas.drawString(36 + CONTENT_W - sw2 - 4, PAGE_H - 32, page_str)
+    canvas.drawRightString(36 + CONTENT_W, PAGE_H - 32, page_str)
 
-    # --- FOOTER ---
-    canvas.setFillColor(SLATE_LIGHT)
-    canvas.rect(36, 12, CONTENT_W, 18, fill=1, stroke=0)
+    # --- FOOTER refinado: línea fina + texto pequeño ---
     canvas.setStrokeColor(GRAY_LINE)
     canvas.setLineWidth(0.5)
-    canvas.line(36, 30, 36 + CONTENT_W, 30)
+    canvas.line(36, 26, 36 + CONTENT_W, 26)
     canvas.setFillColor(MUTED)
     canvas.setFont("Helvetica", 6.5)
     generado = getattr(doc, '_planify_generado', "")
-    footer_l = "PLANIFY  Mantenimiento Predictivo  Generado: %s  Uso interno" % generado
-    canvas.drawString(40, 16, footer_l)
+    canvas.drawString(36, 14, "Planify · Mantenimiento Predictivo · Generado %s" % generado)
     canvas.setFont("Helvetica-Bold", 6.5)
     canvas.setFillColor(SLATE_TEXT)
-    canvas.drawRightString(36 + CONTENT_W - 4, 16, "Applus+")
+    canvas.drawRightString(36 + CONTENT_W, 14, "Uso interno · Applus+")
 
     canvas.restoreState()
 
@@ -299,7 +345,7 @@ class ClosingBlock(Flowable):
         c.drawString(14, self.height - 12, "RESUMEN DE CIERRE DEL PERIODO")
         c.setFillColor(HexColor("#FFFFFF"))
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(14, self.height - 26, "Periodo con alta actividad operacional.")
+        c.drawString(14, self.height - 26, "Período con alta actividad operacional.")
         c.setFillColor(HexColor("#F97316"))
         c.setFont("Helvetica", 8.5)
         c.drawString(14, self.height - 40, self.kpis_summary)
@@ -602,7 +648,7 @@ def build_page1(data):
 
     el.append(Spacer(CONTENT_W, 4))
     el.append(PeriodBanner(
-        "Periodo: %s al %s  |  %s dias  |  Comparado vs: %s - %s"
+        "Período: %s al %s  |  %s días  |  Comparado vs: %s - %s"
         % (desde, hasta, dias, prev_desde, prev_hasta)
     ))
     el.append(Spacer(CONTENT_W, 6))
@@ -650,10 +696,10 @@ def build_page1(data):
         ("OT Cerradas",           "otCerradas"),
         ("Equipos Intervenidos",  "equiposIntervenidos"),
         ("Personal Participante", "personalParticipante"),
-        ("Lecturas Criticas",     "lecturasCriticas"),
+        ("Lecturas Críticas",     "lecturasCriticas"),
         ("Seguimiento Activo",    "seguimientoActivo"),
     ]
-    comp_data = [["Indicador", "Periodo Actual", "Periodo Anterior", "Variacion", "Tend."]]
+    comp_data = [["Indicador", "Período Actual", "Período Anterior", "Variación", "Tend."]]
     for label, kkey in kpi_map:
         kp       = kpis.get(kkey, {})
         actual   = kp.get("actual", 0)   or 0
@@ -935,7 +981,7 @@ def build_page2(data):
     d_pie_esp    = _make_pie_drawing(
         especialidad, esp_colors[:len(especialidad)],
         d_w, ROW_H,
-        "Distribucion por Especialidad - %d trabajos" % actual_jobs,
+        "Distribución por Especialidad - %d trabajos" % actual_jobs,
     )
 
     el.append(SectionLabel("COMPARATIVO KPI ACTUAL vs ANTERIOR  |  DISTRIBUCION POR ESPECIALIDAD"))
@@ -1411,6 +1457,192 @@ def build_page5(data):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+class CoverHero(Flowable):
+    """Portada minimalista — estilo informe corporativo serio.
+
+    Filosofía: una sola declaración tipográfica (el título), respiración
+    generosa, marca discreta en esquina superior izquierda, metadatos
+    sutiles abajo. Sin "hero numérico" (eso vive dentro del reporte).
+    """
+    def __init__(self, titulo_l1, titulo_l2, periodo, generado):
+        super().__init__()
+        self.width = CONTENT_W
+        self.height = 720  # casi toda la página A4 menos márgenes
+        self.titulo_l1 = titulo_l1 or "Informe"
+        self.titulo_l2 = titulo_l2 or ""
+        self.periodo = periodo or "—"
+        self.generado = generado or "—"
+
+    def draw(self):
+        c = self.canv
+        c.saveState()
+
+        x = 0  # alineado al margen izquierdo del documento
+
+        # ── Marca discreta arriba a la izquierda ────────────────────────────
+        # Una sola línea naranja delgada como acento, sin barra vertical.
+        c.setStrokeColor(ACCENT)
+        c.setLineWidth(1.2)
+        c.line(x, self.height - 16, x + 36, self.height - 16)
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(x, self.height - 36, "Applus+")
+        c.setFillColor(INK_SOFT)
+        c.setFont("Helvetica", 8)
+        c.drawString(x, self.height - 48, "Planify")
+
+        # ── Etiqueta de tipo de documento, alineada a la derecha ────────────
+        c.setFillColor(INK_SOFT)
+        c.setFont("Helvetica-Bold", 8)
+        c.drawRightString(x + self.width, self.height - 36, "INFORME DE GESTIÓN")
+        c.setFillColor(INK_SOFT)
+        c.setFont("Helvetica", 8)
+        c.drawRightString(x + self.width, self.height - 48, "Mantenimiento predictivo")
+
+        # ── Bloque central — el corazón de la portada ───────────────────────
+        # Posicionado ligeramente arriba del centro vertical para balance visual.
+        title_y = self.height - 320
+
+        # Título principal en peso normal, dos líneas. Sobrio.
+        # El tamaño se ajusta si la segunda línea es muy larga para no salirse.
+        size_l2 = 42
+        if stringWidth(self.titulo_l2, "Helvetica-Bold", size_l2) > self.width:
+            size_l2 = 36
+        if stringWidth(self.titulo_l2, "Helvetica-Bold", size_l2) > self.width:
+            size_l2 = 30
+        c.setFillColor(INK)
+        c.setFont("Helvetica-Bold", 42)
+        c.drawString(x, title_y, self.titulo_l1)
+        c.setFont("Helvetica-Bold", size_l2)
+        c.drawString(x, title_y - 48, self.titulo_l2)
+
+        # ── Período: tratamiento editorial debajo del título ────────────────
+        # Una línea naranja muy delgada de 24pt seguida del rango en grande.
+        c.setStrokeColor(ACCENT)
+        c.setLineWidth(0.8)
+        c.line(x, title_y - 84, x + 24, title_y - 84)
+
+        c.setFillColor(INK)
+        c.setFont("Helvetica", 16)
+        c.drawString(x, title_y - 110, self.periodo)
+
+        # ── Pie de portada: línea fina + metadatos discretos ────────────────
+        footer_y = 60
+        c.setStrokeColor(GRAY_LINE)
+        c.setLineWidth(0.5)
+        c.line(x, footer_y + 32, x + self.width, footer_y + 32)
+
+        # Lado izquierdo: generado
+        c.setFillColor(INK_SOFT)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(x, footer_y + 18, "GENERADO")
+        c.setFillColor(INK)
+        c.setFont("Helvetica", 9)
+        c.drawString(x, footer_y + 6, self.generado)
+
+        # Lado derecho: confidencialidad
+        c.setFillColor(INK_SOFT)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawRightString(x + self.width, footer_y + 18, "CONFIDENCIALIDAD")
+        c.setFillColor(INK)
+        c.setFont("Helvetica", 9)
+        c.drawRightString(x + self.width, footer_y + 6, "Uso interno")
+
+        c.restoreState()
+
+
+MESES_ES = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"
+]
+
+
+def _parse_fecha_dmy(s):
+    """Parsea 'DD/MM/YYYY' a date. Devuelve None si falla."""
+    if not s:
+        return None
+    s = str(s).strip()
+    try:
+        parts = s.split("/")
+        if len(parts) == 3:
+            return datetime.date(int(parts[2]), int(parts[1]), int(parts[0]))
+    except Exception:
+        pass
+    # Fallback: ISO YYYY-MM-DD
+    try:
+        return datetime.date.fromisoformat(s[:10])
+    except Exception:
+        return None
+
+
+def determinar_titulo_dinamico(rango):
+    """Decide las dos líneas del título de portada según el rango filtrado.
+
+    Reglas:
+      * 1 día           → "Informe del" / "día N de <mes>"
+      * Mes completo    → "Informe resumen" / "mes de <mes>"
+      * 6-7 días (semana) → "Informe" / "semana N" (ISO week)
+      * Otro rango      → "Informe del" / "período"
+
+    Devuelve (linea1, linea2, periodo_legible).
+    """
+    desde = _parse_fecha_dmy(rango.get("desde", ""))
+    hasta = _parse_fecha_dmy(rango.get("hasta", ""))
+
+    if not desde or not hasta:
+        periodo = "%s — %s" % (rango.get("desde", "—"), rango.get("hasta", "—"))
+        return ("Informe de", "Mantenimiento", periodo)
+
+    delta_dias = (hasta - desde).days + 1
+    periodo_legible = "%s — %s" % (
+        desde.strftime("%d/%m/%Y"), hasta.strftime("%d/%m/%Y")
+    )
+
+    # 1) Un solo día
+    if delta_dias == 1:
+        return (
+            "Informe del",
+            "día %d de %s" % (desde.day, MESES_ES[desde.month - 1]),
+            "%d %s %d" % (desde.day, MESES_ES[desde.month - 1], desde.year),
+        )
+
+    # 2) Mes completo: día 1 → último día, mismo mes/año
+    if (desde.day == 1 and desde.month == hasta.month and desde.year == hasta.year
+            and hasta.day == calendar.monthrange(desde.year, desde.month)[1]):
+        return (
+            "Informe",
+            MESES_ES[desde.month - 1],
+            "%s %d" % (MESES_ES[desde.month - 1].capitalize(), desde.year),
+        )
+
+    # 3) Semana: 6 o 7 días consecutivos
+    if delta_dias in (6, 7):
+        return (
+            "Informe",
+            "semana",
+            "%d %s – %d %s %d" % (
+                desde.day, MESES_ES[desde.month - 1][:3],
+                hasta.day, MESES_ES[hasta.month - 1][:3], hasta.year
+            ),
+        )
+
+    # 4) Rango libre
+    return ("Informe del", "período", periodo_legible)
+
+
+def build_cover(data):
+    """Portada minimalista con título dinámico según el rango filtrado."""
+    rango = data.get("rango", {})
+    linea1, linea2, periodo_legible = determinar_titulo_dinamico(rango)
+    cover = CoverHero(
+        titulo_l1=linea1,
+        titulo_l2=linea2,
+        periodo=periodo_legible,
+        generado=data.get("generado", "")
+    )
+    return [cover, PageBreak()]
+
+
 def main():
     if len(sys.argv) < 3:
         print("Usage: python generar_pdf.py input.json output.pdf", file=sys.stderr)
@@ -1430,22 +1662,26 @@ def main():
         pagesize=A4,
         leftMargin=36,
         rightMargin=36,
-        topMargin=62,
-        bottomMargin=30,
+        topMargin=48,
+        bottomMargin=34,
         title="Planify - Control de Mantenimiento",
         author="Planify",
     )
-    doc._planify_daterange = "%s - %s" % (rango.get("desde", ""), rango.get("hasta", ""))
+    doc._planify_daterange = "%s — %s" % (rango.get("desde", ""), rango.get("hasta", ""))
     doc._planify_generado  = date_gen
+    # 6 páginas: cover + 5 originales
+    doc._planify_total_pages = 6
 
     story = []
+    story.extend(build_cover(data))
     story.extend(build_page1(data))
     story.extend(build_page2(data))
     story.extend(build_page3(data))
     story.extend(build_page4(data))
     story.extend(build_page5(data))
 
-    doc.build(story, onFirstPage=draw_page_frame, onLaterPages=draw_page_frame)
+    # Portada usa marco minimalista; el resto el header refinado
+    doc.build(story, onFirstPage=draw_cover_frame, onLaterPages=draw_page_frame)
     print("PDF guardado en: %s" % output_path)
 
 

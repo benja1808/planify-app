@@ -3,6 +3,10 @@ formato_temp/
 error*.txt
 *.zip
 
+# Python cache
+__pycache__/
+*.pyc
+
 # Local Netlify folder
 .netlify
 supabase/.temp/
