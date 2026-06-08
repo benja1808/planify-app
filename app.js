@@ -4895,6 +4895,34 @@ async function actualizarBadgeInsumos() {
     }
 }
 
+// Badge con cantidad de rutas asignadas al trabajador en el dock móvil.
+// Se llama al login, al refrescar la lista y cada vez que cambia el estado
+// de ejecuciones en localStorage. Solo aparece para rol 'trabajador'.
+async function actualizarBadgeRutasTrabajador() {
+    const badge = document.getElementById('badge-mobile-rutas');
+    if (!badge) return;
+    if (estado.usuarioActual !== 'trabajador') {
+        badge.style.display = 'none';
+        return;
+    }
+    const trabajadorId = estado.trabajadorLogueado?.id;
+    if (!trabajadorId) { badge.style.display = 'none'; return; }
+
+    // Refrescamos desde Supabase en background para que el badge sea fresco
+    if (window.supabaseClient) {
+        try { await refrescarRutasEjecucionesDesdeSupabase(); } catch (e) {}
+    }
+    const ejs = getRutasEjecuciones() || {};
+    const n = Object.values(ejs).filter(ej =>
+        ej && ej.estado !== 'cerrada' && ej.estado !== 'cancelada' &&
+        (ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId)
+    ).length;
+
+    if (n > 0) { badge.textContent = n; badge.style.display = 'inline-block'; }
+    else badge.style.display = 'none';
+}
+window.actualizarBadgeRutasTrabajador = actualizarBadgeRutasTrabajador;
+
 // ── HORAS EXTRA: vista de gestión para planificador ───────────────────────────
 async function renderHorasExtraAdminView() {
     mainContent.innerHTML = `<div class="fade-in" style="max-width:1100px; margin:0 auto;">
@@ -12010,12 +12038,109 @@ function getEjecucionActiva(rutaIdx) {
     const all = getRutasEjecuciones();
     return all[rutaIdx] || null;
 }
-function setEjecucionActiva(rutaIdx, ejecucion) {
+function setEjecucionActiva(rutaIdx, ejecucion, opts = {}) {
     const all = getRutasEjecuciones();
     if (ejecucion === null) delete all[rutaIdx];
     else all[rutaIdx] = ejecucion;
     saveRutasEjecuciones(all);
+    // Empujamos al backend en segundo plano: si falla, queda guardado local
+    // y el próximo set lo reintentará. No bloqueamos la UI. El caller puede
+    // pedir skipPush=true para hacer él mismo un await externo.
+    if (ejecucion && window.supabaseClient && !opts.skipPush) {
+        _pushEjecucionASupabase(rutaIdx, ejecucion).catch(err => {
+            console.warn('[rutas] sync supabase falló:', err?.message || err);
+        });
+    }
+    // Refrescar el badge del trabajador si está conectado (también lo verá
+    // sin abrir "Mis Rutas") — fire & forget.
+    if (estado.usuarioActual === 'trabajador') actualizarBadgeRutasTrabajador?.();
 }
+
+// ── Sync con Supabase: tabla rutas_ejecuciones ───────────────────────────
+// La ejecución persiste con un `id` (UUID de Supabase). El localStorage es
+// cache: una sola activa por ruta_idx. Si el `id` ya existe → UPDATE, si no
+// → INSERT y guardamos el id en el cache local para futuros updates.
+async function _pushEjecucionASupabase(rutaIdx, ej) {
+    if (!window.supabaseClient || !ej) return;
+    const r = (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED[rutaIdx] : null;
+    const payload = {
+        ruta_idx: rutaIdx,
+        ruta_nombre: r?.nombre || ej.rutaNombre || `Ruta #${rutaIdx}`,
+        unidad: r?.unidad || ej.unidad || null,
+        plan_sap: r?.plan || ej.plan || null,
+        ot: ej.ot || '',
+        fecha_inicio: ej.fechaInicio || new Date().toISOString().slice(0, 10),
+        fecha_cierre: ej.fechaCierre || null,
+        estado: ej.estado || 'activa',
+        lider_id: ej.liderId || null,
+        lider_nombre: ej.liderNombre || null,
+        ayudante_id: ej.ayudanteId || null,
+        ayudante_nombre: ej.ayudanteNombre || null,
+        componentes_estado: ej.componentesEstado || {},
+        componentes_at: ej.componentesAt || {},
+        observaciones: ej.observaciones || {},
+        mediciones: ej.mediciones || {}
+    };
+    if (ej.id) {
+        const { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id);
+        if (error) throw error;
+    } else {
+        const { data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([payload]).select('id').single();
+        if (error) throw error;
+        // Guardamos el id devuelto en el cache local para próximos updates
+        if (data?.id) {
+            const all = getRutasEjecuciones();
+            if (all[rutaIdx]) {
+                all[rutaIdx].id = data.id;
+                saveRutasEjecuciones(all);
+            }
+        }
+    }
+}
+
+// Trae todas las ejecuciones ACTIVAS desde Supabase y refresca el cache local.
+// Se llama al boot y al entrar a vistas de Rutas o "Mis Rutas" del trabajador.
+async function refrescarRutasEjecucionesDesdeSupabase() {
+    if (!window.supabaseClient) return getRutasEjecuciones();
+    try {
+        const { data, error } = await window.supabaseClient
+            .from('rutas_ejecuciones')
+            .select('*')
+            .eq('estado', 'activa')
+            .order('created_at', { ascending: false });
+        if (error) {
+            // 42P01 = relation does not exist (tabla no creada todavía)
+            if (error.code === '42P01') console.warn('[rutas] tabla rutas_ejecuciones no existe — corre el SQL');
+            else console.warn('[rutas] refresh falló:', error.message);
+            return getRutasEjecuciones();
+        }
+        // Una activa por ruta_idx (la más reciente). Mapeamos a la forma local.
+        const porIdx = {};
+        for (const row of data || []) {
+            if (porIdx[row.ruta_idx]) continue; // ya tenemos la más reciente
+            porIdx[row.ruta_idx] = {
+                id: row.id,
+                ot: row.ot,
+                fechaInicio: row.fecha_inicio,
+                liderId: row.lider_id,
+                liderNombre: row.lider_nombre,
+                ayudanteId: row.ayudante_id,
+                ayudanteNombre: row.ayudante_nombre,
+                componentesEstado: row.componentes_estado || {},
+                componentesAt: row.componentes_at || {},
+                observaciones: row.observaciones || {},
+                mediciones: row.mediciones || {},
+                estado: row.estado
+            };
+        }
+        saveRutasEjecuciones(porIdx);
+        return porIdx;
+    } catch (e) {
+        console.warn('[rutas] refresh excepción:', e.message);
+        return getRutasEjecuciones();
+    }
+}
+window.refrescarRutasEjecucionesDesdeSupabase = refrescarRutasEjecucionesDesdeSupabase;
 
 // ── Color helper ──────────────────────────────────────────────────────────
 function colorUnidad(unidad) {
@@ -12080,6 +12205,675 @@ function labelFrecuencia(frec) {
 // El ITO supervisa el cumplimiento global sin acceso al detalle ni a
 // las acciones operativas (iniciar/cerrar/editar).
 // ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// VISTA TRABAJADOR — Mis Rutas
+// Lista de rutas (ejecuciones activas) donde el trabajador es líder o ayudante.
+// Está pensada mobile-first: cards grandes, tap-friendly, sin info de más.
+// ─────────────────────────────────────────────────────────────────────
+// La idx del detalle se persiste en localStorage para sobrevivir un F5.
+let _trabajadorRutaIdxActiva = null;
+const _KEY_TRAB_RUTA_IDX = 'planify_trab_ruta_idx';
+try { const v = localStorage.getItem(_KEY_TRAB_RUTA_IDX); if (v !== null && v !== '') _trabajadorRutaIdxActiva = Number(v); } catch (e) {}
+
+window.abrirTrabajadorRutaDetalle = function(rutaIdx) {
+    _trabajadorRutaIdxActiva = Number(rutaIdx);
+    try { localStorage.setItem(_KEY_TRAB_RUTA_IDX, String(rutaIdx)); } catch (e) {}
+    vistaActual = 'trabajador-ruta-detalle';
+    renderizarVistaActual();
+};
+
+window.volverAMisRutas = function() {
+    _trabajadorRutaIdxActiva = null;
+    try { localStorage.removeItem(_KEY_TRAB_RUTA_IDX); } catch (e) {}
+    vistaActual = 'trabajador-rutas';
+    renderizarVistaActual();
+};
+
+function renderTrabajadorRutasView() {
+    const host = mainContent || document.getElementById('main-content');
+    if (!host) return;
+
+    const trabajador = estado.trabajadorLogueado;
+    const trabajadorId = trabajador?.id;
+
+    // Pintamos primero el shell con loading, refrescamos desde Supabase, repintamos
+    host.innerHTML = `
+        <div class="fade-in trab-rutas-view" style="padding:1rem; max-width:760px; margin:0 auto;">
+            <header style="display:flex; align-items:center; gap:0.7rem; margin-bottom:1rem;">
+                <div style="width:48px; height:48px; border-radius:12px; background:linear-gradient(135deg,#FF6900 0%, #fb923c 100%); display:flex; align-items:center; justify-content:center; color:#fff; font-size:1.3rem;">
+                    <i class="fa-solid fa-route"></i>
+                </div>
+                <div style="flex:1; min-width:0;">
+                    <h1 style="margin:0; font-size:1.15rem; color:#0f172a;">Mis Rutas</h1>
+                    <p style="margin:0.15rem 0 0; font-size:0.82rem; color:#64748b;">${escapeHtml(trabajador?.nombre || 'Trabajador')}</p>
+                </div>
+                <button id="btn-trab-rutas-refrescar" class="btn btn-outline btn-icon" type="button" title="Actualizar" style="border-color:#e5e7eb;">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                </button>
+            </header>
+            <div id="trab-rutas-lista">
+                <div style="text-align:center; padding:2rem 1rem; color:#94a3b8;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size:1.3rem;"></i>
+                    <p style="margin:0.5rem 0 0;">Buscando rutas asignadas...</p>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const pintarLista = (ejecuciones) => {
+        const cont = document.getElementById('trab-rutas-lista');
+        if (!cont) return;
+        // Filtramos: este trabajador como líder o ayudante, y activa
+        const misRutas = Object.entries(ejecuciones || {})
+            .map(([idxStr, ej]) => ({ idx: Number(idxStr), ej }))
+            .filter(({ ej }) =>
+                ej && ej.estado !== 'cerrada' &&
+                (ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId)
+            );
+
+        if (!misRutas.length) {
+            cont.innerHTML = `
+                <div style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:2rem 1.2rem; text-align:center;">
+                    <div style="font-size:2.4rem; color:#cbd5e1; margin-bottom:0.5rem;">
+                        <i class="fa-solid fa-clipboard-question"></i>
+                    </div>
+                    <h2 style="margin:0; font-size:1rem; color:#0f172a;">No tienes rutas asignadas</h2>
+                    <p style="margin:0.4rem 0 0; font-size:0.85rem; color:#64748b; max-width:320px; margin-left:auto; margin-right:auto;">
+                        Cuando el planificador te asigne una ruta de vibraciones aparecerá aquí.
+                        Toca <i class="fa-solid fa-arrows-rotate" style="color:#FF6900;"></i> para actualizar.
+                    </p>
+                </div>
+            `;
+            return;
+        }
+
+        cont.innerHTML = misRutas.map(({ idx, ej }) => {
+            const r = RUTAS_VIBRACION_SEED[idx];
+            if (!r) return '';
+            const stats = rutasContarComponentes(idx, ej);
+            const pct = stats.total ? Math.round((stats.listos / stats.total) * 100) : 0;
+            const compañero = ej.liderId === trabajadorId ? ej.ayudanteNombre : ej.liderNombre;
+            const unidadColor = colorUnidad(r.unidad);
+            const pctColor = pct >= 100 ? '#16a34a' : pct >= 50 ? unidadColor : '#475569';
+            return `
+                <article class="trab-ruta-card" data-trab-ruta-idx="${idx}" style="background:#fff; border:1px solid #e5e7eb; border-left:4px solid ${unidadColor}; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.6rem; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.04);">
+                    <div style="display:flex; align-items:center; gap:0.7rem; margin-bottom:0.55rem;">
+                        <span style="background:${unidadColor}; color:#fff; font-size:0.68rem; font-weight:800; padding:0.18rem 0.5rem; border-radius:6px; flex-shrink:0;">${escapeHtml(r.unidad || '—')}</span>
+                        <h3 style="margin:0; font-size:0.95rem; color:#0f172a; line-height:1.25; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.nombre)}</h3>
+                        <span style="font-size:1.05rem; font-weight:900; color:${pctColor}; flex-shrink:0; line-height:1;">${pct}%</span>
+                    </div>
+                    <div style="height:5px; background:#f1f5f9; border-radius:999px; overflow:hidden; display:flex; margin-bottom:0.5rem;">
+                        <div style="height:100%; width:${stats.total ? (stats.listos/stats.total)*100 : 0}%; background:#16a34a;"></div>
+                        <div style="height:100%; width:${stats.total ? (stats.noEjec/stats.total)*100 : 0}%; background:#dc2626;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:#64748b;">
+                        <span><i class="fa-solid fa-hashtag" style="color:#94a3b8;"></i> ${escapeHtml(ej.ot || '—')}${compañero ? ` · con ${escapeHtml(compañero)}` : ''}</span>
+                        <span style="color:#FF6900; font-weight:700;">${stats.listos}/${stats.total} <i class="fa-solid fa-chevron-right" style="font-size:0.65rem;"></i></span>
+                    </div>
+                </article>
+            `;
+        }).join('');
+
+        cont.querySelectorAll('[data-trab-ruta-idx]').forEach(el => {
+            el.addEventListener('click', () => {
+                const idx = Number(el.dataset.trabRutaIdx);
+                window.abrirTrabajadorRutaDetalle(idx);
+            });
+        });
+
+        // Actualizar badge en el dock
+        const badge = document.getElementById('badge-mobile-rutas');
+        if (badge) {
+            if (misRutas.length) { badge.style.display = ''; badge.textContent = misRutas.length; }
+            else badge.style.display = 'none';
+        }
+    };
+
+    // Pintamos con cache (instantáneo), luego refrescamos desde Supabase
+    pintarLista(getRutasEjecuciones());
+    refrescarRutasEjecucionesDesdeSupabase().then(pintarLista);
+
+    document.getElementById('btn-trab-rutas-refrescar')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-trab-rutas-refrescar');
+        const icon = btn?.querySelector('i');
+        if (icon) icon.classList.add('fa-spin');
+        const data = await refrescarRutasEjecucionesDesdeSupabase();
+        pintarLista(data);
+        if (icon) icon.classList.remove('fa-spin');
+    });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// VISTA TRABAJADOR — Detalle de una ruta (mobile-first)
+// Lista de equipos → componentes con botones grandes ✓ Listo / ✗ No-ejec.
+// Cada cambio guarda inmediato (setEjecucionActiva → Supabase + local).
+// ─────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// Modal móvil de captura de mediciones para el trabajador en terreno.
+// Pregunta: ¿guardar vibración? Sí → valor + punto.  ¿guardar temp?
+// Sí → solo valor. Acepta "N/A" como respuesta válida en cualquiera.
+// Guarda en ej.mediciones[compKey] = { vibracion, punto, temperatura, ts }
+// ─────────────────────────────────────────────────────────────────────
+window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre, onClose) {
+    document.getElementById('modal-captura-medicion-movil')?.remove();
+    const ej = getEjecucionActiva(rutaIdx);
+    if (!ej) return;
+    const key = `${eqIdx}.${compIdx}`;
+    const prev = ej.mediciones?.[key] || {};
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-captura-medicion-movil';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10500; align-items:flex-end; justify-content:center; padding:0;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:18px 18px 0 0; width:100%; max-width:520px; max-height:92vh; overflow:auto; box-shadow:0 -20px 60px rgba(0,0,0,0.3); padding:1rem 1rem calc(1rem + env(safe-area-inset-bottom,0)) 1rem;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem; margin-bottom:0.85rem;">
+          <div style="min-width:0;">
+            <div style="font-size:0.7rem; font-weight:800; color:#16a34a; text-transform:uppercase; letter-spacing:0.06em;"><i class="fa-solid fa-circle-check"></i> Componente Listo</div>
+            <h2 style="margin:0.2rem 0 0; font-size:1rem; color:#0f172a; line-height:1.25;">${escapeHtml(compNombre || 'Componente')}</h2>
+            <p style="margin:0.2rem 0 0; font-size:0.75rem; color:#64748b;">Registra mediciones (opcionales). Puedes marcar N/A si no aplica.</p>
+          </div>
+          <button type="button" id="cap-med-skip" class="btn btn-outline" style="font-size:0.75rem; border-color:#e5e7eb; color:#64748b; padding:0.35rem 0.65rem;">Omitir</button>
+        </div>
+
+        <!-- ── VIBRACIÓN ─────────────────────────────────────────────────── -->
+        <section style="background:#fff7ed; border:1px solid #fed7aa; border-radius:12px; padding:0.85rem; margin-bottom:0.7rem;">
+          <div style="font-weight:800; color:#9a3412; font-size:0.85rem; margin-bottom:0.5rem;">
+            <i class="fa-solid fa-wave-square"></i> Vibración
+          </div>
+          <div style="display:flex; gap:0.4rem; margin-bottom:0.6rem;">
+            <button type="button" class="cap-vib-modo btn" data-modo="si" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #FF6900; background:${prev.vibracion && prev.vibracion !== 'N/A' ? '#FF6900' : '#fff'}; color:${prev.vibracion && prev.vibracion !== 'N/A' ? '#fff' : '#FF6900'}; font-weight:700; font-size:0.85rem; min-height:42px;">Registrar valor</button>
+            <button type="button" class="cap-vib-modo btn" data-modo="na" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #94a3b8; background:${prev.vibracion === 'N/A' ? '#475569' : '#fff'}; color:${prev.vibracion === 'N/A' ? '#fff' : '#475569'}; font-weight:700; font-size:0.85rem; min-height:42px;">N/A</button>
+          </div>
+          <div id="cap-vib-campos" style="display:${prev.vibracion && prev.vibracion !== 'N/A' ? 'grid' : 'none'}; grid-template-columns:1fr 1fr; gap:0.5rem;">
+            <div>
+              <label style="display:block; font-size:0.72rem; color:#9a3412; font-weight:700; margin-bottom:0.2rem;">Valor</label>
+              <input id="cap-vib-valor" type="text" inputmode="decimal" class="form-control" placeholder="Ej: 3.5" value="${escapeHtml(prev.vibracion && prev.vibracion !== 'N/A' ? String(prev.vibracion) : '')}" style="font-size:1rem;">
+            </div>
+            <div>
+              <label style="display:block; font-size:0.72rem; color:#9a3412; font-weight:700; margin-bottom:0.2rem;">Punto</label>
+              <input id="cap-vib-punto" type="text" class="form-control" placeholder="Ej: 1V, 2H, 3A" value="${escapeHtml(prev.punto || '')}" style="font-size:1rem; text-transform:uppercase;">
+            </div>
+          </div>
+        </section>
+
+        <!-- ── TEMPERATURA ───────────────────────────────────────────────── -->
+        <section style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:12px; padding:0.85rem; margin-bottom:0.85rem;">
+          <div style="font-weight:800; color:#1e40af; font-size:0.85rem; margin-bottom:0.5rem;">
+            <i class="fa-solid fa-temperature-half"></i> Temperatura
+          </div>
+          <div style="display:flex; gap:0.4rem; margin-bottom:0.6rem;">
+            <button type="button" class="cap-temp-modo btn" data-modo="si" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #2563eb; background:${prev.temperatura && prev.temperatura !== 'N/A' ? '#2563eb' : '#fff'}; color:${prev.temperatura && prev.temperatura !== 'N/A' ? '#fff' : '#2563eb'}; font-weight:700; font-size:0.85rem; min-height:42px;">Registrar valor</button>
+            <button type="button" class="cap-temp-modo btn" data-modo="na" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #94a3b8; background:${prev.temperatura === 'N/A' ? '#475569' : '#fff'}; color:${prev.temperatura === 'N/A' ? '#fff' : '#475569'}; font-weight:700; font-size:0.85rem; min-height:42px;">N/A</button>
+          </div>
+          <div id="cap-temp-campos" style="display:${prev.temperatura && prev.temperatura !== 'N/A' ? 'block' : 'none'};">
+            <label style="display:block; font-size:0.72rem; color:#1e40af; font-weight:700; margin-bottom:0.2rem;">Valor (°C)</label>
+            <input id="cap-temp-valor" type="text" inputmode="decimal" class="form-control" placeholder="Ej: 65" value="${escapeHtml(prev.temperatura && prev.temperatura !== 'N/A' ? String(prev.temperatura) : '')}" style="font-size:1rem;">
+          </div>
+        </section>
+
+        <p id="cap-med-error" style="display:none; color:#dc2626; font-size:0.82rem; margin:0 0 0.5rem;"></p>
+
+        <button id="cap-med-guardar" class="btn btn-primary" style="width:100%; padding:0.85rem; font-size:0.95rem; font-weight:800;">
+          <i class="fa-solid fa-check"></i> Guardar y cerrar
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    let vibModo  = prev.vibracion === 'N/A' ? 'na' : (prev.vibracion ? 'si' : null);
+    let tempModo = prev.temperatura === 'N/A' ? 'na' : (prev.temperatura ? 'si' : null);
+
+    const pintarModo = (grupo, modo) => {
+        overlay.querySelectorAll(`.${grupo}-modo`).forEach(btn => {
+            const m = btn.dataset.modo;
+            const accentSi  = grupo === 'cap-vib' ? '#FF6900' : '#2563eb';
+            const accentNa  = '#475569';
+            const isActive  = m === modo;
+            const color     = m === 'si' ? accentSi : accentNa;
+            btn.style.background = isActive ? color : '#fff';
+            btn.style.color      = isActive ? '#fff' : color;
+            btn.style.borderColor= m === 'si' ? accentSi : '#94a3b8';
+        });
+        const campos = overlay.querySelector(`#${grupo}-campos`);
+        if (campos) campos.style.display = modo === 'si' ? (grupo === 'cap-vib' ? 'grid' : 'block') : 'none';
+        if (modo === 'si') {
+            setTimeout(() => overlay.querySelector(`#${grupo}-valor`)?.focus(), 50);
+        }
+    };
+
+    overlay.querySelectorAll('.cap-vib-modo').forEach(b => b.addEventListener('click', () => { vibModo = b.dataset.modo; pintarModo('cap-vib', vibModo); }));
+    overlay.querySelectorAll('.cap-temp-modo').forEach(b => b.addEventListener('click', () => { tempModo = b.dataset.modo; pintarModo('cap-temp', tempModo); }));
+
+    const cerrar = (saved) => {
+        overlay.remove();
+        if (typeof onClose === 'function') onClose(saved);
+    };
+    overlay.querySelector('#cap-med-skip').addEventListener('click', () => cerrar(false));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(false); });
+
+    overlay.querySelector('#cap-med-guardar').addEventListener('click', () => {
+        const errEl = overlay.querySelector('#cap-med-error');
+        errEl.style.display = 'none';
+        const showErr = (m) => { errEl.textContent = m; errEl.style.display = 'block'; };
+
+        let vibracion = null, punto = null, temperatura = null;
+        if (vibModo === 'si') {
+            const v = overlay.querySelector('#cap-vib-valor').value.trim();
+            const p = overlay.querySelector('#cap-vib-punto').value.trim().toUpperCase();
+            if (!v) return showErr('Ingresa el valor de vibración o marca N/A.');
+            if (!p) return showErr('Ingresa el punto de medición (ej: 1V, 2H).');
+            vibracion = v; punto = p;
+        } else if (vibModo === 'na') {
+            vibracion = 'N/A';
+        }
+        if (tempModo === 'si') {
+            const v = overlay.querySelector('#cap-temp-valor').value.trim();
+            if (!v) return showErr('Ingresa la temperatura o marca N/A.');
+            temperatura = v;
+        } else if (tempModo === 'na') {
+            temperatura = 'N/A';
+        }
+
+        const ejCur = getEjecucionActiva(rutaIdx);
+        if (!ejCur) return cerrar(false);
+        ejCur.mediciones = ejCur.mediciones || {};
+        // Solo guardamos si capturó al menos uno
+        if (vibracion !== null || temperatura !== null) {
+            ejCur.mediciones[key] = {
+                vibracion: vibracion,
+                punto: punto,
+                temperatura: temperatura,
+                ts: new Date().toISOString()
+            };
+        }
+        setEjecucionActiva(rutaIdx, ejCur);
+        cerrar(true);
+    });
+};
+
+function renderTrabajadorRutaDetalle() {
+    const host = mainContent || document.getElementById('main-content');
+    if (!host) return;
+
+    const idx = _trabajadorRutaIdxActiva;
+    const r = (idx != null) ? RUTAS_VIBRACION_SEED[idx] : null;
+    const ej = (idx != null) ? getEjecucionActiva(idx) : null;
+    if (!r || !ej) {
+        // Sin idx (F5 que perdió contexto) o ruta inexistente → traemos del
+        // remoto por si la cache local está desactualizada; si tampoco hay,
+        // volvemos a la lista de Mis Rutas (mejor UX que dejar error a la vista).
+        if (window.supabaseClient) {
+            refrescarRutasEjecucionesDesdeSupabase().then(() => {
+                const ejFresca = (idx != null) ? getEjecucionActiva(idx) : null;
+                if (RUTAS_VIBRACION_SEED[idx] && ejFresca) {
+                    renderTrabajadorRutaDetalle();
+                } else {
+                    window.volverAMisRutas();
+                }
+            });
+            host.innerHTML = `
+                <div style="padding:2rem 1rem; text-align:center;">
+                    <i class="fa-solid fa-spinner fa-spin" style="font-size:1.4rem; color:#94a3b8;"></i>
+                    <p style="margin:0.6rem 0 0; color:#64748b;">Cargando ruta...</p>
+                </div>`;
+        } else {
+            window.volverAMisRutas();
+        }
+        return;
+    }
+
+    const unidadColor = colorUnidad(r.unidad);
+    const stats = rutasContarComponentes(idx, ej);
+    const pct = stats.total ? Math.round((stats.listos / stats.total) * 100) : 0;
+    const equipos = r.equipos || [];
+
+    // Equipos expandidos: arrancamos con el PRIMERO con componentes pendientes
+    // y mantenemos el estado del usuario en localStorage por ruta. Esto reduce
+    // el scroll a una pantalla y el trabajador trabaja un equipo a la vez.
+    const EXP_KEY = `planify_trab_eq_exp_${idx}`;
+    let expandidos = new Set();
+    try {
+        const raw = localStorage.getItem(EXP_KEY);
+        if (raw) expandidos = new Set(JSON.parse(raw));
+    } catch (e) {}
+    if (expandidos.size === 0) {
+        // Buscamos el primer equipo con pendientes
+        const primerPendiente = equipos.findIndex((eq, ei) => {
+            const comps = eq.componentes || [];
+            return comps.some((_, ci) => !ej.componentesEstado?.[`${ei}.${ci}`]);
+        });
+        expandidos.add(primerPendiente >= 0 ? primerPendiente : 0);
+    }
+    const guardarExpandidos = () => {
+        try { localStorage.setItem(EXP_KEY, JSON.stringify([...expandidos])); } catch (e) {}
+    };
+
+    // ── HEADER renderer ──────────────────────────────────────────────────
+    const renderEquipoHeader = (eq, eqIdx) => {
+        const comps = eq.componentes || [];
+        const listos = comps.filter((_, ci) => ej.componentesEstado?.[`${eqIdx}.${ci}`] === 'listo').length;
+        const noEjec = comps.filter((_, ci) => ej.componentesEstado?.[`${eqIdx}.${ci}`] === 'no-ejecutado').length;
+        const total = comps.length;
+        const completo = listos + noEjec === total && total > 0;
+        const isOpen = expandidos.has(eqIdx);
+        const pctEq = total ? Math.round((listos / total) * 100) : 0;
+        return `
+            <button type="button" class="trab-eq-header" data-equipo-idx="${eqIdx}" style="
+                width:100%; border:none; background:transparent; cursor:pointer;
+                padding:0.85rem 0.95rem; display:flex; align-items:center; gap:0.7rem;
+                text-align:left; font:inherit;">
+                <i class="fa-solid fa-chevron-${isOpen ? 'down' : 'right'}" style="color:#94a3b8; font-size:0.85rem; width:14px; flex-shrink:0; transition:transform 150ms;"></i>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-weight:700; color:#0f172a; font-size:0.92rem; line-height:1.25; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(eq.nombre || 'Equipo')}</div>
+                    <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.35rem;">
+                        <div style="flex:1; height:4px; background:#f1f5f9; border-radius:999px; overflow:hidden; display:flex;">
+                            <div style="height:100%; width:${total ? (listos/total)*100 : 0}%; background:#16a34a;"></div>
+                            <div style="height:100%; width:${total ? (noEjec/total)*100 : 0}%; background:#dc2626;"></div>
+                        </div>
+                        <span style="font-size:0.72rem; color:#64748b; font-weight:600; flex-shrink:0;">${listos}/${total}</span>
+                    </div>
+                </div>
+                ${completo ? '<i class="fa-solid fa-circle-check" style="color:#16a34a; font-size:1.1rem; flex-shrink:0;"></i>' : ''}
+            </button>
+        `;
+    };
+
+    // ── BODY (componentes) renderer ─────────────────────────────────────
+    const renderEquipoBody = (eq, eqIdx) => {
+        const comps = eq.componentes || [];
+        return `
+            <div class="trab-eq-body" style="border-top:1px solid #f1f5f9;">
+                ${comps.map((c, ci) => {
+                    const k = `${eqIdx}.${ci}`;
+                    const st = ej.componentesEstado?.[k] || '';
+                    const obs = ej.observaciones?.[k] || '';
+                    const isListo = st === 'listo';
+                    const isNoEjec = st === 'no-ejecutado';
+                    const med = ej.mediciones?.[k] || null;
+                    const tieneMed = med && (med.vibracion != null || med.temperatura != null);
+                    return `
+                    <div class="trab-comp-item" data-comp-idx="${ci}" style="
+                        padding:0.7rem 0.95rem; border-top:1px solid #f8fafc;
+                        ${isListo ? 'background:#f0fdf4;' : isNoEjec ? 'background:#fef2f2;' : 'background:#fff;'}">
+
+                        <div style="font-weight:600; color:#0f172a; font-size:0.88rem; line-height:1.3;">
+                            ${escapeHtml(c.nombre || '—')}
+                        </div>
+                        ${c.ubicacion_tecnica ? `<div style="font-family:ui-monospace,monospace; font-size:0.68rem; color:#94a3b8; margin-top:0.1rem;">${escapeHtml(c.ubicacion_tecnica)}</div>` : ''}
+
+                        <div style="display:flex; gap:0.4rem; margin-top:0.55rem;">
+                            <button type="button" class="trab-comp-btn" data-marca="listo" style="
+                                flex:1; padding:0.65rem; border-radius:10px;
+                                border:2px solid ${isListo ? '#16a34a' : '#e2e8f0'};
+                                background:${isListo ? '#16a34a' : '#fff'};
+                                color:${isListo ? '#fff' : '#475569'};
+                                font-weight:700; font-size:0.85rem; cursor:pointer; min-height:44px;">
+                                <i class="fa-solid fa-check"></i> Listo
+                            </button>
+                            <button type="button" class="trab-comp-btn" data-marca="no-ejecutado" style="
+                                flex:1; padding:0.65rem; border-radius:10px;
+                                border:2px solid ${isNoEjec ? '#dc2626' : '#e2e8f0'};
+                                background:${isNoEjec ? '#dc2626' : '#fff'};
+                                color:${isNoEjec ? '#fff' : '#475569'};
+                                font-weight:700; font-size:0.85rem; cursor:pointer; min-height:44px;">
+                                <i class="fa-solid fa-xmark"></i> No ejec.
+                            </button>
+                        </div>
+
+                        ${tieneMed ? `
+                            <div class="trab-comp-med-chip" style="margin-top:0.5rem; display:flex; align-items:center; gap:0.35rem; flex-wrap:wrap;">
+                                ${med.vibracion != null ? `<span style="background:#fff7ed; color:#9a3412; border:1px solid #fed7aa; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-wave-square"></i> ${escapeHtml(String(med.vibracion))}${med.vibracion !== 'N/A' && med.punto ? ` · ${escapeHtml(med.punto)}` : ''}</span>` : ''}
+                                ${med.temperatura != null ? `<span style="background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; font-size:0.7rem; font-weight:700; padding:0.18rem 0.55rem; border-radius:6px;"><i class="fa-solid fa-temperature-half"></i> ${escapeHtml(String(med.temperatura))}${med.temperatura !== 'N/A' ? '°C' : ''}</span>` : ''}
+                                <button type="button" class="trab-comp-editar-med" style="margin-left:auto; background:transparent; border:none; color:#64748b; font-size:0.72rem; cursor:pointer; padding:0.1rem 0.3rem;"><i class="fa-solid fa-pen"></i></button>
+                            </div>
+                        ` : ''}
+
+                        ${obs ? `
+                            <div style="margin-top:0.5rem; background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:0.4rem 0.55rem;">
+                                <div style="font-size:0.7rem; color:#92400e; font-weight:700; margin-bottom:0.15rem;"><i class="fa-regular fa-comment"></i> Observación</div>
+                                <textarea class="trab-comp-obs" rows="2" style="width:100%; border:none; background:transparent; padding:0; font-family:inherit; font-size:0.82rem; resize:none; color:#0f172a;">${escapeHtml(obs)}</textarea>
+                            </div>
+                        ` : `
+                            <button type="button" class="trab-comp-agregar-obs" style="margin-top:0.4rem; background:transparent; border:none; color:#94a3b8; font-size:0.72rem; cursor:pointer; padding:0.1rem 0;"><i class="fa-regular fa-comment"></i> + Observación</button>
+                            <textarea class="trab-comp-obs" rows="2" placeholder="Notas..." style="display:none; margin-top:0.4rem; width:100%; border:1px solid #e5e7eb; border-radius:8px; padding:0.5rem; font-family:inherit; font-size:0.82rem; resize:vertical;"></textarea>
+                        `}
+                    </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    };
+
+    const renderEquipo = (eq, eqIdx) => `
+        <article class="trab-ruta-equipo" data-equipo-idx="${eqIdx}" style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:0.55rem; overflow:hidden; box-shadow:0 1px 3px rgba(15,23,42,0.04);">
+            ${renderEquipoHeader(eq, eqIdx)}
+            ${expandidos.has(eqIdx) ? renderEquipoBody(eq, eqIdx) : ''}
+        </article>
+    `;
+
+    host.innerHTML = `
+        <div class="fade-in trab-ruta-detalle" style="padding:0.55rem; max-width:760px; margin:0 auto;">
+
+            <!-- HEADER COMPACTO con back + título + progreso -->
+            <header style="position:sticky; top:0; z-index:50; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:0.7rem 0.85rem; margin-bottom:0.65rem; box-shadow:0 4px 10px rgba(15,23,42,0.06);">
+                <div style="display:flex; align-items:center; gap:0.55rem;">
+                    <button onclick="window.volverAMisRutas()" type="button" title="Volver" style="border:none; background:#f1f5f9; color:#475569; width:38px; height:38px; border-radius:10px; cursor:pointer; font-size:0.95rem; flex-shrink:0;">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex; align-items:center; gap:0.4rem;">
+                            <span style="background:${unidadColor}; color:#fff; font-size:0.62rem; font-weight:800; padding:0.12rem 0.4rem; border-radius:5px; flex-shrink:0;">${escapeHtml(r.unidad || '—')}</span>
+                            <span style="font-size:0.7rem; color:#64748b; flex-shrink:0;">OT ${escapeHtml(ej.ot || '—')}</span>
+                        </div>
+                        <h1 style="margin:0.15rem 0 0; font-size:0.92rem; color:#0f172a; line-height:1.2; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.nombre)}</h1>
+                    </div>
+                    <strong id="trab-progress-pct" style="color:${unidadColor}; font-size:1.15rem; font-weight:900; flex-shrink:0;">${pct}%</strong>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.4rem; margin-top:0.55rem;">
+                    <div style="flex:1; height:5px; background:#f1f5f9; border-radius:999px; overflow:hidden; display:flex;">
+                        <div id="trab-progress-bar-listos" style="height:100%; width:${stats.total ? (stats.listos/stats.total)*100 : 0}%; background:#16a34a; transition:width 200ms;"></div>
+                        <div id="trab-progress-bar-noejec" style="height:100%; width:${stats.total ? (stats.noEjec/stats.total)*100 : 0}%; background:#dc2626; transition:width 200ms;"></div>
+                    </div>
+                    <span id="trab-progress-meta" style="font-size:0.7rem; color:#94a3b8; font-weight:600; flex-shrink:0;">${stats.listos}·${stats.noEjec}·${stats.pend}</span>
+                </div>
+            </header>
+
+            <!-- TOOLBAR: expandir/contraer todo -->
+            <div style="display:flex; gap:0.4rem; margin-bottom:0.55rem; padding:0 0.15rem;">
+                <button id="trab-toggle-todos" type="button" style="flex:1; background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:0.4rem 0.6rem; font-size:0.74rem; color:#64748b; font-weight:600; cursor:pointer;">
+                    <i class="fa-solid fa-list"></i> ${expandidos.size === equipos.length ? 'Contraer todos' : 'Expandir todos'}
+                </button>
+            </div>
+
+            <!-- LISTA de equipos en acordeón -->
+            <div id="trab-equipos-lista">
+                ${equipos.map(renderEquipo).join('')}
+            </div>
+
+            <!-- ESPACIO al fondo para que el botón flotante no tape el último equipo -->
+            <div style="height:5rem;"></div>
+
+            <!-- BOTÓN FLOTANTE Guardar -->
+            <div style="position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0) + 0.6rem); padding:0 0.6rem; z-index:90; pointer-events:none;">
+                <div style="max-width:760px; margin:0 auto; pointer-events:auto;">
+                    <button id="btn-trab-ruta-guardar" type="button" style="
+                        width:100%; padding:0.85rem 1rem;
+                        background:linear-gradient(135deg, #FF6900 0%, #fb923c 100%);
+                        color:#fff; border:none; border-radius:14px;
+                        font-size:0.95rem; font-weight:800; cursor:pointer;
+                        box-shadow:0 10px 24px rgba(249,115,22,0.4);">
+                        <i class="fa-solid fa-cloud-arrow-up"></i> Guardar y sincronizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // ── Helpers locales para actualizar progreso sin re-render completo ────
+    const refrescarProgreso = () => {
+        const ejActual = getEjecucionActiva(idx);
+        const st = rutasContarComponentes(idx, ejActual);
+        const pctNuevo = st.total ? Math.round((st.listos / st.total) * 100) : 0;
+        const bar1 = document.getElementById('trab-progress-bar-listos');
+        const bar2 = document.getElementById('trab-progress-bar-noejec');
+        const pctEl = document.getElementById('trab-progress-pct');
+        const metaEl = document.getElementById('trab-progress-meta');
+        if (bar1) bar1.style.width = `${st.total ? (st.listos/st.total)*100 : 0}%`;
+        if (bar2) bar2.style.width = `${st.total ? (st.noEjec/st.total)*100 : 0}%`;
+        if (pctEl) pctEl.textContent = `${pctNuevo}%`;
+        if (metaEl) metaEl.textContent = `${st.listos}·${st.noEjec}·${st.pend}`;
+    };
+
+    // Re-render de un equipo completo (header + body si está expandido)
+    const refrescarEquipo = (eqIdx) => {
+        const eqEl = host.querySelector(`.trab-ruta-equipo[data-equipo-idx="${eqIdx}"]`);
+        if (!eqEl) return;
+        const html = renderEquipo(equipos[eqIdx], eqIdx);
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        eqEl.replaceWith(tmp.firstElementChild);
+        cablearEquipo(eqIdx);
+    };
+
+    // Toggle del acordeón
+    const toggleEquipo = (eqIdx) => {
+        if (expandidos.has(eqIdx)) expandidos.delete(eqIdx);
+        else expandidos.add(eqIdx);
+        guardarExpandidos();
+        refrescarEquipo(eqIdx);
+        // Actualizar texto del botón "Expandir/Contraer todos"
+        const btn = document.getElementById('trab-toggle-todos');
+        if (btn) {
+            const todos = expandidos.size === equipos.length;
+            btn.innerHTML = `<i class="fa-solid fa-list"></i> ${todos ? 'Contraer todos' : 'Expandir todos'}`;
+        }
+    };
+
+    const marcar = (eqIdx, compIdx, marca) => {
+        const ejCur = getEjecucionActiva(idx) || ej;
+        ejCur.componentesEstado = ejCur.componentesEstado || {};
+        ejCur.componentesAt = ejCur.componentesAt || {};
+        const k = `${eqIdx}.${compIdx}`;
+        const yaTeniaEsteEstado = ejCur.componentesEstado[k] === marca;
+        if (yaTeniaEsteEstado) {
+            delete ejCur.componentesEstado[k];
+            delete ejCur.componentesAt[k];
+        } else {
+            ejCur.componentesEstado[k] = marca;
+            ejCur.componentesAt[k] = new Date().toISOString();
+        }
+        setEjecucionActiva(idx, ejCur);
+
+        if (!yaTeniaEsteEstado && marca === 'listo') {
+            const comp = r.equipos?.[eqIdx]?.componentes?.[compIdx];
+            const nombre = comp?.nombre || 'Componente';
+            setTimeout(() => {
+                window.abrirCapturaMedicionMovil(idx, eqIdx, compIdx, nombre, () => {
+                    refrescarEquipo(eqIdx);
+                });
+            }, 80);
+        }
+    };
+
+    // ── Cableo unificado: se llama después de cualquier re-render ────────
+    function cablearEquipo(eqIdx) {
+        const eqEl = host.querySelector(`.trab-ruta-equipo[data-equipo-idx="${eqIdx}"]`);
+        if (!eqEl) return;
+
+        // Header: tap → toggle accordion
+        eqEl.querySelector('.trab-eq-header')?.addEventListener('click', () => toggleEquipo(eqIdx));
+
+        // Componentes (solo si el body está renderizado)
+        eqEl.querySelectorAll('.trab-comp-item').forEach(item => {
+            const compIdx = Number(item.dataset.compIdx);
+
+            // Listo / No ejec
+            item.querySelectorAll('.trab-comp-btn').forEach(btn => {
+                btn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    marcar(eqIdx, compIdx, btn.dataset.marca);
+                    refrescarEquipo(eqIdx);
+                    refrescarProgreso();
+                });
+            });
+
+            // Editar mediciones
+            item.querySelector('.trab-comp-editar-med')?.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const comp = r.equipos?.[eqIdx]?.componentes?.[compIdx];
+                window.abrirCapturaMedicionMovil(idx, eqIdx, compIdx, comp?.nombre || 'Componente', () => {
+                    refrescarEquipo(eqIdx);
+                });
+            });
+
+            // "+ Observación" → revela el textarea
+            item.querySelector('.trab-comp-agregar-obs')?.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const btn = ev.currentTarget;
+                const ta = item.querySelector('.trab-comp-obs');
+                if (ta) {
+                    btn.style.display = 'none';
+                    ta.style.display = 'block';
+                    setTimeout(() => ta.focus(), 30);
+                }
+            });
+
+            // Guardar observación al perder foco
+            const obs = item.querySelector('.trab-comp-obs');
+            if (obs) {
+                obs.addEventListener('blur', () => {
+                    const ejCur = getEjecucionActiva(idx);
+                    if (!ejCur) return;
+                    ejCur.observaciones = ejCur.observaciones || {};
+                    const k = `${eqIdx}.${compIdx}`;
+                    const val = obs.value.trim();
+                    if (val) ejCur.observaciones[k] = val;
+                    else delete ejCur.observaciones[k];
+                    setEjecucionActiva(idx, ejCur);
+                });
+            }
+        });
+    }
+
+    // Cablear todos los equipos al primer render
+    equipos.forEach((_, eqIdx) => cablearEquipo(eqIdx));
+
+    // Botón "Expandir / Contraer todos"
+    document.getElementById('trab-toggle-todos')?.addEventListener('click', () => {
+        const todosExpandidos = expandidos.size === equipos.length;
+        if (todosExpandidos) expandidos.clear();
+        else equipos.forEach((_, i) => expandidos.add(i));
+        guardarExpandidos();
+        // Re-render solo de la lista de equipos
+        const lista = document.getElementById('trab-equipos-lista');
+        if (lista) lista.innerHTML = equipos.map(renderEquipo).join('');
+        equipos.forEach((_, eqIdx) => cablearEquipo(eqIdx));
+        const btn = document.getElementById('trab-toggle-todos');
+        if (btn) btn.innerHTML = `<i class="fa-solid fa-list"></i> ${expandidos.size === equipos.length ? 'Contraer todos' : 'Expandir todos'}`;
+    });
+
+    // Botón guardar — fuerza un push a Supabase y muestra toast
+    document.getElementById('btn-trab-ruta-guardar')?.addEventListener('click', async () => {
+        const btn = document.getElementById('btn-trab-ruta-guardar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
+        try {
+            const ejCur = getEjecucionActiva(idx);
+            await _pushEjecucionASupabase(idx, ejCur);
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Sincronizado';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Guardar y sincronizar';
+            }, 1600);
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Error — reintentar';
+            console.warn('[rutas] guardar:', e.message);
+        }
+    });
+}
+
 function renderItoView() {
     const host = mainContent || document.getElementById('main-content');
     if (!host) return;
@@ -12309,7 +13103,21 @@ function renderItoView() {
     `;
 }
 
+let _rutasRefrescoEnVuelo = false;
 function renderRutasView() {
+    // Refrescar ejecuciones desde Supabase en segundo plano (cache local
+    // se usa para el primer paint, luego re-renderizamos si hubo cambios).
+    // Guardamos un flag para que el re-render no dispare otro refresh.
+    if (window.supabaseClient && !_rutasRefrescoEnVuelo) {
+        _rutasRefrescoEnVuelo = true;
+        const cacheAntes = JSON.stringify(getRutasEjecuciones());
+        refrescarRutasEjecucionesDesdeSupabase().then(nuevas => {
+            _rutasRefrescoEnVuelo = false;
+            if (vistaActual === 'rutas' && JSON.stringify(nuevas) !== cacheAntes) {
+                renderRutasView();
+            }
+        }).catch(() => { _rutasRefrescoEnVuelo = false; });
+    }
     if (!vistaRutasEstado.seccionActiva) {
         renderVibracionesHub();
         return;
@@ -12607,6 +13415,8 @@ function renderRutasDetalle(idx) {
         const componenteVinculado = obtenerEquipoPorUT(comp.ubicacion_tecnica);
         const tieneFicha = !!componenteVinculado?.id;
         const datosGuardados = Array.isArray(ej?.mediciones?.[k]) ? ej.mediciones[k] : [];
+        // Nuevo formato (objeto): { vibracion, punto, temperatura } guardado por el modal móvil
+        const medObj = (ej?.mediciones?.[k] && !Array.isArray(ej.mediciones[k])) ? ej.mediciones[k] : null;
         const borderColor = done ? '#bbf7d0' : skipped ? '#fecaca' : '#e5e7eb';
         const bgColor = done ? '#f0fdf4' : skipped ? '#fef2f2' : '#fff';
         const titleStyle = done
@@ -12648,6 +13458,8 @@ function renderRutasDetalle(idx) {
                             : `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#fef3c7; color:#92400e; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;" title="No vinculado al maestro"><i class="fa-solid fa-circle-question"></i> Sin vincular</span>`
                         }
                         ${datosGuardados.length ? `<span style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#dcfce7; color:#047857; padding:0.1rem 0.4rem; border-radius:999px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid fa-floppy-disk"></i> ${datosGuardados.length}</span>` : ''}
+                        ${medObj && medObj.vibracion != null ? `<span title="Vibración" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#fff7ed; color:#9a3412; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #fed7aa;"><i class="fa-solid fa-wave-square"></i> ${escapeHtml(String(medObj.vibracion))}${medObj.vibracion !== 'N/A' && medObj.punto ? ` · ${escapeHtml(medObj.punto)}` : ''}</span>` : ''}
+                        ${medObj && medObj.temperatura != null ? `<span title="Temperatura" style="display:inline-flex; align-items:center; gap:0.2rem; font-size:0.62rem; font-weight:700; background:#eff6ff; color:#1e40af; padding:0.1rem 0.4rem; border-radius:999px; border:1px solid #bfdbfe;"><i class="fa-solid fa-temperature-half"></i> ${escapeHtml(String(medObj.temperatura))}${medObj.temperatura !== 'N/A' ? '°C' : ''}</span>` : ''}
                     </div>
                     <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.7rem; color:#64748b; margin-top:0.1rem;">
                         ${escapeHtml(comp.ubicacion_tecnica || '—')}
@@ -13063,25 +13875,158 @@ window.vibracionesVolver = function() {
 window.rutasIniciarEjecucion = function(idx) {
     const r = RUTAS_VIBRACION_SEED[idx];
     if (!r) return;
-    const ot = prompt(`Iniciar ejecución de:
-${r.nombre}
 
-Ingresa el número de OT (Orden de Trabajo):`, '');
-    if (ot === null) return; // cancelado
-    const otTrim = String(ot).trim();
-    if (!otTrim) {
-        alert('El número de OT es obligatorio para iniciar la ejecución.');
-        return;
-    }
-    setEjecucionActiva(idx, {
-        ot: otTrim,
-        fechaInicio: new Date().toISOString().slice(0, 10),
-        componentesEstado: {},   // { "eqIdx.compIdx": "listo" | "no-ejecutado" }
-        componentesAt: {},        // timestamp por componente
-        observaciones: {},        // observación por componente
-        mediciones: {}            // datos guardados por componente
+    // Quitar modal previo si existe (idempotente)
+    document.getElementById('modal-iniciar-ruta')?.remove();
+
+    const trabajadoresActivos = (estado.trabajadores || [])
+        .filter(t => t.activo !== false)
+        .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-iniciar-ruta';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10500; align-items:center; justify-content:center; padding:1rem;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; box-shadow:0 30px 70px rgba(15,23,42,0.35); width:100%; max-width:520px; max-height:90vh; overflow:auto;">
+        <div style="padding:1.1rem 1.3rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:flex-start; gap:0.7rem;">
+          <div>
+            <div style="font-size:0.72rem; font-weight:800; color:#FF6900; text-transform:uppercase; letter-spacing:0.06em;">Iniciar ruta</div>
+            <h2 style="margin:0.25rem 0 0; font-size:1.05rem; color:#0f172a;">${escapeHtml(r.nombre)}</h2>
+            <p style="margin:0.25rem 0 0; font-size:0.78rem; color:#64748b;">
+              ${escapeHtml(r.unidad || '—')} · ${escapeHtml(labelFrecuencia(r.frecuencia) || '—')} · ${(r.equipos || []).length} equipo(s)
+            </p>
+          </div>
+          <button type="button" id="iniciar-ruta-cerrar" class="btn btn-outline btn-icon" title="Cerrar" style="border-color:#e5e7eb; color:#64748b;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div style="padding:1rem 1.3rem; display:flex; flex-direction:column; gap:0.9rem;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;">
+              <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> Número de OT (obligatorio)
+            </label>
+            <input id="iniciar-ruta-ot" type="text" class="form-control" placeholder="Ej: 12345678" style="width:100%; text-transform:uppercase;">
+          </div>
+
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+              <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155;">
+                <i class="fa-solid fa-user-group" style="color:#0ea5e9;"></i> Técnicos asignados (selecciona 2)
+              </label>
+              <span id="iniciar-ruta-counter" style="font-size:0.78rem; font-weight:800; padding:0.18rem 0.55rem; border-radius:999px; background:#fee2e2; color:#b91c1c;">0 / 2</span>
+            </div>
+            <div id="iniciar-ruta-tecnicos" style="max-height:280px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; padding:0.45rem; background:#f8fafc; display:flex; flex-direction:column; gap:0.25rem;">
+              ${trabajadoresActivos.length ? trabajadoresActivos.map(t => `
+                <label class="iniciar-ruta-tec-row" style="display:flex; align-items:center; gap:0.55rem; padding:0.5rem 0.7rem; background:#fff; border:2px solid #e5e7eb; border-radius:10px; cursor:pointer; font-size:0.9rem; transition:border-color 120ms, background 120ms;">
+                  <input type="checkbox" class="iniciar-ruta-tec-check" value="${escapeHtml(t.id)}" data-nombre="${escapeHtml(t.nombre)}" style="width:18px; height:18px; accent-color:#FF6900; cursor:pointer; margin:0;">
+                  <span style="flex:1; color:#0f172a; font-weight:600;">${escapeHtml(t.nombre)}</span>
+                  ${t.cargo ? `<span style="font-size:0.74rem; color:#94a3b8; font-weight:500;">${escapeHtml(t.cargo)}</span>` : ''}
+                </label>
+              `).join('') : `<p style="margin:0; padding:0.5rem; color:#94a3b8; font-size:0.85rem;">Sin trabajadores activos.</p>`}
+            </div>
+          </div>
+
+          <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:0.6rem 0.8rem; font-size:0.8rem; color:#1e40af;">
+            <i class="fa-solid fa-circle-info"></i>
+            Ambos verán esta ruta en su celular dentro de <strong>"Rutas"</strong> y podrán tickear los componentes en terreno.
+          </div>
+
+          <p id="iniciar-ruta-error" style="display:none; color:#dc2626; font-size:0.85rem; margin:0;"></p>
+        </div>
+
+        <div style="padding:0.85rem 1.3rem; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button type="button" id="iniciar-ruta-cancelar" class="btn btn-outline">Cancelar</button>
+          <button type="button" id="iniciar-ruta-confirmar" class="btn btn-primary"><i class="fa-solid fa-play"></i> Iniciar ruta</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const otInput   = overlay.querySelector('#iniciar-ruta-ot');
+    const errEl     = overlay.querySelector('#iniciar-ruta-error');
+    const counterEl = overlay.querySelector('#iniciar-ruta-counter');
+    const checks    = [...overlay.querySelectorAll('.iniciar-ruta-tec-check')];
+    setTimeout(() => otInput?.focus(), 50);
+
+    // Lista de IDs seleccionados (max 2). Si intentas marcar un tercero,
+    // se bloquea hasta que destildes uno.
+    const refrescarEstado = () => {
+        const seleccionados = checks.filter(c => c.checked);
+        const n = seleccionados.length;
+        if (counterEl) {
+            counterEl.textContent = `${n} / 2`;
+            counterEl.style.background = n === 2 ? '#dcfce7' : '#fee2e2';
+            counterEl.style.color      = n === 2 ? '#15803d' : '#b91c1c';
+        }
+        // Resaltar la fila seleccionada y deshabilitar resto si ya hay 2
+        checks.forEach(cb => {
+            const row = cb.closest('label');
+            const sel = cb.checked;
+            row.style.borderColor = sel ? '#FF6900' : '#e5e7eb';
+            row.style.background  = sel ? '#fff7ed' : '#fff';
+            cb.disabled = !sel && n >= 2;
+            row.style.opacity = cb.disabled ? '0.55' : '1';
+            row.style.cursor  = cb.disabled ? 'not-allowed' : 'pointer';
+        });
+    };
+    checks.forEach(cb => cb.addEventListener('change', refrescarEstado));
+    refrescarEstado();
+
+    const cerrar = () => overlay.remove();
+    overlay.querySelector('#iniciar-ruta-cerrar').addEventListener('click', cerrar);
+    overlay.querySelector('#iniciar-ruta-cancelar').addEventListener('click', cerrar);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#iniciar-ruta-confirmar').addEventListener('click', async () => {
+        const ot = String(otInput.value || '').trim().toUpperCase();
+        const seleccionados = checks.filter(c => c.checked).map(c => ({ id: c.value, nombre: c.dataset.nombre }));
+        const showErr = (m) => { errEl.textContent = m; errEl.style.display = 'block'; };
+        errEl.style.display = 'none';
+
+        if (!ot) return showErr('El número de OT es obligatorio.');
+        if (seleccionados.length !== 2) return showErr('Selecciona exactamente 2 técnicos.');
+
+        // Para compatibilidad con el resto del sistema (DB columns + filtros
+        // del trabajador) el primero queda como liderId y el segundo como
+        // ayudanteId. La UI ya no muestra esa distinción.
+        const liderId    = seleccionados[0].id;
+        const ayudanteId = seleccionados[1].id;
+        const lider    = estado.trabajadores.find(t => t.id === liderId);
+        const ayudante = estado.trabajadores.find(t => t.id === ayudanteId);
+
+        const btn = overlay.querySelector('#iniciar-ruta-confirmar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Iniciando...';
+
+        const ejecucionNueva = {
+            ot,
+            fechaInicio: new Date().toISOString().slice(0, 10),
+            estado: 'activa',
+            liderId,       liderNombre:    lider?.nombre || '',
+            ayudanteId,    ayudanteNombre: ayudante?.nombre || '',
+            componentesEstado: {},
+            componentesAt:     {},
+            observaciones:     {},
+            mediciones:        {}
+        };
+        // Guardar local PRIMERO (UX rápido) y AWAIT el push remoto para
+        // detectar fallos (red caída, RLS, tabla inexistente). Sin el await,
+        // el planificador creería que asignó pero el trabajador no lo vería.
+        // skipPush=true evita el push fire-and-forget para no duplicar inserts.
+        setEjecucionActiva(idx, ejecucionNueva, { skipPush: true });
+        try {
+            if (window.supabaseClient) {
+                await _pushEjecucionASupabase(idx, ejecucionNueva);
+            }
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-play"></i> Iniciar ruta';
+            showErr('No se pudo guardar en el servidor: ' + (e.message || e) + '\nReintenta o revisa tu conexión.');
+            return;
+        }
+        cerrar();
+        renderRutasView();
     });
-    renderRutasView();
 };
 
 // Clave única para identificar un componente dentro de una ruta
@@ -13104,8 +14049,21 @@ window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
     }
     setEjecucionActiva(rutaIdx, ej);
     renderRutasView();
+    // Cuando recién se pasa a Listo (y no estaba antes), abrimos el modal de
+    // captura de vibración + temperatura. Es el mismo modal que usa el
+    // trabajador en su vista móvil — funciona también en desktop.
     if (estado === 'listo' && !yaListo) {
-        setTimeout(() => window.rutasAbrirCapturaComponente?.(rutaIdx, eqIdx, compIdx), 0);
+        const r = RUTAS_VIBRACION_SEED[rutaIdx];
+        const comp = r?.equipos?.[eqIdx]?.componentes?.[compIdx];
+        const nombre = comp?.nombre || 'Componente';
+        setTimeout(() => {
+            if (typeof window.abrirCapturaMedicionMovil === 'function') {
+                window.abrirCapturaMedicionMovil(rutaIdx, eqIdx, compIdx, nombre, () => {
+                    // Después de guardar/omitir refrescamos para que se vea el chip
+                    if (vistaActual === 'rutas') renderRutasView();
+                });
+            }
+        }, 50);
     }
 };
 
@@ -13187,7 +14145,7 @@ function rutasContarComponentes(rutaIdx, ej) {
     return { total, listos, noEjec, pend: total - listos - noEjec };
 }
 
-window.rutasCerrarEjecucion = function(idx) {
+window.rutasCerrarEjecucion = async function(idx) {
     const r = RUTAS_VIBRACION_SEED[idx];
     const ej = getEjecucionActiva(idx);
     if (!ej || !r) return;
@@ -13220,14 +14178,49 @@ window.rutasCerrarEjecucion = function(idx) {
         });
         localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
     } catch (e) { /* noop */ }
+    // Marcamos la ejecución como CERRADA en Supabase antes de limpiarla
+    // del cache local — si no, el siguiente refresh la traería de vuelta.
+    await _marcarEjecucionFinalizada(idx, 'cerrada');
     setEjecucionActiva(idx, null);
     renderRutasView();
 };
-window.rutasCancelarEjecucion = function(idx) {
+window.rutasCancelarEjecucion = async function(idx) {
     if (!confirm('¿Cancelar la ejecución actual?\nSe perderá el avance registrado.')) return;
+    // Igual que cerrar: primero marcamos en Supabase para que el refresh
+    // no la resucite desde la base de datos.
+    await _marcarEjecucionFinalizada(idx, 'cancelada');
     setEjecucionActiva(idx, null);
     renderRutasView();
 };
+
+// Marca la ejecución activa en Supabase como cerrada o cancelada para que
+// el filtro `estado='activa'` ya no la incluya en el próximo refresh.
+async function _marcarEjecucionFinalizada(idx, nuevoEstado) {
+    const ej = getEjecucionActiva(idx);
+    if (!ej || !window.supabaseClient) return;
+    const fechaCierre = new Date().toISOString().slice(0, 10);
+    // Si tenemos id (la ejecución se sincronizó con Supabase) → UPDATE
+    if (ej.id) {
+        try {
+            const { error } = await window.supabaseClient
+                .from('rutas_ejecuciones')
+                .update({ estado: nuevoEstado, fecha_cierre: fechaCierre })
+                .eq('id', ej.id);
+            if (error) console.warn('[rutas] no se pudo marcar finalizada:', error.message);
+        } catch (e) { console.warn('[rutas] excepción marcar finalizada:', e.message); }
+        return;
+    }
+    // Fallback: ejecución sin id (creada offline / sync nunca ocurrió).
+    // Borramos por ruta_idx + ot para no dejar basura.
+    if (ej.ot) {
+        try {
+            await window.supabaseClient
+                .from('rutas_ejecuciones')
+                .update({ estado: nuevoEstado, fecha_cierre: fechaCierre })
+                .eq('ruta_idx', idx).eq('ot', ej.ot).eq('estado', 'activa');
+        } catch (e) { /* noop */ }
+    }
+}
 
 
 // --- SISTEMA DE NAVEGACIÓN Y RENDER ---
@@ -13251,6 +14244,7 @@ const navConfig = {
     'nav-mobile-hours': 'mis_horas',
     'nav-mobile-perfil': 'perfil',
     'nav-mobile-insumos': 'insumos',
+    'nav-mobile-rutas': 'trabajador-rutas',
     'nav-perfil': 'perfil',
     'nav-checkin': 'checkin'
 };
@@ -13305,6 +14299,12 @@ function renderizarVistaActual() {
             break;
         case 'rutas':
             renderRutasView();
+            break;
+        case 'trabajador-rutas':
+            renderTrabajadorRutasView();
+            break;
+        case 'trabajador-ruta-detalle':
+            renderTrabajadorRutaDetalle();
             break;
         case 'ito':
             renderItoView();
@@ -16332,6 +17332,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mobile-hours':       ['trabajador'],
         'nav-mobile-perfil':      ['trabajador'],
         'nav-mobile-insumos':     ['admin', 'trabajador'],
+        'nav-mobile-rutas':       ['trabajador'],
         'nav-mobile-menu':        [],
         'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin'],
@@ -16369,6 +17370,8 @@ function accederApp(rol, trabajadorObj = null) {
     // Badge de pendientes solo para planificador
     if (esRolGestion(rol)) actualizarBadgeHE();
     actualizarBadgeInsumos();
+    // Badge de rutas solo para trabajador
+    if (rol === 'trabajador') actualizarBadgeRutasTrabajador();
     // Monitor SIEMPRE arranca → así los toasts in-app funcionan sin permisos del SO
     iniciarMonitorNotificaciones({ resetBaseline: true });
     // Push remoto (servidor → SO) solo si el usuario ya activó permisos
@@ -16389,7 +17392,7 @@ function accederApp(rol, trabajadorObj = null) {
             if (vistaGuardada) {
                 const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','checkin','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
-                const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos'];
+                const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
                 const permitidoVisita = ['dashboard','semanal','historial','equipos'];
                 const permitidoIto = ['ito'];
                 const lista = rol === 'admin' ? permitidoAdmin

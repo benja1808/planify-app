@@ -4465,9 +4465,9 @@ h3 {
         bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
         z-index: 120;
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
-        gap: 0.45rem;
-        padding: 0.55rem;
+        grid-template-columns: repeat(auto-fit, minmax(48px, 1fr));
+        gap: 0.35rem;
+        padding: 0.5rem;
         border-radius: 24px;
         background: rgba(255, 255, 255, 0.94);
         border: 1px solid rgba(226, 232, 240, 0.95);
@@ -4477,15 +4477,23 @@ h3 {
     }
 
     .mobile-dock-btn {
-        min-height: 58px;
+        min-height: 56px;
         display: grid;
         place-items: center;
-        gap: 0.16rem;
-        padding: 0.45rem 0.2rem;
+        gap: 0.14rem;
+        padding: 0.4rem 0.15rem;
         border: none;
-        border-radius: 18px;
+        border-radius: 16px;
         background: transparent;
         color: #64748b;
+    }
+
+    /* Pantallas muy chicas (≤ 380px): dock más compacto para que entren 6 botones */
+    @media (max-width: 380px) {
+        .mobile-dock { gap: 0.25rem; padding: 0.4rem; }
+        .mobile-dock-btn { min-height: 52px; padding: 0.35rem 0.1rem; border-radius: 14px; }
+        .mobile-dock-btn span { font-size: 0.62rem; }
+        .mobile-dock-btn i { font-size: 0.95rem; }
     }
 
     .mobile-dock-btn i {
