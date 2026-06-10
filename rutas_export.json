@@ -4166,7 +4166,12 @@
         "unidad": "U3",
         "componentes": [
           {
-            "nombre": "SOPLADOR AIRE PURGA CAMPO A",
+            "nombre": "MOTOR SOPLADOR AIRE PURGA CAMPO A",
+            "ubicacion_tecnica": "2893-35-HNF02-BB101-KN01",
+            "unidad": "U3"
+          },
+          {
+            "nombre": "VENTILADOR",
             "ubicacion_tecnica": "2893-35-HNF02-BB101-KN01",
             "unidad": "U3"
           }
@@ -4177,7 +4182,12 @@
         "unidad": "U3",
         "componentes": [
           {
-            "nombre": "SOPLADOR AIRE PURGA CAMPO B",
+            "nombre": "MOTOR SOPLADOR AIRE PURGA CAMPO B",
+            "ubicacion_tecnica": "2893-35-HNF02-BB102-KN01",
+            "unidad": "U3"
+          },
+          {
+            "nombre": "VENTILADOR",
             "ubicacion_tecnica": "2893-35-HNF02-BB102-KN01",
             "unidad": "U3"
           }
