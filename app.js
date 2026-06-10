@@ -13061,50 +13061,43 @@ function renderItoView() {
 
     const todasRutas = typeof RUTAS_VIBRACION_SEED !== 'undefined' ? RUTAS_VIBRACION_SEED : [];
     const totalRutas = todasRutas.length;
+    // Para que el % cuadre con la vista del planificador (Control), solo
+    // contamos componentes de rutas ACTIVAS. Si se incluyen las 45 rutas
+    // del catálogo, el avance se diluye con rutas que ni se han iniciado.
     let totalCompTodas = 0, totalCompListos = 0, totalCompNoEjec = 0;
     todasRutas.forEach((r, idx) => {
+        const ej = ejecuciones[idx];
+        if (!ej) return;  // solo rutas con ejecución activa
         const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
         totalCompTodas += comps;
-        const ej = ejecuciones[idx];
-        if (ej?.componentesEstado) {
+        if (ej.componentesEstado) {
             Object.values(ej.componentesEstado).forEach(st => {
                 if (st === 'listo') totalCompListos++;
                 else if (st === 'no-ejecutado') totalCompNoEjec++;
             });
         }
     });
-    // Sumar componentes cerrados (del historial)
-    historialRutas.forEach(h => {
-        totalCompListos += (h.completados || 0);
-        totalCompNoEjec += (h.noEjecutados || 0);
-    });
     const pctGlobal = totalCompTodas ? Math.round((totalCompListos / totalCompTodas) * 100) : 0;
     const rutasActivas = Object.keys(ejecuciones).length;
     const rutasCerradas = historialRutas.length;
 
-    // Avance por unidad
+    // Avance por unidad — solo cuenta rutas con ejecución activa, mismo
+    // criterio que el avance global para que los % cuadren entre vistas.
     const unidadesMap = new Map(); // unidad -> { total, listos, noEjec }
     todasRutas.forEach((r, idx) => {
+        const ej = ejecuciones[idx];
+        if (!ej) return;
         const u = r.unidad || 'Otros';
         if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
         const slot = unidadesMap.get(u);
         const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
         slot.total += comps;
-        const ej = ejecuciones[idx];
-        if (ej?.componentesEstado) {
+        if (ej.componentesEstado) {
             Object.values(ej.componentesEstado).forEach(st => {
                 if (st === 'listo') slot.listos++;
                 else if (st === 'no-ejecutado') slot.noEjec++;
             });
         }
-    });
-    historialRutas.forEach(h => {
-        const u = h.unidad || 'Otros';
-        if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
-        const slot = unidadesMap.get(u);
-        slot.total += (h.totalComponentes || 0);
-        slot.listos += (h.completados || 0);
-        slot.noEjec += (h.noEjecutados || 0);
     });
     const porUnidad = [...unidadesMap.entries()]
         .map(([u, x]) => ({
@@ -13184,7 +13177,7 @@ function renderItoView() {
                 <article style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1.1rem; text-align:center;">
                     <div style="font-size:0.7rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Avance global</div>
                     <div style="font-size:2.6rem; font-weight:900; color:#0ea5e9; line-height:1.05; margin:0.4rem 0;">${pctGlobal}%</div>
-                    <div style="font-size:0.78rem; color:#64748b;">${totalCompListos} de ${totalCompTodas} componentes</div>
+                    <div style="font-size:0.78rem; color:#64748b;">${totalCompListos} de ${totalCompTodas} componentes en rutas activas</div>
                     <div style="height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden; margin-top:0.7rem;">
                         <div style="height:100%; width:${pctGlobal}%; background:#0ea5e9;"></div>
                     </div>
