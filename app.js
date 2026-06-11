@@ -14571,41 +14571,61 @@ window.rutasCerrarEjecucion = async function(idx) {
     const msg = `¿Cerrar la ruta "${r.nombre}" (OT ${ej.ot})?\n\n${resumen} de ${c.total} componente(s)\n\nLas mediciones capturadas se enviarán al historial de cada equipo.`;
     if (!confirm(msg)) return;
 
-    // Empujar cada medición a la tabla `mediciones` del equipo para que
-    // aparezcan en los gráficos y en el historial por componente.
-    const pushResult = await _pushMedicionesDeRutaACerrar(idx, ej);
-    if (pushResult.ok > 0 || pushResult.err > 0) {
-        console.log(`[rutas] Mediciones empujadas: ${pushResult.ok} ok · ${pushResult.err} errores`);
+    // Overlay de carga para evitar parpadeo
+    let overlay = document.getElementById('rutas-cierre-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'rutas-cierre-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.85);backdrop-filter:blur(2px);';
+        overlay.innerHTML = `<div style="text-align:center;">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size:2rem;color:var(--primary-color);"></i>
+            <p id="rutas-cierre-msg" style="margin-top:0.75rem;font-size:1rem;font-weight:600;color:#334155;">Cerrando ruta…</p>
+        </div>`;
+        document.body.appendChild(overlay);
+    } else {
+        overlay.style.display = 'flex';
     }
+    const msgEl = document.getElementById('rutas-cierre-msg');
 
     try {
-        const histRaw = localStorage.getItem('planify_rutas_historial');
-        const hist = histRaw ? JSON.parse(histRaw) : [];
-        hist.push({
-            rutaIdx: idx,
-            rutaNombre: r.nombre,
-            unidad: r.unidad,
-            frecuencia: r.frecuencia,
-            plan: r.plan,
-            ot: ej.ot,
-            fechaInicio: ej.fechaInicio,
-            fechaCierre: new Date().toISOString().slice(0, 10),
-            totalEquipos: (r.equipos || []).length,
-            totalComponentes: c.total,
-            completados: c.listos,
-            noEjecutados: c.noEjec,
-            sinMarcar: c.pend,
-            componentesEstado: ej.componentesEstado || {},
-            componentesAt: ej.componentesAt || {},
-            mediciones: ej.mediciones || {},
-            observaciones: ej.observaciones || {}
-        });
-        localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
-    } catch (e) { /* noop */ }
-    // Marcamos la ejecución como CERRADA en Supabase antes de limpiarla
-    // del cache local — si no, el siguiente refresh la traería de vuelta.
-    await _marcarEjecucionFinalizada(idx, 'cerrada');
-    setEjecucionActiva(idx, null);
+        if (msgEl) msgEl.textContent = 'Guardando mediciones…';
+        const pushResult = await _pushMedicionesDeRutaACerrar(idx, ej);
+        if (pushResult.ok > 0 || pushResult.err > 0) {
+            console.log(`[rutas] Mediciones empujadas: ${pushResult.ok} ok · ${pushResult.err} errores`);
+        }
+
+        if (msgEl) msgEl.textContent = 'Archivando en historial…';
+        try {
+            const histRaw = localStorage.getItem('planify_rutas_historial');
+            const hist = histRaw ? JSON.parse(histRaw) : [];
+            hist.push({
+                rutaIdx: idx,
+                rutaNombre: r.nombre,
+                unidad: r.unidad,
+                frecuencia: r.frecuencia,
+                plan: r.plan,
+                ot: ej.ot,
+                fechaInicio: ej.fechaInicio,
+                fechaCierre: new Date().toISOString().slice(0, 10),
+                totalEquipos: (r.equipos || []).length,
+                totalComponentes: c.total,
+                completados: c.listos,
+                noEjecutados: c.noEjec,
+                sinMarcar: c.pend,
+                componentesEstado: ej.componentesEstado || {},
+                componentesAt: ej.componentesAt || {},
+                mediciones: ej.mediciones || {},
+                observaciones: ej.observaciones || {}
+            });
+            localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
+        } catch (e) { /* noop */ }
+
+        if (msgEl) msgEl.textContent = 'Sincronizando…';
+        await _marcarEjecucionFinalizada(idx, 'cerrada');
+        setEjecucionActiva(idx, null, { skipPush: true });
+    } finally {
+        overlay.style.display = 'none';
+    }
     renderRutasView();
 };
 window.rutasCancelarEjecucion = async function(idx) {
