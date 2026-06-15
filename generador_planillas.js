@@ -296,10 +296,12 @@
     }
 
     // ── URL del backend (Render en prod, localhost en dev) ──────────
+    // Usa la URL global declarada en index.html (window.PLANIFY_PDF_BACKEND)
+    // como fuente única — evita que se desincronicen entre archivos.
     const PLANILLA_SERVER = (() => {
         const h = window.location.hostname;
         if (h === 'localhost' || h === '127.0.0.1') return '';
-        return 'https://planify-backend.onrender.com';
+        return window.PLANIFY_PDF_BACKEND || 'https://planify-backend-lfq3.onrender.com';
     })();
 
     // ── Función principal ──────────────────────────────────────────────
