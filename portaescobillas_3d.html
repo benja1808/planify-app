@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portaescobillas 3D — Bomba Aceite Emergencia U4</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a1a; font-family: 'Inter', system-ui, sans-serif; }
+    #app { width: 100%; height: 100%; position: relative; }
+    #canvas-host { width: 100%; height: 100%; }
+
+    /* Header overlay */
+    .hud-header {
+        position: absolute; top: 0; left: 0; right: 0;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(180deg, rgba(10,10,12,0.85) 0%, rgba(10,10,12,0) 100%);
+        pointer-events: none;
+        z-index: 10;
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+    }
+    .hud-title h1 { font-size: 1.05rem; color: #f8fafc; font-weight: 800; letter-spacing: 0.01em; }
+    .hud-title p  { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
+    .hud-badge {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        background: rgba(255,107,53,0.15); border: 1px solid rgba(255,107,53,0.45);
+        color: #ff8c5a; font-size: 0.7rem; font-weight: 700;
+        padding: 0.3rem 0.65rem; border-radius: 999px; white-space: nowrap;
+    }
+    .hud-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #ff6b35; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    /* Legend */
+    .hud-legend {
+        position: absolute; bottom: 1rem; left: 1rem;
+        background: rgba(15,16,20,0.82); border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px; padding: 0.75rem 0.9rem;
+        z-index: 10; pointer-events: none;
+        backdrop-filter: none;
+    }
+    .hud-legend h3 { font-size: 0.62rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .hud-legend .row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: #cbd5e1; margin-top: 0.3rem; }
+    .hud-legend .sw { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+
+    /* Controls hint */
+    .hud-hint {
+        position: absolute; bottom: 1rem; right: 1rem;
+        font-size: 0.68rem; color: #475569; z-index: 10; pointer-events: none;
+        text-align: right; line-height: 1.5;
+    }
+
+    /* CSS2D labels */
+    .lbl {
+        color: #e2e8f0; font-size: 11px; font-weight: 700;
+        background: rgba(15,16,20,0.78); border: 1px solid rgba(255,255,255,0.12);
+        padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .lbl.brush { font-size: 9px; font-weight: 600; color: #fbbf24; background: rgba(40,20,5,0.8); border-color: rgba(251,191,36,0.3); padding: 1px 6px; }
+</style>
+</head>
+<body>
+<div id="app">
+    <div class="hud-header">
+        <div class="hud-title">
+            <h1>⚙ Portaescobillas — Motor Bomba Aceite Emergencia U4</h1>
+            <p>Anillo colector con 4 portaescobillas · 3 escobillas de carbón c/u · Vista termográfica</p>
+        </div>
+        <span class="hud-badge"><span class="dot"></span> EN OPERACIÓN</span>
+    </div>
+
+    <div class="hud-legend">
+        <h3>Paleta térmica</h3>
+        <div class="row"><span class="sw" style="background:#b87333;"></span> Anillo colector (caliente)</div>
+        <div class="row"><span class="sw" style="background:#ff6b35;"></span> Escobillas — zona de fricción</div>
+        <div class="row"><span class="sw" style="background:#4a6fa5;"></span> Housing — temp. normal</div>
+        <div class="row"><span class="sw" style="background:#cccccc;"></span> Resorte de presión</div>
+    </div>
+
+    <div class="hud-hint">
+        🖱 Arrastrar: rotar · Rueda: zoom<br>
+        Click derecho: desplazar
+    </div>
+
+    <div id="canvas-host"></div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const host = document.getElementById('canvas-host');
+
+// ── Scene / camera / renderers ─────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x23262c);
+scene.fog = new THREE.Fog(0x23262c, 14, 30);
+
+const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 0.1, 100);
+camera.position.set(3.4, 2.8, 4.4);
+camera.lookAt(0, 0.6, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(host.clientWidth, host.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.6;
+host.appendChild(renderer.domElement);
+
+// Environment map → reflejos realistas en los metales (PBR)
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.5;
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(host.clientWidth, host.clientHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+host.appendChild(labelRenderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.autoRotate = false;
+controls.minDistance = 2.5;
+controls.maxDistance = 12;
+controls.target.set(0, 0.6, 0);
+
+// ── Lighting (thermal environment) ─────────────────────────────────────
+// Nota: three r155+ usa unidades físicas → intensidades altas en PointLight
+scene.add(new THREE.AmbientLight(0xffb070, 0.9));
+scene.add(new THREE.HemisphereLight(0x9db4d8, 0x553311, 1.1));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 3.2);
+keyLight.position.set(3, 7, 4);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(1024, 1024);
+keyLight.shadow.camera.left = -5; keyLight.shadow.camera.right = 5;
+keyLight.shadow.camera.top = 5;  keyLight.shadow.camera.bottom = -5;
+scene.add(keyLight);
+
+const thermalLight = new THREE.PointLight(0xff4500, 40, 20, 2);
+thermalLight.position.set(-4, 1.5, -2);
+scene.add(thermalLight);
+
+// Fill direccional desde el lado opuesto para que ningún lado quede negro
+const backFill = new THREE.DirectionalLight(0xaabbdd, 1.2);
+backFill.position.set(-3, 4, -5);
+scene.add(backFill);
+
+// Soft fill from below to fake bounce off floor
+const fill = new THREE.PointLight(0xff8c42, 15, 12, 2);
+fill.position.set(0, -1, 2);
+scene.add(fill);
+
+// Warm glow emanating from the collector ring itself
+const ringGlow = new THREE.PointLight(0xffa050, 25, 6, 2);
+ringGlow.position.set(0, 0.6, 0);
+scene.add(ringGlow);
+
+// ── Floor grid ─────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(14, 28, 0x4a5160, 0x32363f);
+grid.position.y = -1.05;
+scene.add(grid);
+
+const floorGeo = new THREE.CircleGeometry(7, 48);
+const floorMat = new THREE.MeshStandardMaterial({ color: 0x141518, metalness: 0.2, roughness: 0.95 });
+const floor = new THREE.Mesh(floorGeo, floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -1.06;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Polvillo de carbón acumulado bajo el colector (desgaste de escobillas)
+const dust = new THREE.Mesh(
+    new THREE.RingGeometry(0.5, 2.3, 48),
+    new THREE.MeshBasicMaterial({ color: 0x0a0a0a, transparent: true, opacity: 0.4, side: THREE.DoubleSide })
+);
+dust.rotation.x = -Math.PI / 2;
+dust.position.y = -1.045;
+scene.add(dust);
+
+// ── Materials ──────────────────────────────────────────────────────────
+// Textura procedural del colector: pátina cobriza + 3 pistas de desgaste
+// (bandas brillantes donde corren las escobillas) + vetas de carbón.
+function makeCollectorTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = 1024; cv.height = 256;
+    const g = cv.getContext('2d');
+
+    // Base cobre con gradiente vertical
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#8a5524');
+    grad.addColorStop(0.5, '#c08040');
+    grad.addColorStop(1, '#7a4a1e');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1024, 256);
+
+    // Vetas circunferenciales (líneas horizontales de mecanizado)
+    for (let i = 0; i < 90; i++) {
+        const y = Math.random() * 256;
+        g.strokeStyle = `rgba(${40 + Math.random()*40|0},${20 + Math.random()*20|0},5,${0.06 + Math.random()*0.1})`;
+        g.lineWidth = 0.6 + Math.random() * 1.2;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(1024, y); g.stroke();
+    }
+
+    // 3 pistas de desgaste brillantes alineadas con las alturas de las escobillas
+    [0.1, 0.5, 0.9].forEach(v => {
+        const y = v * 256;
+        const band = g.createLinearGradient(0, y - 16, 0, y + 16);
+        band.addColorStop(0, 'rgba(255,210,150,0)');
+        band.addColorStop(0.5, 'rgba(255,215,160,0.55)');
+        band.addColorStop(1, 'rgba(255,210,150,0)');
+        g.fillStyle = band;
+        g.fillRect(0, y - 16, 1024, 32);
+        // sombra de carbón en los bordes de la pista
+        g.fillStyle = 'rgba(25,12,4,0.35)';
+        g.fillRect(0, y - 20, 1024, 4);
+        g.fillRect(0, y + 16, 1024, 4);
+    });
+
+    // Manchas de pátina/oxidación
+    for (let i = 0; i < 60; i++) {
+        const x = Math.random() * 1024, y = Math.random() * 256;
+        const r = 4 + Math.random() * 18;
+        const spot = g.createRadialGradient(x, y, 0, x, y, r);
+        spot.addColorStop(0, `rgba(${30+Math.random()*30|0},15,5,${0.05 + Math.random()*0.12})`);
+        spot.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = spot;
+        g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fill();
+    }
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+const matCollector = new THREE.MeshStandardMaterial({
+    map: makeCollectorTexture(),
+    color: 0xffffff, metalness: 0.85, roughness: 0.35,
+    emissive: 0x200800, emissiveIntensity: 1.0
+});
+const matBrass = new THREE.MeshStandardMaterial({ color: 0xb5995a, metalness: 0.95, roughness: 0.28 });
+const matShaft = new THREE.MeshStandardMaterial({ color: 0x8a8f98, metalness: 0.85, roughness: 0.3 });
+const matHousing = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, metalness: 0.6, roughness: 0.5 });
+const matHousingBlue = new THREE.MeshStandardMaterial({ color: 0x4a6fa5, metalness: 0.6, roughness: 0.5 });
+const matSpring = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.7, roughness: 0.35 });
+const matArm = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 0.7, roughness: 0.4 });
+
+// Brush gradient: vertex-colored orange → dark graphite
+function makeBrushMaterial() {
+    return new THREE.MeshStandardMaterial({
+        metalness: 0.1, roughness: 0.8, vertexColors: true,
+        emissive: 0x331100, emissiveIntensity: 0.55
+    });
+}
+function brushGeometryWithGradient(w, h, d) {
+    const geo = new THREE.BoxGeometry(w, h, d, 1, 1, 4);
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const cHot = new THREE.Color(0xff6b35);    // tip (friction)
+    const cCold = new THREE.Color(0x3b3b3b);   // back (graphite)
+    const c = new THREE.Color();
+    for (let i = 0; i < pos.count; i++) {
+        // Gradient along Z: front (-z, toward collector) hot, back cold
+        const t = 1 - ((pos.getZ(i) / d) + 0.5);   // 1 at -z/front, 0 at +z/back
+        c.copy(cCold).lerp(cHot, Math.pow(t, 1.6));
+        colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    return geo;
+}
+
+// ── Collector ring + shaft ─────────────────────────────────────────────
+const rotor = new THREE.Group();
+scene.add(rotor);
+
+const ring = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.4, 64), matCollector);
+ring.position.y = 0.6;
+ring.castShadow = true;
+ring.receiveShadow = true;
+rotor.add(ring);
+
+// Bordes torneados arriba/abajo del anillo (chaflán metálico)
+for (const dy of [-0.2, 0.2]) {
+    const lip = new THREE.Mesh(
+        new THREE.TorusGeometry(1.2, 0.015, 10, 72),
+        new THREE.MeshStandardMaterial({ color: 0x9a6a30, metalness: 0.95, roughness: 0.25 })
+    );
+    lip.rotation.x = Math.PI / 2;
+    lip.position.y = 0.6 + dy;
+    rotor.add(lip);
+}
+
+// Shaft above + below
+const shaftTop = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.0, 32), matShaft);
+shaftTop.position.y = 1.3;
+shaftTop.castShadow = true;
+rotor.add(shaftTop);
+const shaftBottom = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.2, 32), matShaft);
+shaftBottom.position.y = -0.2;
+shaftBottom.castShadow = true;
+rotor.add(shaftBottom);
+
+// Keyway detail on top shaft
+const key = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.6, 0.05), matArm);
+key.position.set(0.21, 1.3, 0);
+rotor.add(key);
+
+// ── Helical spring builder (torus segments stacked) ────────────────────
+function buildSpring(turns = 4, radius = 0.05, wire = 0.011, pitch = 0.028) {
+    const g = new THREE.Group();
+    for (let i = 0; i < turns; i++) {
+        const seg = new THREE.Mesh(new THREE.TorusGeometry(radius, wire, 6, 20), matSpring);
+        seg.rotation.x = Math.PI / 2;
+        seg.rotation.z = (i % 2) * 0.3;
+        seg.position.y = i * pitch;
+        g.add(seg);
+    }
+    return g;
+}
+
+// ── Brush holder assembly (x4) ─────────────────────────────────────────
+// Los holders van pegados al anillo (como en el equipo real): la escobilla
+// es corta y su punta apoya directamente sobre la superficie del colector.
+const RING_R = 1.2;
+const HOLDER_R = 1.6;                 // housing muy cerca del anillo
+const GAP = HOLDER_R - RING_R;        // 0.4 hasta la superficie
+const BRUSH_W = 0.18, BRUSH_H = 0.12;
+const BRUSH_LEN = 0.45;               // escobilla corta, apoyada en el anillo
+
+const labelDivs = [];
+
+for (let i = 0; i < 4; i++) {
+    const angle = i * Math.PI / 2;   // 0°, 90°, 180°, 270°
+    const ux = Math.sin(angle), uz = Math.cos(angle);
+
+    const assembly = new THREE.Group();
+    assembly.position.set(ux * HOLDER_R, 0.6, uz * HOLDER_R);
+    assembly.lookAt(0, 0.6, 0);
+    assembly.rotateY(Math.PI);   // lookAt apunta +Z al centro; giramos para que -Z (escobillas) mire al anillo
+    scene.add(assembly);
+
+    // Housing (taller box holding 3 brushes vertically)
+    const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.25, 0.5, 0.15),
+        i % 2 === 0 ? matHousing : matHousingBlue
+    );
+    housing.castShadow = true;
+    housing.receiveShadow = true;
+    assembly.add(housing);
+
+    // Pernos hex en las esquinas del housing
+    [[0.1, 0.21], [-0.1, 0.21], [0.1, -0.21], [-0.1, -0.21]].forEach(([bx, by]) => {
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 6), matShaft);
+        bolt.rotation.x = Math.PI / 2;
+        bolt.position.set(bx, by, 0.085);
+        assembly.add(bolt);
+    });
+
+    // Mounting arm (radial support out the back)
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.45), matArm);
+    arm.position.z = 0.3;
+    arm.castShadow = true;
+    assembly.add(arm);
+
+    // Columna de bronce vertical (como el equipo real) con abrazaderas y tuercas hex
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.7, 20), matBrass);
+    post.position.set(0, -0.3, 0.55);
+    post.castShadow = true;
+    assembly.add(post);
+
+    // Abrazaderas de bronce con pernos hexagonales (3 niveles, como la foto)
+    [0.16, 0, -0.16].forEach(cy => {
+        const clamp = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.14), matBrass);
+        clamp.position.set(0, cy, 0.55);
+        clamp.castShadow = true;
+        assembly.add(clamp);
+        // Tuerca hex al frente de cada abrazadera
+        const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.035, 6), matShaft);
+        nut.rotation.x = Math.PI / 2;
+        nut.position.set(0, cy, 0.47);
+        nut.castShadow = true;
+        assembly.add(nut);
+        // Perno lateral
+        const boltSide = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.03, 6), matShaft);
+        boltSide.rotation.z = Math.PI / 2;
+        boltSide.position.set(0.09, cy, 0.55);
+        assembly.add(boltSide);
+    });
+
+    // 3 carbon brushes stacked vertically
+    const brushYs = [0.16, 0, -0.16];
+    const brushNames = ['1', '2', '3'];
+    // Fundas tejidas de los pigtails: una naranja y dos blancas (como la foto)
+    const sleeveColors = [0xd35427, 0xd8d8d2, 0xd8d8d2];
+    brushYs.forEach((by, bi) => {
+        const brushGroup = new THREE.Group();
+        brushGroup.position.y = by;
+        assembly.add(brushGroup);
+
+        // Escobilla corta: la punta toca la superficie del anillo.
+        // Superficie del anillo en local z = -GAP → centro de la escobilla
+        // en z = -GAP + BRUSH_LEN/2 (queda mayormente dentro de la guía).
+        const brush = new THREE.Mesh(brushGeometryWithGradient(BRUSH_W, BRUSH_H, BRUSH_LEN), makeBrushMaterial());
+        brush.position.z = -GAP + BRUSH_LEN / 2;
+        brush.castShadow = true;
+        brushGroup.add(brush);
+
+        // Brush guide box (open channel look)
+        const guide = new THREE.Mesh(
+            new THREE.BoxGeometry(BRUSH_W + 0.05, BRUSH_H + 0.045, 0.28),
+            i % 2 === 0 ? matHousingBlue : matHousing
+        );
+        guide.position.z = -0.1;
+        guide.castShadow = true;
+        brushGroup.add(guide);
+
+        // Spring on top of brush (pressing down/inward)
+        const spring = buildSpring(4);
+        spring.rotation.x = Math.PI / 2;     // coil axis along Z (radial)
+        spring.position.set(0, BRUSH_H / 2 + 0.05, -0.18);
+        brushGroup.add(spring);
+
+        // Pigtail (shunt) con funda tejida: bucle saliendo de la escobilla
+        // hacia la abrazadera de bronce de atrás (como la foto real)
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0, BRUSH_H / 2 - 0.01, 0.02),
+            new THREE.Vector3(0.07, BRUSH_H / 2 + 0.13, 0.12),
+            new THREE.Vector3(0.1, BRUSH_H / 2 + 0.17, 0.28),
+            new THREE.Vector3(0.04, BRUSH_H / 2 + 0.08, 0.42),
+            new THREE.Vector3(0, 0.02, 0.5)
+        ]);
+        const pig = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 28, 0.02, 8, false),
+            new THREE.MeshStandardMaterial({ color: sleeveColors[bi], metalness: 0.05, roughness: 0.92 })
+        );
+        pig.castShadow = true;
+        brushGroup.add(pig);
+        // Terminal metálico donde el pigtail entra a la escobilla
+        const term = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.035, 10), matShaft);
+        term.rotation.x = Math.PI / 2;
+        term.position.set(0, BRUSH_H / 2, 0.03);
+        brushGroup.add(term);
+
+        // Per-brush label only on first holder to avoid clutter
+        if (i === 0) {
+            const div = document.createElement('div');
+            div.className = 'lbl brush';
+            div.textContent = `Escobilla ${brushNames[bi]}`;
+            const lbl = new CSS2DObject(div);
+            lbl.position.set(0.28, by, -0.2);
+            assembly.add(lbl);
+            labelDivs.push(div);
+        }
+    });
+
+    // Holder label
+    const div = document.createElement('div');
+    div.className = 'lbl';
+    div.textContent = `Portaescobillas ${i + 1}`;
+    const lbl = new CSS2DObject(div);
+    lbl.position.set(0, 0.48, 0.1);
+    assembly.add(lbl);
+    labelDivs.push(div);
+}
+
+// ── Heat shimmer particles above the ring (subtle) ─────────────────────
+const sparkGeo = new THREE.BufferGeometry();
+const N_SPARKS = 60;
+const sparkPos = new Float32Array(N_SPARKS * 3);
+const sparkSeed = new Float32Array(N_SPARKS);
+for (let i = 0; i < N_SPARKS; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 1.18 + Math.random() * 0.1;
+    sparkPos[i*3] = Math.sin(a) * r;
+    sparkPos[i*3+1] = 0.4 + Math.random() * 0.5;
+    sparkPos[i*3+2] = Math.cos(a) * r;
+    sparkSeed[i] = Math.random() * Math.PI * 2;
+}
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+const sparkMat = new THREE.PointsMaterial({
+    color: 0xffa040, size: 0.025, transparent: true, opacity: 0.55,
+    blending: THREE.AdditiveBlending, depthWrite: false
+});
+const sparks = new THREE.Points(sparkGeo, sparkMat);
+scene.add(sparks);
+
+// ── Animation loop ─────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+
+    // Slow collector spin
+    rotor.rotation.y = t * 0.55;
+
+    // Emissive breathing on the ring (thermal pulse)
+    matCollector.emissiveIntensity = 0.85 + Math.sin(t * 1.4) * 0.25;
+
+    // Heat shimmer drift
+    const p = sparkGeo.attributes.position;
+    for (let i = 0; i < N_SPARKS; i++) {
+        let y = p.getY(i) + 0.0016 + Math.sin(t * 2 + sparkSeed[i]) * 0.0004;
+        if (y > 1.15) y = 0.42;
+        p.setY(i, y);
+    }
+    p.needsUpdate = true;
+
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+}
+animate();
+
+// ── Resize ─────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+    const w = host.clientWidth, h = host.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    labelRenderer.setSize(w, h);
+});
+</script>
+</body>
+</html>

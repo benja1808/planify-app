@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Excitatriz 3D — Generador U4</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #111111; font-family: 'Inter', system-ui, sans-serif; }
+    #app { width: 100%; height: 100%; position: relative; }
+    #canvas-host { width: 100%; height: 100%; }
+
+    .hud-header {
+        position: absolute; top: 0; left: 0; right: 0;
+        padding: 1rem 1.25rem;
+        background: linear-gradient(180deg, rgba(8,8,10,0.85) 0%, rgba(8,8,10,0) 100%);
+        pointer-events: none; z-index: 10;
+        display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem;
+    }
+    .hud-title h1 { font-size: 1.05rem; color: #f8fafc; font-weight: 800; letter-spacing: 0.01em; }
+    .hud-title p  { font-size: 0.75rem; color: #94a3b8; margin-top: 0.2rem; }
+    .hud-badge {
+        display: inline-flex; align-items: center; gap: 0.35rem;
+        background: rgba(176,48,56,0.18); border: 1px solid rgba(176,48,56,0.55);
+        color: #f08a90; font-size: 0.7rem; font-weight: 700;
+        padding: 0.3rem 0.65rem; border-radius: 999px; white-space: nowrap;
+    }
+    .hud-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: #e04048; animation: pulse 1.6s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+    .hud-legend {
+        position: absolute; bottom: 1rem; left: 1rem;
+        background: rgba(13,13,16,0.85); border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px; padding: 0.75rem 0.9rem;
+        z-index: 10; pointer-events: none;
+    }
+    .hud-legend h3 { font-size: 0.62rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem; }
+    .hud-legend .row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; color: #cbd5e1; margin-top: 0.3rem; }
+    .hud-legend .sw { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+
+    .hud-hint {
+        position: absolute; bottom: 1rem; right: 1rem;
+        font-size: 0.68rem; color: #5b6472; z-index: 10; pointer-events: none;
+        text-align: right; line-height: 1.5;
+    }
+
+    .lbl {
+        color: #e2e8f0; font-size: 12px; font-weight: 800;
+        background: rgba(13,13,16,0.82); border: 1px solid rgba(255,255,255,0.14);
+        padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .lbl.pos { color: #6ee7a0; border-color: rgba(110,231,160,0.4); }
+    .lbl.neg { color: #93b4f5; border-color: rgba(147,180,245,0.4); }
+
+    /* Popup al clickear una escobilla */
+    .brush-popup {
+        position: absolute; z-index: 20;
+        background: rgba(13,13,16,0.95); border: 1px solid rgba(255,255,255,0.14);
+        border-radius: 10px; padding: 0.7rem 0.85rem;
+        color: #e2e8f0; font-size: 0.78rem; min-width: 190px; max-width: 250px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.55);
+        animation: popIn 0.16s ease-out;
+    }
+    @keyframes popIn { from { opacity: 0; transform: scale(0.92) translateY(4px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    .brush-popup .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.5rem; margin-bottom: 0.4rem; }
+    .brush-popup h5 { font-size: 0.9rem; font-weight: 800; color: #f8fafc; margin: 0; }
+    .brush-popup .close { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 1.05rem; line-height: 1; padding: 0; }
+    .brush-popup .close:hover { color: #fff; }
+    .brush-popup .meta { font-size: 0.7rem; color: #94a3b8; line-height: 1.5; }
+    .brush-popup .tagline { margin-top: 0.45rem; font-size: 0.66rem; color: #64748b; font-style: italic; }
+</style>
+</head>
+<body>
+<div id="app">
+    <div class="hud-header">
+        <div class="hud-title">
+            <h1>⚡ Excitatriz — Generador Unidad 4</h1>
+            <p>Anillo colector · 2 bancos de escobillas (7 filas × 3 c/u) · 42 escobillas · Yugo porta-escobillas</p>
+        </div>
+        <span class="hud-badge"><span class="dot"></span> EN OPERACIÓN</span>
+    </div>
+
+    <div class="hud-legend">
+        <h3>Componentes</h3>
+        <div class="row"><span class="sw" style="background:#b03038;"></span> Yugo / estructura soporte</div>
+        <div class="row"><span class="sw" style="background:#b87333;"></span> Anillo colector (cobre)</div>
+        <div class="row"><span class="sw" style="background:#6e2222;"></span> Escobillas (burdeo)</div>
+        <div class="row"><span class="sw" style="background:#4a4d54;"></span> Marcos portaescobillas</div>
+        <div class="row"><span class="sw" style="background:#c87533;"></span> Trenzas de cobre</div>
+        <div class="row"><span class="sw" style="background:#b8b8b0;"></span> Brida / carcasa generador</div>
+    </div>
+
+    <div class="hud-hint">
+        🖱 Arrastrar: rotar · Rueda: zoom<br>
+        Click derecho: desplazar
+    </div>
+
+    <div id="canvas-host"></div>
+</div>
+
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const host = document.getElementById('canvas-host');
+
+// ── Escena / cámara / renderers ────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111114);
+scene.fog = new THREE.Fog(0x111114, 18, 38);
+
+const W0 = host.clientWidth || 800, H0 = host.clientHeight || 500;
+const camera = new THREE.PerspectiveCamera(48, W0 / H0, 0.1, 120);
+camera.position.set(5.2, 3.4, 6.4);   // vista 3/4 frontal
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(W0, H0);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.5;
+host.appendChild(renderer.domElement);
+
+// Environment map → reflejos PBR en metales (three r160 usa unidades físicas)
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.45;
+
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(W0, H0);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+host.appendChild(labelRenderer.domElement);
+
+const CENTER_Y = 1.9;                  // altura del eje del colector
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 3;
+controls.maxDistance = 18;
+controls.target.set(0, CENTER_Y, 0);
+
+// ── Iluminación ────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0xfff0e0, 0.45));                    // ambiental tenue
+scene.add(new THREE.HemisphereLight(0x8fa3c4, 0x3a2a20, 0.9));
+
+const keyLight = new THREE.DirectionalLight(0xffffff, 2.6);
+keyLight.position.set(4, 8, 5);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -7; keyLight.shadow.camera.right = 7;
+keyLight.shadow.camera.top = 8;  keyLight.shadow.camera.bottom = -3;
+scene.add(keyLight);
+
+// Point light cenital blanca
+const topLight = new THREE.PointLight(0xffffff, 55, 25, 2);
+topLight.position.set(0, 7.5, 1.5);
+scene.add(topLight);
+
+// Point light cálida lateral
+const warmLight = new THREE.PointLight(0xffa050, 32, 18, 2);
+warmLight.position.set(-5, 2.5, 3);
+scene.add(warmLight);
+
+// Fill frío trasero para que la brida no quede negra
+const backFill = new THREE.DirectionalLight(0xaabbdd, 0.9);
+backFill.position.set(-3, 4, -6);
+scene.add(backFill);
+
+// Brillo cálido emanando del colector
+const ringGlow = new THREE.PointLight(0xffb060, 18, 7, 2);
+ringGlow.position.set(0, CENTER_Y, 0.4);
+scene.add(ringGlow);
+
+// ── Piso ───────────────────────────────────────────────────────────────
+const grid = new THREE.GridHelper(20, 40, 0x3a3f4a, 0x23262e);
+grid.position.y = 0;
+scene.add(grid);
+
+const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(10, 48),
+    new THREE.MeshStandardMaterial({ color: 0x131417, metalness: 0.15, roughness: 0.95 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.01;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// ── Materiales ─────────────────────────────────────────────────────────
+// Textura procedural del colector: cobre pulido + 3 pistas de desgaste
+// (una por columna axial de escobillas) + vetas de mecanizado.
+function makeCollectorTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = 1024; cv.height = 256;
+    const g = cv.getContext('2d');
+
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0, '#9a6128');
+    grad.addColorStop(0.5, '#c98a45');
+    grad.addColorStop(1, '#8a5522');
+    g.fillStyle = grad;
+    g.fillRect(0, 0, 1024, 256);
+
+    // Vetas circunferenciales de mecanizado
+    for (let i = 0; i < 110; i++) {
+        const y = Math.random() * 256;
+        g.strokeStyle = `rgba(${45 + Math.random()*40|0},${22 + Math.random()*18|0},6,${0.05 + Math.random()*0.1})`;
+        g.lineWidth = 0.5 + Math.random() * 1.1;
+        g.beginPath(); g.moveTo(0, y); g.lineTo(1024, y); g.stroke();
+    }
+
+    // 3 pistas de desgaste brillantes (columnas axiales de escobillas)
+    [0.22, 0.5, 0.78].forEach(v => {
+        const y = v * 256;
+        const band = g.createLinearGradient(0, y - 20, 0, y + 20);
+        band.addColorStop(0, 'rgba(255,215,165,0)');
+        band.addColorStop(0.5, 'rgba(255,222,175,0.6)');
+        band.addColorStop(1, 'rgba(255,215,165,0)');
+        g.fillStyle = band;
+        g.fillRect(0, y - 20, 1024, 40);
+        g.fillStyle = 'rgba(28,14,4,0.35)';
+        g.fillRect(0, y - 24, 1024, 4);
+        g.fillRect(0, y + 20, 1024, 4);
+    });
+
+    // Pátina
+    for (let i = 0; i < 50; i++) {
+        const x = Math.random() * 1024, y = Math.random() * 256;
+        const r = 4 + Math.random() * 16;
+        const spot = g.createRadialGradient(x, y, 0, x, y, r);
+        spot.addColorStop(0, `rgba(${30+Math.random()*25|0},14,5,${0.05 + Math.random()*0.1})`);
+        spot.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = spot;
+        g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.fill();
+    }
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+// Número pintado en la cabeza de cada escobilla (como las marcas de tiza de la foto)
+function makeNumberTexture(id) {
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 64;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#e8e0c8';
+    g.fillRect(0, 0, 128, 64);
+    g.fillStyle = '#3a2a1a';
+    g.font = 'bold 34px sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(id, 64, 34);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+// Placa de advertencia (canvas)
+function makeWarningTexture() {
+    const cv = document.createElement('canvas');
+    cv.width = 128; cv.height = 96;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#efe8d2';
+    g.fillRect(0, 0, 128, 96);
+    g.strokeStyle = '#888070'; g.lineWidth = 4;
+    g.strokeRect(3, 3, 122, 90);
+    // Triángulo amarillo
+    g.fillStyle = '#f2c014';
+    g.beginPath(); g.moveTo(64, 14); g.lineTo(88, 50); g.lineTo(40, 50); g.closePath(); g.fill();
+    g.strokeStyle = '#221d10'; g.lineWidth = 2.5; g.stroke();
+    g.fillStyle = '#221d10';
+    g.font = 'bold 20px sans-serif'; g.textAlign = 'center';
+    g.fillText('⚡', 64, 44);
+    g.font = 'bold 11px sans-serif';
+    g.fillText('WARNING', 64, 66);
+    g.font = '7px sans-serif';
+    g.fillText('RISK OF ELECTRIC SHOCK', 64, 78);
+    g.fillText('DO NOT TOUCH', 64, 87);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    return tex;
+}
+
+const matCollector = new THREE.MeshStandardMaterial({
+    map: makeCollectorTexture(),
+    color: 0xffffff, metalness: 0.88, roughness: 0.3,
+    emissive: 0x1a0a00, emissiveIntensity: 0.8
+});
+const matYugo    = new THREE.MeshStandardMaterial({ color: 0xb03038, metalness: 0.35, roughness: 0.55 });
+const matEscobilla = new THREE.MeshStandardMaterial({ color: 0x6e2222, metalness: 0.2, roughness: 0.45 });   // cuerpo burdeo como la foto
+const matCeramica  = new THREE.MeshStandardMaterial({ color: 0xe8e0c8, metalness: 0.05, roughness: 0.6 });   // tope aislante claro
+const matTrenza  = new THREE.MeshStandardMaterial({ color: 0xc87533, metalness: 0.7, roughness: 0.45 });
+const matBrida   = new THREE.MeshStandardMaterial({ color: 0xb8b8b0, metalness: 0.65, roughness: 0.42 });
+const matAcero   = new THREE.MeshStandardMaterial({ color: 0x8a8f98, metalness: 0.85, roughness: 0.3 });
+const matAceroOsc= new THREE.MeshStandardMaterial({ color: 0x4a4d54, metalness: 0.7, roughness: 0.45 });
+const matBronce  = new THREE.MeshStandardMaterial({ color: 0xb5995a, metalness: 0.9, roughness: 0.3 });
+const matWarning = new THREE.MeshStandardMaterial({ map: makeWarningTexture(), metalness: 0.1, roughness: 0.7 });
+
+// ── Rotor: eje + anillo colector (gira) ────────────────────────────────
+// Eje del conjunto a lo largo de Z mundial, centrado en (0, CENTER_Y, 0).
+const COL_R = 0.95;       // radio del colector
+const COL_LEN = 1.5;      // largo axial
+
+const rotor = new THREE.Group();
+rotor.position.set(0, CENTER_Y, 0);
+scene.add(rotor);
+
+// Colector (cilindro orientado a eje Z)
+const collector = new THREE.Mesh(new THREE.CylinderGeometry(COL_R, COL_R, COL_LEN, 72), matCollector);
+collector.rotation.x = Math.PI / 2;
+collector.castShadow = true;
+collector.receiveShadow = true;
+rotor.add(collector);
+
+// Chaflanes torneados en los bordes del colector
+for (const dz of [-COL_LEN/2, COL_LEN/2]) {
+    const lip = new THREE.Mesh(
+        new THREE.TorusGeometry(COL_R, 0.02, 10, 72),
+        new THREE.MeshStandardMaterial({ color: 0x9a6a30, metalness: 0.95, roughness: 0.25 })
+    );
+    lip.position.z = dz;
+    rotor.add(lip);
+}
+
+// Eje hacia adelante y hacia la brida
+const shaftFront = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 1.1, 32), matAcero);
+shaftFront.rotation.x = Math.PI / 2;
+shaftFront.position.z = COL_LEN/2 + 0.55;
+shaftFront.castShadow = true;
+rotor.add(shaftFront);
+
+const shaftBack = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 1.0, 32), matAcero);
+shaftBack.rotation.x = Math.PI / 2;
+shaftBack.position.z = -COL_LEN/2 - 0.5;
+shaftBack.castShadow = true;
+rotor.add(shaftBack);
+
+// Chaveta visible en el eje frontal (para apreciar el giro)
+const key = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.06, 0.7), matAceroOsc);
+key.position.set(0, 0.3, COL_LEN/2 + 0.55);
+rotor.add(key);
+
+// ── Brida / carcasa del generador al fondo ─────────────────────────────
+const brida = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 2.75, 0.35, 64), matBrida);
+brida.rotation.x = Math.PI / 2;
+brida.position.set(0, CENTER_Y, -1.55);
+brida.castShadow = true;
+brida.receiveShadow = true;
+scene.add(brida);
+
+// Pernos perimetrales de la brida (cabezas hex)
+for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.1, 6), matAceroOsc);
+    bolt.rotation.x = Math.PI / 2;
+    bolt.position.set(Math.cos(a) * 2.4, CENTER_Y + Math.sin(a) * 2.4, -1.32);
+    bolt.castShadow = true;
+    scene.add(bolt);
+}
+
+// Refuerzos radiales de la brida (nervaduras como en la foto)
+for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.7, 0.3), matBrida);
+    rib.position.set(Math.cos(a) * 1.55, CENTER_Y + Math.sin(a) * 1.55, -1.55);
+    rib.rotation.z = a + Math.PI / 2;
+    rib.castShadow = true;
+    scene.add(rib);
+}
+
+// Campana cónica detrás de la brida
+const campana = new THREE.Mesh(new THREE.CylinderGeometry(2.75, 1.7, 1.3, 64), matBrida);
+campana.rotation.x = Math.PI / 2;
+campana.position.set(0, CENTER_Y, -2.4);
+campana.castShadow = true;
+scene.add(campana);
+
+// Cubo central de la brida donde pasa el eje
+const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.5, 32), matAcero);
+hub.rotation.x = Math.PI / 2;
+hub.position.set(0, CENTER_Y, -1.3);
+scene.add(hub);
+
+// ── Yugo / estructura roja porta-escobillas ────────────────────────────
+const yugo = new THREE.Group();
+scene.add(yugo);
+
+// Pedestal en el piso
+const pedestal = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.45, 0.9), matYugo);
+pedestal.position.set(0, 0.225, 1.0);
+pedestal.castShadow = true; pedestal.receiveShadow = true;
+yugo.add(pedestal);
+
+// Columna frontal vertical (del piso hasta sobre el colector)
+const columna = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3.3, 0.4), matYugo);
+columna.position.set(0, 0.45 + 1.65, 1.0);
+columna.castShadow = true;
+yugo.add(columna);
+
+// Arco que abraza el colector por arriba (medio torus de sección gruesa)
+const arco = new THREE.Mesh(new THREE.TorusGeometry(COL_R + 0.62, 0.17, 12, 48, Math.PI), matYugo);
+arco.position.set(0, CENTER_Y, 0.95);
+arco.castShadow = true;
+yugo.add(arco);
+
+// Brazos del arco bajando a ambos lados
+for (const sx of [-1, 1]) {
+    const brazo = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.5, 0.3), matYugo);
+    brazo.position.set(sx * (COL_R + 0.62), CENTER_Y - 0.75, 0.95);
+    brazo.castShadow = true;
+    yugo.add(brazo);
+
+    // Base de apoyo de cada brazo
+    const pie = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.25, 0.55), matYugo);
+    pie.position.set(sx * (COL_R + 0.62), 0.125, 0.95);
+    pie.castShadow = true; pie.receiveShadow = true;
+    yugo.add(pie);
+
+    // Columna del pie al brazo
+    const colLat = new THREE.Mesh(new THREE.BoxGeometry(0.3, CENTER_Y - 0.75, 0.28), matYugo);
+    colLat.position.set(sx * (COL_R + 0.62), (CENTER_Y - 0.75) / 2 + 0.25, 0.95);
+    colLat.castShadow = true;
+    yugo.add(colLat);
+}
+
+// Pernos decorativos en la columna frontal
+for (let i = 0; i < 8; i++) {
+    const perno = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 6), matAceroOsc);
+    perno.rotation.x = Math.PI / 2;
+    perno.position.set((i % 2 === 0 ? -0.18 : 0.18), 0.8 + Math.floor(i / 2) * 0.75, 1.21);
+    yugo.add(perno);
+}
+
+// Placas de advertencia sobre la columna
+for (const py of [1.6, 2.6]) {
+    const placa = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.32), matWarning);
+    placa.position.set(0, py, 1.215);
+    yugo.add(placa);
+}
+
+// ── Bancos de escobillas: 2 lados × 7 filas × 3 escobillas ────────────
+// Cada fila se construye en orientación "superior" (escobilla apunta -Y,
+// tocando el colector en y = COL_R) y luego se rota alrededor del eje Z
+// del colector hasta su ángulo final.
+const BRUSH_W = 0.15;    // ancho tangencial
+const BRUSH_RAD = 0.32;  // dimensión radial del cuerpo de grafito
+const BRUSH_D = 0.2;     // profundidad axial
+const brushZs = [-0.42, 0, 0.42];   // 3 columnas axiales
+
+// Lista global de escobillas para el raycaster (click → popup con su número)
+const brushMeshes = [];
+
+function buildFila(lado, filaNum) {
+    const fila = new THREE.Group();
+
+    brushZs.forEach((bz, bi) => {
+        const escNum = bi + 1;
+        const id = `${lado}${filaNum}-${escNum}`;
+
+        // Cuerpo de la escobilla BURDEO (como la foto): bloque alto que
+        // sobresale del marco, apoyado sobre el colector.
+        // Material clonado por escobilla para resaltarla individualmente al hover.
+        const matEsc = matEscobilla.clone();
+        const esc = new THREE.Mesh(new THREE.BoxGeometry(BRUSH_W, 0.46, BRUSH_D), matEsc);
+        esc.position.set(0, COL_R + 0.23, bz);
+        esc.castShadow = true;
+        esc.userData = { isBrush: true, id, lado, fila: filaNum, esc: escNum };
+        brushMeshes.push(esc);
+        fila.add(esc);
+
+        // Tope aislante claro con el número pintado en la cara exterior
+        const capMats = [
+            matCeramica, matCeramica,
+            new THREE.MeshStandardMaterial({ map: makeNumberTexture(id), metalness: 0.05, roughness: 0.6 }),
+            matCeramica, matCeramica, matCeramica
+        ];
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(BRUSH_W + 0.02, 0.05, BRUSH_D + 0.02), capMats);
+        cap.position.set(0, COL_R + 0.485, bz);
+        cap.castShadow = true;
+        cap.userData = { isBrush: true, id, lado, fila: filaNum, esc: escNum, proxyFor: esc };
+        brushMeshes.push(cap);
+        fila.add(cap);
+
+        // Clip metálico de presión sobre la cabeza (pequeño, acero)
+        const clip = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.1, BRUSH_D + 0.06), matAcero);
+        clip.position.set(0, COL_R + 0.53, bz);
+        clip.castShadow = true;
+        fila.add(clip);
+
+        // Marco portaescobillas abierto (acero oscuro): placas laterales +
+        // trasera. El hueco frontal/superior es por donde sale la trenza y
+        // donde se engancha la pinza amperimétrica para medir corriente.
+        for (const sx of [-1, 1]) {
+            const placa = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.3, BRUSH_D + 0.07), matAceroOsc);
+            placa.position.set(sx * (BRUSH_W / 2 + 0.03), COL_R + 0.26, bz);
+            placa.castShadow = true;
+            fila.add(placa);
+        }
+        const back = new THREE.Mesh(new THREE.BoxGeometry(BRUSH_W + 0.12, 0.3, 0.028), matAceroOsc);
+        back.position.set(0, COL_R + 0.26, bz - (BRUSH_D / 2 + 0.05));
+        back.castShadow = true;
+        fila.add(back);
+        // Travesaño frontal solo abajo → ventana/hueco abierto arriba
+        const lip = new THREE.Mesh(new THREE.BoxGeometry(BRUSH_W + 0.12, 0.07, 0.028), matAceroOsc);
+        lip.position.set(0, COL_R + 0.16, bz + (BRUSH_D / 2 + 0.05));
+        fila.add(lip);
+
+        // Trenza de cobre: sale de la cabeza de la escobilla por el hueco
+        // y cae en bucle hacia el espárrago de montaje
+        const curve = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(0.02, COL_R + 0.46, bz + 0.06),
+            new THREE.Vector3(0.12, COL_R + 0.52, bz + 0.16),
+            new THREE.Vector3(0.1, COL_R + 0.44, bz + 0.26),
+            new THREE.Vector3(0.02, COL_R + 0.46, bz + 0.34)
+        ]);
+        const trenza = new THREE.Mesh(new THREE.TubeGeometry(curve, 20, 0.022, 7, false), matTrenza);
+        trenza.castShadow = true;
+        fila.add(trenza);
+    });
+
+    // Espárrago de bronce axial (sin riel rojo): sostiene los marcos de la
+    // fila y conecta al anillo porta-escobillas del fondo
+    const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 1.45, 10), matBronce);
+    stud.rotation.x = Math.PI / 2;
+    stud.position.set(0, COL_R + 0.45, 0.12);
+    stud.castShadow = true;
+    fila.add(stud);
+
+    // Tuercas hex en el espárrago entre marcos
+    for (const nz of [-0.21, 0.21, 0.62]) {
+        const nut = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.04, 6), matBronce);
+        nut.rotation.x = Math.PI / 2;
+        nut.position.set(0, COL_R + 0.45, nz);
+        fila.add(nut);
+    }
+
+    return fila;
+}
+
+// Anillo porta-escobillas (brush gear) al que llegan todos los espárragos
+const gearRing = new THREE.Mesh(new THREE.TorusGeometry(COL_R + 0.45, 0.06, 10, 72), matAceroOsc);
+gearRing.position.set(0, CENTER_Y, 0.85);
+gearRing.castShadow = true;
+scene.add(gearRing);
+
+// Lado (+): banco derecho — 7 filas entre -54° y +54° respecto a +X
+// Lado (−): banco izquierdo — espejo (126° a 234°)
+const N_FILAS = 7;
+const SPREAD = 108;   // grados que cubre cada banco
+function placeBanco(centerDeg, lado) {
+    for (let i = 0; i < N_FILAS; i++) {
+        const deg = centerDeg - SPREAD/2 + (i / (N_FILAS - 1)) * SPREAD;
+        const fila = buildFila(lado, i + 1);
+        const pivot = new THREE.Group();
+        pivot.position.set(0, CENTER_Y, 0);
+        pivot.rotation.z = (deg - 90) * Math.PI / 180;   // fila construida "arriba" (90°)
+        pivot.add(fila);
+        scene.add(pivot);
+    }
+}
+placeBanco(0, '+');     // Lado (+) → derecha
+placeBanco(180, '−');   // Lado (−) → izquierda
+
+// ── Click en escobillas: raycaster + popup con el número ──────────────
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+let hoveredBrush = null;
+
+function updatePointer(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+}
+function pickBrush() {
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(brushMeshes, false);
+    if (!hits.length) return null;
+    const obj = hits[0].object;
+    // El cap es proxy: resaltamos el cuerpo de la escobilla
+    return obj.userData.proxyFor || obj;
+}
+function setHover(brush) {
+    if (hoveredBrush === brush) return;
+    if (hoveredBrush) hoveredBrush.material.emissive.setHex(0x000000);
+    hoveredBrush = brush;
+    if (brush) {
+        brush.material.emissive.setHex(0xff3030);
+        brush.material.emissiveIntensity = 0.5;
+        renderer.domElement.style.cursor = 'pointer';
+    } else {
+        renderer.domElement.style.cursor = 'grab';
+    }
+}
+
+function showBrushPopup(info, clientX, clientY) {
+    document.querySelector('.brush-popup')?.remove();
+    const app = document.getElementById('app');
+    const popup = document.createElement('div');
+    popup.className = 'brush-popup';
+    const ladoTxt = info.lado === '+' ? 'Lado (+)' : 'Lado (−)';
+    popup.innerHTML = `
+        <div class="head">
+            <h5>Escobilla ${info.id}</h5>
+            <button class="close" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="meta">${ladoTxt} · Fila ${info.fila} · Posición ${info.esc}</div>
+        <div class="meta">Banco de ${N_FILAS} filas × 3 escobillas</div>
+        <div class="tagline">Vista previa — al integrarla en Planify, aquí se mostrará la última medición registrada.</div>
+    `;
+    app.appendChild(popup);
+    const rect = app.getBoundingClientRect();
+    const pw = popup.offsetWidth || 200, ph = popup.offsetHeight || 110;
+    let x = clientX - rect.left + 14;
+    let y = clientY - rect.top - ph / 2;
+    if (x + pw > rect.width - 8) x = clientX - rect.left - pw - 14;
+    if (y < 8) y = 8;
+    if (y + ph > rect.height - 8) y = rect.height - ph - 8;
+    popup.style.left = x + 'px';
+    popup.style.top = y + 'px';
+    popup.querySelector('.close').onclick = () => popup.remove();
+}
+
+// Distinguir click de arrastre de cámara
+let dragStart = null, isDragging = false;
+const DRAG_THRESHOLD = 5;
+renderer.domElement.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    dragStart = { x: e.clientX, y: e.clientY };
+    isDragging = false;
+});
+renderer.domElement.addEventListener('pointermove', e => {
+    if (dragStart && Math.hypot(e.clientX - dragStart.x, e.clientY - dragStart.y) > DRAG_THRESHOLD) isDragging = true;
+    if (!isDragging) {
+        updatePointer(e);
+        setHover(pickBrush());
+    }
+});
+renderer.domElement.addEventListener('pointerup', e => {
+    if (e.button === 0 && dragStart && !isDragging) {
+        updatePointer(e);
+        const brush = pickBrush();
+        if (brush) showBrushPopup(brush.userData, e.clientX, e.clientY);
+    }
+    dragStart = null;
+    isDragging = false;
+});
+renderer.domElement.addEventListener('pointerleave', () => { setHover(null); dragStart = null; isDragging = false; });
+renderer.domElement.style.cursor = 'grab';
+
+// ── Etiquetas ──────────────────────────────────────────────────────────
+function addLabel(text, cls, x, y, z) {
+    const div = document.createElement('div');
+    div.className = 'lbl ' + cls;
+    div.textContent = text;
+    const lbl = new CSS2DObject(div);
+    lbl.position.set(x, y, z);
+    scene.add(lbl);
+}
+addLabel('Lado (+)', 'pos',  2.4, CENTER_Y + 1.7, 0);
+addLabel('Lado (−)', 'neg', -2.4, CENTER_Y + 1.7, 0);
+addLabel('Anillo colector', '', 0, CENTER_Y - 1.55, 0.6);
+
+// ── Animación ──────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+function animate() {
+    requestAnimationFrame(animate);
+    const t = clock.getElapsedTime();
+
+    // Solo el rotor gira (lento)
+    rotor.rotation.z = t * 0.5;
+
+    // Pulso térmico sutil del colector
+    matCollector.emissiveIntensity = 0.65 + Math.sin(t * 1.3) * 0.2;
+
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+}
+animate();
+
+// ── Resize (ResizeObserver: cubre paneles que parten ocultos en 0×0) ───
+const ro = new ResizeObserver(() => {
+    const w = host.clientWidth, h = host.clientHeight;
+    if (!w || !h) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+    labelRenderer.setSize(w, h);
+});
+ro.observe(host);
+</script>
+</body>
+</html>

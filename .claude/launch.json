@@ -3,10 +3,16 @@
   "configurations": [
     {
       "name": "planify",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["serve", "."],
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
       "autoPort": true,
       "port": 4173
+    },
+    {
+      "name": "excitatriz",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "http-server", "-p", "4174", "-c-1", "."],
+      "port": 4174
     }
   ]
 }

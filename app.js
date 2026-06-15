@@ -16612,7 +16612,6 @@ function renderFichaTecnicaModal() {
                 <div class="planify-ficha-tabs">
                     <button class="tab-btn planify-ficha-tab-btn active" data-target="tab-vibraciones">Vibraciones</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-termografia">Termografía</button>
-                    <button id="ficha-tab-vision3d" class="tab-btn planify-ficha-tab-btn" data-target="tab-vision3d" style="display:none;"><i class="fa-solid fa-cube" style="margin-right:0.3rem; color:#ff8c5a;"></i>Visión 3D</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-lubricacion">Lubricación / Aceite</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-actividad">Actividad</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-avisos-sap">Avisos SAP <span id="ficha-avisos-badge" style="display:none; background:#0ea5e9; color:#fff; border-radius:999px; font-size:0.7rem; font-weight:800; padding:0.05rem 0.45rem; margin-left:0.3rem; vertical-align:middle;"></span></button>
@@ -16666,17 +16665,6 @@ function renderFichaTecnicaModal() {
                                 </div>
                                 <div id="lista-mediciones-termografia" class="planify-ficha-reading-list"></div>
                             </aside>
-                        </div>
-                    </div>
-                    <div id="tab-vision3d" class="tab-pane" style="display:none;">
-                        <div class="planify-ficha-card" style="padding:0; overflow:hidden;">
-                            <div class="planify-ficha-card-head" style="padding:0.85rem 1rem;">
-                                <div>
-                                    <h3><i class="fa-solid fa-cube" style="color:#ff8c5a; margin-right:0.4rem;"></i>Visión 3D del portaescobillas</h3>
-                                    <span>Modelo interactivo del anillo colector y las 4 escobillas. Arrastra para rotar, rueda para zoom.</span>
-                                </div>
-                            </div>
-                            <div id="ficha-vision3d-host" style="width:100%; height:560px; background:#23262c; position:relative;"></div>
                         </div>
                     </div>
                     <div id="tab-lubricacion" class="tab-pane" style="display:none;">
@@ -16822,15 +16810,6 @@ function renderFichaLoadingState(equipo) {
     document.getElementById('lista-mediciones-lubricacion').innerHTML = emptyFichaState('Cargando actividad de lubricación', 'Buscando cambios de aceite y registros asociados.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = emptyFichaState('Cargando historial', 'Revisando los últimos cierres relacionados con este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = emptyFichaState('Cargando componentes', 'Buscando componentes del mismo activo dentro de la unidad.');
-
-    // Visión 3D: solo disponible para Bomba Aceite Emergencia en U4 (motor con portaescobillas)
-    const tabV3d = document.getElementById('ficha-tab-vision3d');
-    if (tabV3d) {
-        const nombreActivo = String(equipo.activo || '').toLowerCase();
-        const ubic = String(equipo.ubicacion || '').toLowerCase();
-        const esBbaAceiteU4 = nombreActivo.includes('bomba aceite emergencia') && ubic === 'u4';
-        tabV3d.style.display = esBbaAceiteU4 ? '' : 'none';
-    }
 }
 
 function getNombresTecnicosFicha(source) {
@@ -17710,16 +17689,7 @@ function setupFichaEvents() {
     const panes = [...modal.querySelectorAll('.tab-pane')];
     const tabs = [...modal.querySelectorAll('.tab-btn')];
 
-    // Limpieza de la escena 3D al cerrar la ficha (libera WebGL/GPU)
-    const destroyVision3D = () => {
-        if (window._planifyVision3DApi) {
-            try { window._planifyVision3DApi.destroy(); } catch (e) { console.warn('[Vision3D] destroy:', e); }
-            window._planifyVision3DApi = null;
-        }
-    };
-
     const closeFicha = () => {
-        destroyVision3D();
         modal.style.display = 'none';
     };
 
@@ -17743,20 +17713,10 @@ function setupFichaEvents() {
         panes.forEach(pane => {
             pane.style.display = pane.id === target ? 'block' : 'none';
         });
-        // Lazy-init / destrucción del visor 3D según se entra o sale del tab
-        if (target === 'tab-vision3d') {
-            const host = document.getElementById('ficha-vision3d-host');
-            if (host && !window._planifyVision3DApi && window.Vision3D) {
-                window.Vision3D.mount(host, { mediciones: window._planifyFichaMediciones || [] }).then(api => {
-                    window._planifyVision3DApi = api;
-                    // Si las mediciones llegaron después del mount, refrescar
-                    if (api && typeof api.setMediciones === 'function') {
-                        api.setMediciones(window._planifyFichaMediciones || []);
-                    }
-                });
-            }
-        } else if (window._planifyVision3DApi) {
-            destroyVision3D();
+        // Cleanup del visor 3D si quedó montado de una sesión anterior (dormante)
+        if (target !== 'tab-vision3d' && window._planifyVision3DApi) {
+            try { window._planifyVision3DApi.destroy(); } catch (e) { /* noop */ }
+            window._planifyVision3DApi = null;
         }
     };
 
