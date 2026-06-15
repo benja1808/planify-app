@@ -422,17 +422,24 @@ async function generarPlanillaMoncon(body) {
 
     // Página apaisada + ajustar a 1 hoja de ancho (no salta de página por mitad).
     // La planilla tiene ~12 columnas (A→L) que no caben verticalmente en carta.
+    // ExcelJS: setear props individuales en lugar de reasignar pageSetup completo,
+    // y limpiar printArea/pageBreaks heredados del template original.
     workbook.worksheets.forEach(sheet => {
-        sheet.pageSetup = {
-            ...(sheet.pageSetup || {}),
-            orientation: 'landscape',
-            fitToPage: true,
-            fitToWidth: 1,
-            fitToHeight: 0,
-            margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
-            horizontalCentered: true,
-            paperSize: 9 // A4
+        if (!sheet.pageSetup) sheet.pageSetup = {};
+        sheet.pageSetup.orientation = 'landscape';
+        sheet.pageSetup.paperSize = 9;          // A4
+        sheet.pageSetup.fitToPage = true;
+        sheet.pageSetup.fitToWidth = 1;
+        sheet.pageSetup.fitToHeight = 999;
+        sheet.pageSetup.horizontalCentered = true;
+        sheet.pageSetup.printArea = undefined;   // borrar área de impresión heredada del template
+        sheet.pageSetup.margins = {
+            left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2
         };
+        // Borrar saltos de página manuales del template
+        try {
+            sheet.eachRow((row) => { row.pageBreak = undefined; });
+        } catch (e) { /* noop */ }
     });
 
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
