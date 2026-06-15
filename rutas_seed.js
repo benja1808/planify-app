@@ -186,7 +186,7 @@ const RUTAS_VIBRACION_SEED = [
     "plan": "5000083261",
     "equipos": [
       {
-        "nombre": "UNIDAD TURBINA A VAPOR- GENERADOR",
+        "nombre": "TURBINA A VAPOR- GENERADOR",
         "unidad": "U1",
         "componentes": [
           {
@@ -242,7 +242,7 @@ const RUTAS_VIBRACION_SEED = [
         ]
       },
       {
-        "nombre": "UNIDAD VENTILADOR VTI U1",
+        "nombre": "VENTILADOR VTI U1",
         "unidad": "U1",
         "componentes": [
           {
@@ -489,7 +489,7 @@ const RUTAS_VIBRACION_SEED = [
     "plan": "5000083270",
     "equipos": [
       {
-        "nombre": "UNIDAD TURBINA A VAPOR- GENERADOR",
+        "nombre": "TURBINA A VAPOR- GENERADOR",
         "unidad": "U2",
         "componentes": [
           {
@@ -561,7 +561,7 @@ const RUTAS_VIBRACION_SEED = [
         ]
       },
       {
-        "nombre": "UNIDAD VENTILADOR VTI U2",
+        "nombre": "VENTILADOR VTI U2",
         "unidad": "U2",
         "componentes": [
           {
@@ -797,7 +797,7 @@ const RUTAS_VIBRACION_SEED = [
     "plan": "5000083279",
     "equipos": [
       {
-        "nombre": "UNIDAD TURBINA A VAPOR- GENERADOR",
+        "nombre": "TURBINA A VAPOR- GENERADOR",
         "unidad": "U3",
         "componentes": [
           {
@@ -1110,7 +1110,7 @@ const RUTAS_VIBRACION_SEED = [
     "plan": "5000083288",
     "equipos": [
       {
-        "nombre": "UNIDAD TURBINA A VAPOR- GENERADOR",
+        "nombre": "TURBINA A VAPOR- GENERADOR",
         "unidad": "U4",
         "componentes": [
           {
@@ -1182,7 +1182,7 @@ const RUTAS_VIBRACION_SEED = [
         ]
       },
       {
-        "nombre": "UNIDAD VENTILADOR VTI U4",
+        "nombre": "VENTILADOR VTI U4",
         "unidad": "U4",
         "componentes": [
           {
@@ -1386,7 +1386,7 @@ const RUTAS_VIBRACION_SEED = [
     "plan": "5000083297",
     "equipos": [
       {
-        "nombre": "UNIDAD TURBINA A VAPOR- GENERADOR",
+        "nombre": "TURBINA A VAPOR- GENERADOR",
         "unidad": "U5",
         "componentes": [
           {

@@ -212,23 +212,33 @@
         });
     }
 
-    // Busca en col A de la hoja la fila donde aparece el nombre del equipo.
-    // Match flexible: normaliza ambos y compara substring case/accent-insensitive.
     function encontrarFilaEquipo(ws, nombreEquipo) {
-        const nombreNorm = normalizar(nombreEquipo);
-        if (!nombreNorm) return null;
+        const target = normalizar(nombreEquipo);
+        if (!target) return null;
+        const targetWords = target.split(/\s+/).filter(w => w.length > 1);
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-        for (let r = range.s.r; r <= range.e.r; r++) {
+        let found = null, bestScore = 0;
+        for (let r = Math.max(range.s.r, 3); r <= range.e.r; r++) {
             const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
             if (!cell || !cell.v) continue;
             const v = normalizar(cell.v);
             if (!v) continue;
-            // Match exacto o ambos lados se contienen (para variaciones menores)
-            if (v === nombreNorm || v.includes(nombreNorm) || nombreNorm.includes(v)) {
-                return r + 1; // SheetJS usa 0-based row, devolvemos 1-based
+            if (v === target) return r + 1;
+            if (v.includes(target) || target.includes(v)) {
+                if (bestScore < 100) { found = r + 1; bestScore = 100; }
+                continue;
+            }
+            const cellWords = v.split(/\s+/).filter(w => w.length > 1);
+            const shorter = cellWords.length < targetWords.length ? cellWords : targetWords;
+            const longer = cellWords.length < targetWords.length ? targetWords : cellWords;
+            const matches = shorter.filter(w => longer.includes(w)).length;
+            const score = matches / shorter.length;
+            if (score >= 0.6 && matches >= 2 && score > bestScore) {
+                found = r + 1;
+                bestScore = score;
             }
         }
-        return null;
+        return found;
     }
 
     // Escribe valor en celda manejando ref vacía. NO toca celdas merged
@@ -285,6 +295,13 @@
         return null;
     }
 
+    // ── URL del backend (Render en prod, localhost en dev) ──────────
+    const PLANILLA_SERVER = (() => {
+        const h = window.location.hostname;
+        if (h === 'localhost' || h === '127.0.0.1') return '';
+        return 'https://planify-backend.onrender.com';
+    })();
+
     // ── Función principal ──────────────────────────────────────────────
     window.generarPlanillaDeRuta = async function(rutaIdx, opts = {}) {
         if (typeof RUTAS_VIBRACION_SEED === 'undefined') {
@@ -306,135 +323,52 @@
             return;
         }
 
-        // ── 1) Cargar plantilla ─────────────────────────────────────────
-        let workbook;
+        // Mostrar indicador de carga
+        const loading = document.createElement('div');
+        loading.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#1e40af; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(30,64,175,0.35); z-index:11000; display:flex; align-items:center; gap:0.5rem;';
+        loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando planilla…';
+        document.body.appendChild(loading);
+
         try {
-            const resp = await fetch(`formatos/${encodeURIComponent(plantilla.archivo)}`);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const buf = await resp.arrayBuffer();
-            workbook = XLSX.read(buf, { type: 'array', cellStyles: true, cellNF: true });
-        } catch (e) {
-            alert('No pude cargar la plantilla:\n' + e.message);
-            return;
-        }
-
-        // La hoja se resuelve CONTRA el workbook: si la plantilla define
-        // varios candidatos (ej. ESCORIA U1 no existe → cae a U2), se usa
-        // el primero que realmente exista en el archivo.
-        const hoja = resolverHoja(plantilla, ruta, workbook);
-        if (!hoja) {
-            alert(`No encontré una hoja válida en la plantilla para esta ruta.\nPlantilla: ${plantilla.archivo}\nHojas disponibles: ${workbook.SheetNames.join(', ')}`);
-            return;
-        }
-        const ws = workbook.Sheets[hoja];
-
-        // ── 2) Rellenar encabezado ──────────────────────────────────────
-        const hoyStr = fmtFecha(ej.fechaCierre || ej.fechaInicio || new Date());
-
-        // Header genérico: localiza los labels "Fecha entrega..." y "Orden de
-        // trabajo" en la fila 1 (posición varía por formato) y escribe el
-        // valor después del merge del label.
-        // Para turbina los encabezados se repiten por unidad → omitir por ahora.
-        const esTurbina = /TURBINA/i.test(plantilla.tipo);
-        if (!esTurbina) {
-            escribirHeader(ws, hoyStr, ej.ot || '');
-        }
-
-        // ── 3) Rellenar equipos ─────────────────────────────────────────
-        // Cada equipo de la ruta intenta vincular con su fila en la plantilla
-        // buscando el nombre en col A. Si no aparece, lo saltamos y avisamos.
-        const noEncontrados = [];
-        const equiposRuta = ruta.equipos || [];
-
-        equiposRuta.forEach((eq, eqIdx) => {
-            const filaBase = encontrarFilaEquipo(ws, eq.nombre);
-            if (!filaBase) {
-                noEncontrados.push(eq.nombre);
-                return;
-            }
-            // Iterar cada componente (motor / ventilador / bomba / amp)
-            const comps = eq.componentes || [];
-            comps.forEach((comp, compIdx) => {
-                const fila = filaBase + compIdx;
-                const k = `${eqIdx}.${compIdx}`;
-                const estado = ej.componentesEstado?.[k] || '';
-                const med = ej.mediciones?.[k] || null;
-                const obs = ej.observaciones?.[k] || '';
-
-                // Columnas: A=Activo B=Comp C=Vib D=Dir E=T°1 F=T°2 G=T°3 H=T°4 I=Obs J=Fecha K=Kizeo
-                if (!med && estado === 'no-ejecutado') {
-                    // Componente marcado como no ejecutado: solo escribir Obs = "No ejecutado"
-                    setCell(ws, `I${fila}`, obs || 'No ejecutado');
-                    return;
-                }
-                if (!med) return; // sin datos capturados → dejar la fila en blanco
-
-                // Vibración + Dir (Punto)
-                if (med.vibracion != null) {
-                    setCell(ws, `C${fila}`, med.vibracion === 'N/A' ? 'N/A' : Number(med.vibracion) || med.vibracion);
-                }
-                if (med.punto) setCell(ws, `D${fila}`, med.punto);
-
-                // Temperaturas: el componente 0 (motor) usa T°1+T°2 (cols E,F)
-                //               el componente 1 (bomba/vent) usa T°3+T°4 (cols G,H)
-                //               (válido para 2 componentes por equipo, que es lo común)
-                const colT_A = compIdx === 0 ? 'E' : 'G';
-                const colT_B = compIdx === 0 ? 'F' : 'H';
-                if (Array.isArray(med.temperaturas) && med.temperaturas.length) {
-                    // Si es N/A explícito, escribir "N/A" en col A del par
-                    if (med.temperaturas.length === 1 && med.temperaturas[0].valor === 'N/A') {
-                        setCell(ws, `${colT_A}${fila}`, 'N/A');
-                    } else {
-                        med.temperaturas.forEach((t, idx) => {
-                            const col = idx === 0 ? colT_A : colT_B;
-                            setCell(ws, `${col}${fila}`, isNaN(Number(t.valor)) ? t.valor : Number(t.valor));
-                        });
-                    }
-                } else if (med.temperatura != null) {
-                    // Formato viejo de temperatura única
-                    setCell(ws, `${colT_A}${fila}`, isNaN(Number(med.temperatura)) ? med.temperatura : Number(med.temperatura));
-                }
-
-                if (obs) setCell(ws, `I${fila}`, obs);
-
-                // Fecha + Kizeo solo en la fila del primer componente del equipo
-                if (compIdx === 0) {
-                    const fechaComp = ej.componentesAt?.[k] || ej.fechaInicio || ej.fechaCierre;
-                    setCell(ws, `J${fila}`, fmtFecha(fechaComp));
-                    if (med.kizeo && med.kizeo.notificado) {
-                        setCell(ws, `K${fila}`, '✓');
-                    } else {
-                        clearCell(ws, `K${fila}`);
-                    }
-                }
+            const resp = await fetch(`${PLANILLA_SERVER}/generar-planilla`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ruta, ejecucion: ej })
             });
-        });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${resp.status}`);
+            }
 
-        // ── 4) Descargar ────────────────────────────────────────────────
-        const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-        const d = new Date();
-        const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
-        const filename = `MONCON ${plantilla.tipo} ${ruta.unidad || ''} — OT ${ej.ot || 'sn'} — ${fechaArchivo}.xlsx`
-            .replace(/\s+/g, ' ')
-            .replace(/[\\/:*?"<>|]/g, '-');
+            const blob = await resp.blob();
+            const cd = resp.headers.get('Content-Disposition') || '';
+            const fnMatch = cd.match(/filename="?([^"]+)"?/);
+            const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+            const d = new Date();
+            const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
+            const fallbackName = `MONCON ${plantilla.tipo} ${ruta.unidad || ''} — OT ${ej.ot || 'sn'} — ${fechaArchivo}.xlsx`
+                .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
+            const filename = fnMatch ? decodeURIComponent(fnMatch[1]) : fallbackName;
 
-        XLSX.writeFile(workbook, filename);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
 
-        // Aviso si hubo equipos sin match
-        if (noEncontrados.length) {
-            console.warn('[planilla] equipos sin fila en la plantilla:', noEncontrados);
-            // Toast suave
-            const t = document.createElement('div');
-            t.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#f59e0b; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(245,158,11,0.35); z-index:11000; max-width:380px; font-size:0.85rem;';
-            t.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Planilla generada — ${noEncontrados.length} equipo(s) sin fila en la plantilla:<br><small style="opacity:0.9;">${noEncontrados.slice(0,3).join(', ')}${noEncontrados.length > 3 ? '...' : ''}</small>`;
-            document.body.appendChild(t);
-            setTimeout(() => t.remove(), 5000);
-        } else {
+            loading.remove();
             const t = document.createElement('div');
             t.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#16a34a; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(22,163,74,0.35); z-index:11000;';
-            t.innerHTML = `<i class="fa-solid fa-circle-check"></i> Planilla generada y descargada`;
+            t.innerHTML = '<i class="fa-solid fa-circle-check"></i> Planilla generada y descargada';
             document.body.appendChild(t);
             setTimeout(() => t.remove(), 3000);
+        } catch (e) {
+            loading.remove();
+            console.error('[planilla] Error:', e);
+            alert('Error generando planilla:\n' + e.message);
         }
     };
 
