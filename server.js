@@ -420,6 +420,21 @@ async function generarPlanillaMoncon(body) {
         catch (e) { console.warn('[planilla] no se pudo eliminar hoja', name, ':', e.message); }
     });
 
+    // Página apaisada + ajustar a 1 hoja de ancho (no salta de página por mitad).
+    // La planilla tiene ~12 columnas (A→L) que no caben verticalmente en carta.
+    workbook.worksheets.forEach(sheet => {
+        sheet.pageSetup = {
+            ...(sheet.pageSetup || {}),
+            orientation: 'landscape',
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 0,
+            margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+            horizontalCentered: true,
+            paperSize: 9 // A4
+        };
+    });
+
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const d = new Date();
     const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
