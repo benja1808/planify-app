@@ -440,6 +440,16 @@ async function generarPlanillaMoncon(body) {
         try {
             sheet.eachRow((row) => { row.pageBreak = undefined; });
         } catch (e) { /* noop */ }
+
+        // Título en el header de impresión: quitar el salto de línea para que
+        // el nombre de la ruta quede en una sola línea horizontal (no tape celdas).
+        if (sheet.headerFooter) {
+            ['oddHeader', 'evenHeader', 'firstHeader'].forEach(k => {
+                if (typeof sheet.headerFooter[k] === 'string') {
+                    sheet.headerFooter[k] = sheet.headerFooter[k].replace(/[\r\n]+\s*/g, ' ');
+                }
+            });
+        }
     });
 
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
