@@ -1,0 +1,903 @@
+{
+ "U4": [
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 4-A",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "100 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 4-B",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "100 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 4-C",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "100 L"
+  },
+  {
+   "nombre": "BOMBA DE CONDENSADO 4-A",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "30 L"
+  },
+  {
+   "nombre": "BOMBA DE CONDENSADO 4-B",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "30 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 4-A",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "300 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 4-B",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "300 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 4-C",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "300 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 4-D",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "300 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-A CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-A REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-B CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-B REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-C CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-C REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-D CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 4-D REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 4-A",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 4-B",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 4-C",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 4-D",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "VENTILADOR TIRO FORZADO, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "16 L"
+  },
+  {
+   "nombre": "VENTILADOR AIRE PRIMARIO, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "400 L"
+  },
+  {
+   "nombre": "VENTILADOR TIRO INDUCIDO, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "33 L"
+  },
+  {
+   "nombre": "VENTIL. RECIRCUL. DE GASES, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "6 L"
+  },
+  {
+   "nombre": "SOPLADORES D( S-3E-lll)",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,8 L"
+  },
+  {
+   "nombre": "SOPLADORES D ( S-3E-II) RED.AVANCE",
+   "aceite": "Mobilgear 600 XP 100",
+   "cantidad": "0,9 L"
+  },
+  {
+   "nombre": "SOPLADORES D (S-3E-II) RED.ROTACION",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "SOPLADORES L (STR-8E) L 1 AB REDUCTOR",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "3,5 L"
+  },
+  {
+   "nombre": "SOPLADORES L (SRT-13E) REDUCTOR",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "50 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE, ROD. GUIA ROTOR",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "90 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE,ROD SOPORTE ROTOR",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "0,4 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE, REDUCTOR",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "80 L"
+  },
+  {
+   "nombre": "TRANSPORTADOR TRIPPER",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "0,7 L"
+  },
+  {
+   "nombre": "BOMBA MAKE-UP 4-A",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "0,67 L"
+  },
+  {
+   "nombre": "BOMBA MAKE-UP4-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,67 L"
+  },
+  {
+   "nombre": "VTI( RETROFIT)",
+   "aceite": "Mobil DTE 27",
+   "cantidad": ""
+  },
+  {
+   "nombre": "BOMBA CIRCULACION 4-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "100 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACION 4-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "100 L"
+  },
+  {
+   "nombre": "BOMBA MAKE-UP 4-C",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "0,67 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ENFRIAMIENTO 4-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.6"
+  },
+  {
+   "nombre": "BOMBA AGUA ENFRIAMIENTO 4-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.6"
+  },
+  {
+   "nombre": "BOMBA BOOSTER 4-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.6"
+  },
+  {
+   "nombre": "BOMBA BOOSTER 4-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.6"
+  },
+  {
+   "nombre": "BOMBA DRENAJE 4-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.67"
+  },
+  {
+   "nombre": "BOMBA DRENAJE 4-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0.67"
+  },
+  {
+   "nombre": "CADENA SUMERGIDA, CYLO",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "17"
+  },
+  {
+   "nombre": "CADENA SUMER, VARIADOR DE VELOCIDAD",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "4.3"
+  },
+  {
+   "nombre": "TRITURADOR DE ESCORIA",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "4.6"
+  },
+  {
+   "nombre": "TRANSPORTADOR ESCORIA N°1 CADENA",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": ""
+  },
+  {
+   "nombre": "TRANSPORTADOR ESCORIA N°2",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "3.3"
+  },
+  {
+   "nombre": "TRANSPORTADOR ESCORIA N°2 CADENA",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": ""
+  },
+  {
+   "nombre": "VENTILADOR VACIO CENIZA 4-A",
+   "aceite": "Mobil Heavy",
+   "cantidad": "7.4"
+  },
+  {
+   "nombre": "VENTILADOR VACIO CENIZAS 4-B",
+   "aceite": "Mobil Heavy",
+   "cantidad": "7.4"
+  },
+  {
+   "nombre": "DESCARGADOR DE POLVO, REDUCTOR",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "3.4"
+  },
+  {
+   "nombre": "SOPLADOR DE PARED D1-D11,14 - D15-D41",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1.8"
+  },
+  {
+   "nombre": "SOPLADOR DE PARED D12,14 CARTER AVANCE",
+   "aceite": "Mobilgear 600 XP 100",
+   "cantidad": "0.9"
+  },
+  {
+   "nombre": "SOPLADOR DE PARED D12,14 CARTER ROTACION",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1.5"
+  },
+  {
+   "nombre": "SOPLADOR DE HOLLIN L1AB-L16",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "3.5"
+  },
+  {
+   "nombre": "SOPLADOR CALENTADOR DE AIRE SUPERIOR",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "1.1"
+  },
+  {
+   "nombre": "SOPLADOR CALENTADOR DE AIRE INFERIOR",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "1.1"
+  },
+  {
+   "nombre": "FILTRO DEBRIS",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "2.2"
+  },
+  {
+   "nombre": "PURIFICADOR DE ACEITE",
+   "aceite": "Mobil Heavy Medium",
+   "cantidad": "1.2"
+  },
+  {
+   "nombre": "REJA FIJA,REDUCTOR SECUNDARIO",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "7.8"
+  },
+  {
+   "nombre": "REJA MOVIL,REDUCTOR",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "17"
+  },
+  {
+   "nombre": "BOMBA LAVADO REJA 4-A",
+   "aceite": "Mobil DTE Medium",
+   "cantidad": "6"
+  },
+  {
+   "nombre": "BOMBA LAVADO REJA 4-B",
+   "aceite": "Mobil DTE Medium",
+   "cantidad": "6"
+  },
+  {
+   "nombre": "BOMBA HIDRAZINA 4-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA HIDRAZINA 4-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA FOSFATO 4-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA FOSFATO 4-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 4-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 4-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4-A CARTER",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4-A DIAFRACMA",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0.8"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4-A  SOPORTE",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0.7"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4-A CARTER",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4.2"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4- A DIAFRACMA",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0.8"
+  },
+  {
+   "nombre": "BOMBA AGENTE  ACOND 4-  A SOPORTE",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0.7"
+  },
+  {
+   "nombre": "REJA FIJA, REDUCTOR PRIMARIO",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "1.2"
+  }
+ ],
+ "U2": [
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 2-A",
+   "aceite": "Mobil DTE Medium",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACIÓN 2-A",
+   "aceite": "MOBILUX-AW2",
+   "cantidad": ""
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACIÓN 2-B",
+   "aceite": "Mobil DTE Medium",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 2-B",
+   "aceite": "MOBILUX-AW2",
+   "cantidad": ""
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 2-C",
+   "aceite": "Mobil DTE Medium",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACION 2-C",
+   "aceite": "MOBILUX-AW2",
+   "cantidad": ""
+  },
+  {
+   "nombre": "BOMBA CONDENSADO 2-A",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "2,8 L"
+  },
+  {
+   "nombre": "BOMBA CONDENSADO 2-B",
+   "aceite": "Mobil Heavy",
+   "cantidad": "6,5 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACION 2-A",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "4,4 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACION 2-B",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "4,4 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 2-A",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "280 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 2-B",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "280 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 2-C",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "280 L"
+  },
+  {
+   "nombre": "PULVERIZADOR 2-D",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "280 L"
+  },
+  {
+   "nombre": "ALIM. CARBON 2-A, CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 2-A, REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 2-B, CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM. CARBON 2-B, REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 2-C, CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 2-C,REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "ALIM.CARBON 2-D, CADENA RASPADORA",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "ALIM. CARBON 2-D, REDUCTOR CORREA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "5,5 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 2-A",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "11,5 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 2-B",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "11,5 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR  2-C",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "11,5 L"
+  },
+  {
+   "nombre": "DESBLOQUEADOR 2-D",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "11,5 L"
+  },
+  {
+   "nombre": "VENTILADOR TIRO FORZADO, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "90 L"
+  },
+  {
+   "nombre": "VENTILADOR TIRO FORZADO, MOTOR",
+   "aceite": "Mobil DTE 26",
+   "cantidad": "12,7 L"
+  },
+  {
+   "nombre": "VENTILADOR AIRE PRIMARIO, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "600 L"
+  },
+  {
+   "nombre": "VENTILADOR AIRE PRIMARIO, MOTOR",
+   "aceite": "Mobil DTE 26",
+   "cantidad": "7,5 L"
+  },
+  {
+   "nombre": "VENTIL. RECIRCUL. DE GASES, DESCANSO",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "90 L"
+  },
+  {
+   "nombre": "VENTIL. RECIRCUL. DE GASES, MOTOR",
+   "aceite": "Mobil DTE 26",
+   "cantidad": "12,7 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE, ROD. GUIA ROTOR",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "40 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE, ROD. GUIA SOPORTE ROTOR",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "255 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE,EMBRAGUE ACTUADOR",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "0,4 L"
+  },
+  {
+   "nombre": "CALENTADOR DE AIRE REDUCTOR",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "105 L"
+  },
+  {
+   "nombre": "VENTILADOR AIRE SELLO 2-A",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "2,8 L"
+  },
+  {
+   "nombre": "VENTILADOR AIRE SELLO 2-B",
+   "aceite": "Mobil DTE Light",
+   "cantidad": "2,8 L"
+  },
+  {
+   "nombre": "BOMBA BOOSTER 2-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,6 L"
+  },
+  {
+   "nombre": "BOMBA BOOSTER 2-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,6 L"
+  },
+  {
+   "nombre": "BOMBA DRENAJE 2-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,6 L"
+  },
+  {
+   "nombre": "BOMBA DRENAJE 2-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,6 L"
+  },
+  {
+   "nombre": "VTI (RETROFIT), DESCANSO",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "10 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ENFRIAMIENTO 2-A",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,3 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ENFRIAMIENTO 2-B",
+   "aceite": "Mobil Medium",
+   "cantidad": "0,3 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACION PLANTA DESALADORA 2",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "1,4 L"
+  },
+  {
+   "nombre": "BOMBA PRODUCTO PLANTA DESALADORA 2",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0,5 L"
+  },
+  {
+   "nombre": "BOMBA SALMUERA PLANTA DESALADORA 2",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "0,5 L"
+  },
+  {
+   "nombre": "COMPRESOR PLANTA DESALADORA 2",
+   "aceite": "Mobil Medium",
+   "cantidad": "17 L"
+  },
+  {
+   "nombre": "COMPRESOR PLANTA DESALADORA (MOTOR)",
+   "aceite": "EP-2",
+   "cantidad": ""
+  },
+  {
+   "nombre": "BOMBA DOSIFICADORA ANTI-ICRUSTANTE 2",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "0,9 L"
+  },
+  {
+   "nombre": "CADENA SUMERGIDA, CYCLO",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "18 L"
+  },
+  {
+   "nombre": "CADENA SUMERGIDA, VARIADOR DE VELOCIDAD",
+   "aceite": "Mobil Extra Heavy",
+   "cantidad": "4,3 L"
+  },
+  {
+   "nombre": "TRITURADOR DE ESCORIA",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "4,6 L"
+  },
+  {
+   "nombre": "TRANSPORTADOR ESCORIA N° 1",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "1,3 L"
+  },
+  {
+   "nombre": "TRANSPORTADOR  ESCORIA N°2",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "2,6 L"
+  },
+  {
+   "nombre": "VENTILADOR VACIO CENIZAS 2-A",
+   "aceite": "Mobil Heavy Medium",
+   "cantidad": "9,2 L"
+  },
+  {
+   "nombre": "VENTILADOR VACIO CENIZAS 2-B (NASH)",
+   "aceite": "LGHP",
+   "cantidad": "8 gr"
+  },
+  {
+   "nombre": "VENTILADOR FLUIDIZACION 2-A",
+   "aceite": "Mobil Heavy Medium",
+   "cantidad": "4 L"
+  },
+  {
+   "nombre": "VENTILADOR FLUIDIZACION 2-B",
+   "aceite": "Mobil Heavy Medium",
+   "cantidad": "4 L"
+  },
+  {
+   "nombre": "DESCARGADOR DE POLVO, REDUCTOR",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "40 L"
+  },
+  {
+   "nombre": "SOPLADOR DE PARED D1-D41",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "1,8 L"
+  },
+  {
+   "nombre": "SOPLADOR DE HOLLIN L1-L16",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "4 L"
+  },
+  {
+   "nombre": "SOPLADOR CALENTADOR DE AIRE S",
+   "aceite": "Mobilgear 600 XP 150",
+   "cantidad": "0,7 L"
+  },
+  {
+   "nombre": "FILTRO DEBRIS",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "2,2 L"
+  },
+  {
+   "nombre": "PURIFICADOR DE ACEITE",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "8 L"
+  },
+  {
+   "nombre": "REJA FIJA, REDUCTOR",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "13 L"
+  },
+  {
+   "nombre": "REJA MOVIL,REDUCTOR PRIMARIO",
+   "aceite": "Mobilgear 600 XP 320",
+   "cantidad": "13 L"
+  },
+  {
+   "nombre": "REJA MOVIL, REDUCTOR SECUNDARIO",
+   "aceite": "Mobilgear 600 XP 460",
+   "cantidad": "22 L"
+  },
+  {
+   "nombre": "BOMBA LAVADO REJA 2-A",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "0,5 L"
+  },
+  {
+   "nombre": "BOMBA LAVADO REJA 2-B",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "0,5 L"
+  },
+  {
+   "nombre": "BOMBA HIDRAZINA 2-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "BOMBA HIDRAZINA 2-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "BOMBA FOSFATO 2-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "10 L"
+  },
+  {
+   "nombre": "BOMBA FOSFATO 2-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "10 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-A CARTER",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "10 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-A, DIAFRAGMA",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "2 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-A, MENSULA",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-B, CARTER",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "10 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-B, DIAFRAGMA",
+   "aceite": "Mobil DTE 24",
+   "cantidad": "2 L"
+  },
+  {
+   "nombre": "BOMBA SULFATO FERROSO 2-B, MENSULA",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "1,5 L"
+  },
+  {
+   "nombre": "BOMBA AGENTE ACONDICIONADOR 2-A",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "BOMBA AGENTE ACONDICIONADOR 2-B",
+   "aceite": "Mobil DTE 27",
+   "cantidad": "4,2 L"
+  },
+  {
+   "nombre": "MONORRIEL PULVERIZADOR 2-A",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "2,9 L"
+  },
+  {
+   "nombre": "MONORRIEL PULVERIZADOR 2-B",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "2,9 L"
+  },
+  {
+   "nombre": "MONORRIEL PULVERIZADOR 2-C",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "2,9 L"
+  },
+  {
+   "nombre": "MONORRIEL PULVERIZADOR 2-D",
+   "aceite": "Mobilgear 600 XP 220",
+   "cantidad": "2,9 L"
+  }
+ ],
+ "U1": [
+  {
+   "nombre": "BOMBA AGUA ALIMENTACIÓN 1-A",
+   "aceite": "MOBIL DTE MEDIUM",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACIÓN 1-B",
+   "aceite": "MOBIL DTE MEDIUM",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA AGUA ALIMENTACIÓN 1-C",
+   "aceite": "MOBIL DTE MEDIUM",
+   "cantidad": "320 L"
+  },
+  {
+   "nombre": "BOMBA CONDENSADO 1-A",
+   "aceite": "MOBIL EXTRA HEAVY",
+   "cantidad": "2.8 L"
+  },
+  {
+   "nombre": "BOMBA CONDENSADO 1-B",
+   "aceite": "MOBIL EXTRA HEAVY",
+   "cantidad": "2.8 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACIÓN PPLL 1-A",
+   "aceite": "MOBIL EXTRA HEAVY",
+   "cantidad": "4.5 L"
+  },
+  {
+   "nombre": "BOMBA CIRCULACIÓN PPLL 1-B",
+   "aceite": "MOBIL EXTRA HEAVY",
+   "cantidad": "4.5 L"
+  },
+  {
+   "nombre": "REDUCTOR PULVERIZADOR 1-A",
+   "aceite": "MOBIL GEAR 600XP 320",
+   "cantidad": "290 L"
+  },
+  {
+   "nombre": "REDUCTOR PULVERIZADOR 1-B",
+   "aceite": "MOBIL GEAR 600XP 320",
+   "cantidad": "290 L"
+  },
+  {
+   "nombre": "REDUCTOR PULVERIZADOR 1-C",
+   "aceite": "MOBIL GEAR 600XP 320",
+   "cantidad": "290 L"
+  },
+  {
+   "nombre": "REDUCTOR PULVERIZADOR 1-D",
+   "aceite": "MOBIL GEAR 600XP 320",
+   "cantidad": "290 L"
+  },
+  {
+   "nombre": "ALIM. CARBON",
+   "aceite": "",
+   "cantidad": ""
+  }
+ ]
+}

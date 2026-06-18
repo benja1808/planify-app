@@ -98,6 +98,39 @@ function esRolGestion(rol = estado.usuarioActual) {
 }
 window.esRolGestion = esRolGestion;
 
+// ── Guardia de transiciones locales de tareas ─────────────────────────────────
+// Cuando un usuario inicia un trabajo, el cambio se aplica localmente (optimista)
+// y se persiste a Supabase. Pero un refetch de realtime/notificaciones puede
+// llegar ANTES de que la escritura se propague (o disparado por OTRA acción, p.ej.
+// finalizar otra tarea) y pisar el estado recién puesto, devolviendo los demás
+// trabajos a "para iniciar". Registramos las transiciones locales recientes y las
+// re-aplicamos sobre cualquier lista traída del servidor durante una ventana corta.
+const _tareasTransicionLocal = new Map(); // id -> { estadoTarea, estadoEjecucion, ts }
+const _TRANSICION_LOCAL_TTL = 60000;      // 60 s de protección
+
+function _marcarTransicionLocalTarea(id, estadoTarea, estadoEjecucion) {
+    if (!id) return;
+    _tareasTransicionLocal.set(id, { estadoTarea, estadoEjecucion, ts: Date.now() });
+}
+function _olvidarTransicionLocalTarea(id) {
+    _tareasTransicionLocal.delete(id);
+}
+// Re-aplica las transiciones locales recientes sobre una lista de tareas recién
+// traída del servidor. Solo "sostiene" el estado iniciado; si la tarea ya no está
+// (fue finalizada/eliminada) o expiró la ventana, se descarta la marca.
+function _aplicarTransicionesLocalesTareas(tareas) {
+    if (!Array.isArray(tareas) || _tareasTransicionLocal.size === 0) return tareas;
+    const ahora = Date.now();
+    for (const [id, info] of _tareasTransicionLocal) {
+        if (ahora - info.ts > _TRANSICION_LOCAL_TTL) { _tareasTransicionLocal.delete(id); continue; }
+        const t = tareas.find(x => String(x.id) === String(id));
+        if (!t) { _tareasTransicionLocal.delete(id); continue; }
+        if (info.estadoTarea) t.estadoTarea = info.estadoTarea;
+        if (info.estadoEjecucion) t.estadoEjecucion = info.estadoEjecucion;
+    }
+    return tareas;
+}
+
 let semanalExcelImportState = {
     fileName: '',
     total: 0,
@@ -973,7 +1006,7 @@ async function sincronizarDatosParaNotificaciones({ force = false, renderOnChang
         const fetches = [
             supabaseClient.from('tareas').select('*').then(({ data, error }) => {
                 if (error || !Array.isArray(data)) return;
-                estado.tareas = data.map(normalizarTareaPlanify);
+                estado.tareas = _aplicarTransicionesLocalesTareas(data.map(normalizarTareaPlanify));
                 if (window.localDB) window.localDB.tareas.bulk(estado.tareas).catch(() => {});
             })
         ];
@@ -1593,7 +1626,7 @@ function configurarRealtime() {
         const fetches = [];
         if (pendingTareas) fetches.push(
             supabaseClient.from('tareas').select('*').then(({ data }) => {
-                estado.tareas = (data || []).map(t => ({
+                estado.tareas = _aplicarTransicionesLocalesTareas((data || []).map(t => ({
                     id: t.id, tipo: t.tipo,
                     liderId: t.lider_id, liderNombre: t.lider_nombre,
                     ayudantesIds: t.ayudantes_ids || [], ayudantesNombres: t.ayudantes_nombres || [],
@@ -1612,7 +1645,7 @@ function configurarRealtime() {
                     vigiaId: t.vigia_id || null,
                     vigiaNombre: t.vigia_nombre || null,
                     orden: t.orden || 0
-                }));
+                })));
             })
         );
         if (pendingTrabajadores) fetches.push(
@@ -1805,6 +1838,9 @@ async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso
         orden: 0
     };
     estado.tareas.push(tareaLocal);
+    if (estadoTarea === 'en_curso') {
+        _marcarTransicionLocalTarea(tareaLocal.id, 'en_curso', estadoEjecucion || 'activo');
+    }
     // Solo los ayudantes se bloquean — el líder puede estar en múltiples tareas
     if (estadoTarea === 'en_curso' && (estadoEjecucion === 'activo' || !estadoEjecucion)) {
         estado.trabajadores = estado.trabajadores.map(w =>
@@ -1973,6 +2009,7 @@ async function guardarTareaFinalizada({
 
     // Optimistic update: actualizar UI inmediatamente
     const idsALiberar = [liderId, ...ayudantesIds].filter(Boolean);
+    _olvidarTransicionLocalTarea(id);
     estado.tareas = estado.tareas.filter(t => t.id !== id);
     estado.trabajadores = estado.trabajadores.map(w =>
         idsALiberar.includes(w.id) ? { ...w, ocupado: false, disponible: true } : w
@@ -2418,6 +2455,17 @@ window.abrirDetalleHistorial = function(registroId) {
             </div>
         ` : ''}
 
+        ${(typeof esTareaEscobillas === 'function'
+            && esTareaEscobillas({ tipo: item.tipo, subtitulo: item.subtitulo })
+            && [3, 4, 5].includes(obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion }))) ? `
+            <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
+                <button type="button" onclick="window.generarPlanillaExcitatrizHistorial('${String(registroId).replace(/'/g, "\\'")}')"
+                    style="border:1px solid #93c5fd; background:#eff6ff; color:#1e40af; border-radius:10px; padding:0.45rem 0.75rem; font-size:0.84rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem;">
+                    <i class="fa-solid fa-file-excel"></i> Descargar planilla
+                </button>
+            </div>
+        ` : ''}
+
         <div style="padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:10px;">
             <div style="font-size:0.78rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;">
                 <i class="fa-solid fa-people-group" style="color:#FF6900;"></i> Equipo de trabajo
@@ -2458,6 +2506,122 @@ window.abrirDetalleHistorial = function(registroId) {
     };
 
     modal.style.display = 'flex';
+};
+
+// Reconstruye las escobillas + cabecera desde el texto de acciones_realizadas
+// de un registro de historial de excitatriz. El finalizar emite líneas como
+//   [Escobilla 1.1] Corriente: 8.6 A | Alta temp: NO | Normalizado: SI
+//   • Escobilla 1.1 → Temp: 43.4 °C | Corriente: 8.6 A | Alta temp: NO | ...
+//   • Excitatriz U5 → Humedad: 42 % | Temp. termografía: 24 °C | Generación: ...
+// Mergeamos por posición (las líneas se duplican, una con temp y otra sin).
+function _parseExcitatrizAcciones(texto) {
+    const map = {};
+    const header = { hum: '', temp: '', gen: '', vcampo: '', icampo: '' };
+    const grab = (re, line) => { const m = line.match(re); return m ? m[1] : ''; };
+    String(texto || '').split(/\r?\n/).forEach(line => {
+        const esc = line.match(/Escobilla\s+(\d+\.\d+)/i);
+        if (esc) {
+            const pos = esc[1];
+            const cur = map[pos] || { pos, temp: '', corr: '', alta: '', norm: '' };
+            const temp = grab(/Temp:\s*([\d.,]+)/i, line);
+            const corr = grab(/Corriente:\s*([\d.,]+)/i, line);
+            const alta = grab(/Alta temp:\s*(SI|NO)/i, line);
+            const norm = grab(/Normalizado:\s*(SI|NO)/i, line);
+            if (temp) cur.temp = temp.replace(',', '.');
+            if (corr) cur.corr = corr.replace(',', '.');
+            if (alta) cur.alta = alta.toUpperCase();
+            if (norm) cur.norm = norm.toUpperCase();
+            map[pos] = cur;
+            return;
+        }
+        if (/Excitatriz\s+U\d/i.test(line)) {
+            header.hum    = header.hum    || grab(/Humedad:\s*([\d.,]+)/i, line);
+            header.temp   = header.temp   || grab(/Temp\.\s*termograf[ií]a:\s*([\d.,]+)/i, line);
+            header.gen    = header.gen    || grab(/Generaci[oó]n:\s*([\d.,]+)/i, line);
+            header.vcampo = header.vcampo || grab(/V campo:\s*([\d.,]+)/i, line);
+            header.icampo = header.icampo || grab(/I campo:\s*([\d.,]+)/i, line);
+        }
+    });
+    const escobillas = Object.values(map).sort((a, b) => {
+        const [ae, ap] = a.pos.split('.').map(Number);
+        const [be, bp] = b.pos.split('.').map(Number);
+        return ae - be || ap - bp;
+    });
+    return { escobillas, header };
+}
+
+// Genera y descarga la planilla de terreno de excitatriz desde un registro de
+// historial ya finalizado, usando el backend (formatos/Formato Planilla de
+// terreno Excitatriz.xlsx).
+window.generarPlanillaExcitatrizHistorial = async function(registroId) {
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { alert('Registro no encontrado'); return; }
+
+    const unidad = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+    if (![3, 4, 5].includes(unidad)) {
+        alert('La planilla de excitatriz solo está disponible para U3, U4 y U5.');
+        return;
+    }
+
+    const { escobillas, header } = _parseExcitatrizAcciones(item.acciones_realizadas);
+    if (!escobillas.length) {
+        alert('Este registro no tiene mediciones de escobillas para generar la planilla.');
+        return;
+    }
+
+    const fechaObj = new Date(item.fecha_termino || item.created_at || item.fecha_med || Date.now());
+    const fecha = !isNaN(fechaObj.getTime())
+        ? `${String(fechaObj.getDate()).padStart(2, '0')}/${String(fechaObj.getMonth() + 1).padStart(2, '0')}/${fechaObj.getFullYear()}`
+        : '';
+    const ayudantes = Array.isArray(item.ayudantes_nombres)
+        ? item.ayudantes_nombres
+        : String(item.ayudantes_nombres || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
+    const tecnicos = [item.lider_nombre, ...ayudantes].filter(Boolean).join(' / ');
+
+    const payload = {
+        unidad, fecha, ot: item.ot_numero || '', tecnicos,
+        hum: header.hum, temp: header.temp, gen: header.gen, vcampo: header.vcampo, icampo: header.icampo,
+        escobillas
+    };
+
+    const server = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        ? '' : (window.PLANIFY_PDF_BACKEND || 'https://planify-backend-lfq3.onrender.com');
+
+    const loading = document.createElement('div');
+    loading.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#1e40af; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(30,64,175,0.35); z-index:11000; display:flex; align-items:center; gap:0.5rem;';
+    loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando planilla…';
+    document.body.appendChild(loading);
+
+    try {
+        const resp = await fetch(`${server}/generar-planilla-excitatriz`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${resp.status}`);
+        }
+        const blob = await resp.blob();
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const fnMatch = cd.match(/filename="?([^"]+)"?/);
+        const filename = fnMatch ? decodeURIComponent(fnMatch[1]) : `Planilla Excitatriz U${unidad}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        loading.remove();
+        const t = document.createElement('div');
+        t.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#16a34a; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(22,163,74,0.35); z-index:11000;';
+        t.innerHTML = '<i class="fa-solid fa-circle-check"></i> Planilla generada y descargada';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    } catch (e) {
+        loading.remove();
+        console.error('[planilla-exc] Error:', e);
+        alert('Error generando planilla:\n' + e.message);
+    }
 };
 
 // Editar fecha de inicio del permiso o de término (vencimiento) de una tarea
@@ -2535,6 +2699,7 @@ window.iniciarTareaColaExposed = async function(tareaId) {
     tarea.estadoEjecucion = 'activo';
     tarea.horaAsignacion = hora;
     tarea.fechaAsignacion = ahora.toISOString();
+    _marcarTransicionLocalTarea(tareaId, 'en_curso', 'activo');
     // Marcar ayudantes como ocupados
     if (tarea.ayudantesIds?.length) {
         estado.trabajadores = estado.trabajadores.map(w =>
@@ -2993,7 +3158,7 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
             fetchAllEquipos()
         ]);
         if (tareasRes.status === 'fulfilled' && tareasRes.value?.data) {
-            estado.tareas = (tareasRes.value.data || []).map(t => ({
+            estado.tareas = _aplicarTransicionesLocalesTareas((tareasRes.value.data || []).map(t => ({
                 id: t.id, tipo: t.tipo,
                 liderId: t.lider_id, liderNombre: t.lider_nombre,
                 ayudantesIds: t.ayudantes_ids || [], ayudantesNombres: t.ayudantes_nombres || [],
@@ -3012,7 +3177,7 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
                 vigiaId: t.vigia_id || null,
                 vigiaNombre: t.vigia_nombre || null,
                 orden: t.orden || 0
-            }));
+            })));
         }
         if (trabajadoresRes.status === 'fulfilled' && trabajadoresRes.value?.data) {
             estado.trabajadores = (trabajadoresRes.value.data || []).map(t => ({ ...t, disponible: _checkinVigente(t) }));
@@ -5434,6 +5599,60 @@ window.mostrarCalendarioHorasExtra = function(trabajadorId, registros) {
 };
 
 // COMPONENTE: Vista Trabajadores (2 tabs: Equipo Disponible | Equipo Trabajando)
+// ── Ocultar duplicados de la vista ────────────────────────────────────────
+// En la base conviven el equipo NORMAL/canónico (kks "GUA#…" o ruta "R.VENT")
+// y duplicados creados por rutas de monitoreo/lubricación (kks "2893-…").
+// Cuando ambos comparten unidad + código funcional KKS (ej. "HLB10-AN101"),
+// ocultamos el "2893-…" para que en la lista quede solo el equipo normal.
+// Es SOLO un filtro de visualización: no se borra nada de la base de datos.
+// El equipo NORMAL/canónico se reconoce por su kks "GUA#…" (catálogo real).
+// Ojo: NO se puede usar la ruta (ej. "R.VENT.6KV") porque los duplicados de
+// monitoreo comparten esa misma ruta; solo el kks distingue normal vs duplicado.
+function _equipoEsCanonico(e) {
+    return /GUA\d/i.test(e.kks || '');
+}
+function _codigoFuncionalKKS(e) {
+    const m = String(e.kks || '').match(/([A-Z]{2,4}\d{2})-?([A-Z]{2}\d{3})/i);
+    return m ? (m[1] + '-' + m[2]).toUpperCase() : null;
+}
+function _unidadEquipoDedup(e) {
+    if (window.PLANIFY_ACEITES && typeof window.PLANIFY_ACEITES.unidadDe === 'function') {
+        const u = window.PLANIFY_ACEITES.unidadDe(e);
+        if (u) return u;
+    }
+    const s = `${e.kks || ''} ${e.denominacion_ut || ''}`;
+    let m = s.match(/2893-(\d)/); if (m) return 'U' + m[1];
+    m = String(e.kks || '').match(/GUA(\d)/i); if (m) return 'U' + m[1];
+    m = String(e.ubicacion || '').match(/UNIDAD\s*([1-5])/i); if (m) return 'U' + m[1];
+    return '?';
+}
+let _setDuplicadosOcultos = null;
+let _setDuplicadosFirma = -1;
+function _obtenerDuplicadosOcultos() {
+    const eqs = estado.equipos || [];
+    if (_setDuplicadosOcultos && _setDuplicadosFirma === eqs.length) return _setDuplicadosOcultos;
+    const canonKeys = new Set();
+    for (const e of eqs) {
+        if (_equipoEsCanonico(e)) {
+            const fc = _codigoFuncionalKKS(e);
+            if (fc) canonKeys.add(_unidadEquipoDedup(e) + '|' + fc);
+        }
+    }
+    const ocultos = new Set();
+    for (const e of eqs) {
+        if (_equipoEsCanonico(e)) continue;
+        const fc = _codigoFuncionalKKS(e);
+        if (fc && canonKeys.has(_unidadEquipoDedup(e) + '|' + fc)) ocultos.add(String(e.id));
+    }
+    _setDuplicadosOcultos = ocultos;
+    _setDuplicadosFirma = eqs.length;
+    return ocultos;
+}
+function filtrarEquiposDuplicados(lista) {
+    const ocultos = _obtenerDuplicadosOcultos();
+    return (lista || []).filter(e => !ocultos.has(String(e.id)));
+}
+
 function renderEquiposView() {
     const normalizar = (valor) => String(valor || '')
         .normalize('NFD')
@@ -5442,7 +5661,7 @@ function renderEquiposView() {
         .trim();
 
     const criticidadColor = { A: '#ef4444', B: '#f59e0b', C: '#22c55e' };
-    const equiposRaw = estado.equipos || [];
+    const equiposRaw = filtrarEquiposDuplicados(estado.equipos || []);
 
     // ── Pre-cómputo: agrupar + ordenar + cachear el searchText UNA SOLA VEZ ──
     // Con 300+ equipos esto evita recorrer/normalizar todo en cada tecleo.
@@ -8522,6 +8741,15 @@ function injectPlanifyEnhancementStyles() {
 .planify-ficha-stat-label{display:flex;align-items:center;gap:.45rem;font-size:.74rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#64748b;margin-bottom:.45rem}
 .planify-ficha-stat-value{font-size:1.45rem;font-weight:900;line-height:1.1;letter-spacing:-.03em;color:#0f172a;overflow-wrap:anywhere}
 .planify-ficha-stat-meta{font-size:.8rem;line-height:1.45;color:#475569;margin-top:.35rem}
+.planify-ficha-aceite{min-height:auto;background:linear-gradient(135deg,#fffaf0 0%,#fff 60%);border-color:#fde9c8}
+.planify-ficha-aceite .planify-ficha-stat-label{color:#b45309}
+.planify-aceite-lista{display:flex;flex-direction:column;gap:.5rem}
+.planify-aceite-fila{display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;background:rgba(255,255,255,.7);border:1px solid #f1e3cf;border-radius:12px;padding:.5rem .7rem}
+.planify-aceite-tipo{font-size:1rem;font-weight:800;color:#0f172a;letter-spacing:-.01em;overflow-wrap:anywhere}
+.planify-aceite-detalle{display:flex;align-items:center;gap:.4rem .6rem;flex-wrap:wrap}
+.planify-aceite-parte{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:.12rem .5rem}
+.planify-aceite-cant{font-size:.85rem;font-weight:700;color:#475569;white-space:nowrap}
+.planify-aceite-cant i{color:#94a3b8;margin-right:.15rem}
 .planify-ficha-tabs{display:flex;gap:.4rem;flex-wrap:wrap;padding:.8rem 1.2rem;background:#fff;border-bottom:1px solid #e5e7eb}
 .planify-ficha-tab-btn{padding:.78rem 1rem;border:none;background:transparent;color:#64748b;font-weight:700;border-radius:12px;cursor:pointer;transition:all .18s ease}
 .planify-ficha-tab-btn:hover{background:#f8fafc;color:#0f172a}
@@ -8816,6 +9044,31 @@ function crearTarjetaResumenFicha({ label, value, meta, icon, tone = '' }) {
     `;
 }
 
+// Lubricantes/aceites del equipo (datos de la planilla, ver aceites_equipos.js).
+function _lubricantesFilasFicha(lubricantes) {
+    return lubricantes.map(l => {
+        const parte = l.parte
+            ? `<span class="planify-aceite-parte">${escapeHtml(l.parte)}</span>`
+            : '';
+        const cantidad = l.cantidad
+            ? `<span class="planify-aceite-cant"><i class="fa-solid fa-flask"></i> ${escapeHtml(l.cantidad)}</span>`
+            : '';
+        return `<div class="planify-aceite-fila">
+            <div class="planify-aceite-tipo">${escapeHtml(l.aceite || 'Sin especificar')}</div>
+            <div class="planify-aceite-detalle">${parte}${cantidad}</div>
+        </div>`;
+    }).join('');
+}
+
+function renderTarjetaAceiteFicha(lubricantes) {
+    if (!lubricantes || !lubricantes.length) return '';
+    const titulo = lubricantes.length > 1 ? `Lubricantes (${lubricantes.length})` : 'Lubricante / Aceite';
+    return `<article class="planify-ficha-stat planify-ficha-aceite" style="grid-column:1 / -1;">
+        <div class="planify-ficha-stat-label"><i class="fa-solid fa-oil-can"></i> ${titulo}</div>
+        <div class="planify-aceite-lista">${_lubricantesFilasFicha(lubricantes)}</div>
+    </article>`;
+}
+
 function crearTarjetaMiniFicha({ label, value, meta, tone = '' }) {
     return `
         <article class="planify-ficha-mini ${tone}">
@@ -9035,6 +9288,18 @@ function _clasificarTareasPorEspecialidad(tareas) {
         if (!esVibr && !esLubr) otros.push(t);
     });
     return { vibraciones, lubricacion, otros };
+}
+
+// Numera la cola "por iniciar" de UNA columna desde 1 (colas independientes
+// entre columnas) y devuelve solo las tareas en cola de esa columna, en orden.
+// Muta `_pos` sobre las tareas recibidas (cada tarea pertenece a una sola columna).
+function _numerarColaColumna(tareasColumna) {
+    let pos = 0;
+    const cola = [];
+    tareasColumna.forEach(t => {
+        if (t._enCola) { t._pos = ++pos; cola.push(t); }
+    });
+    return cola;
 }
 
 function _esTareaPendienteInicio(tarea) {
@@ -9455,11 +9720,15 @@ function renderDashboardView() {
     // Incluye activas + en cola (programada_semana con personal ya asignado)
     const tareasDiarias = _tareasDiariasOrdenadas();
     // Calcular posición en cola para cada tarea
-    let _colaPosCounter = 0;
-    const _tareasConPos = tareasDiarias.map(t => ({ ...t, _enCola: _esTareaPendienteInicio(t), _pos: ++_colaPosCounter }));
+    const _tareasConPos = tareasDiarias.map(t => ({ ...t, _enCola: _esTareaPendienteInicio(t), _pos: 0 }));
     const colaTareas = _tareasConPos.filter(t => t._enCola);
     const tareasActivas = _tareasConPos.filter(t => !t._enCola);
     const { vibraciones, lubricacion, otros } = _clasificarTareasPorEspecialidad(_tareasConPos);
+    // Colas independientes: cada columna numera su propia cola desde 1 y solo
+    // se reordena dentro de sí misma (izquierda y derecha no comparten cola).
+    const colaVibraciones = _numerarColaColumna(vibraciones);
+    const colaLubricacion = _numerarColaColumna(lubricacion);
+    const colaOtros = _numerarColaColumna(otros);
     const trabajadoresConCheckIn = estado.trabajadores.filter(t => t.disponible).length;
     const trabajadoresOcupados = estado.trabajadores.filter(t => t.ocupado).length;
     const trabajadoresSinCheckIn = Math.max(estado.trabajadores.length - trabajadoresConCheckIn, 0);
@@ -10200,7 +10469,7 @@ function renderDashboardView() {
                                     : `<div class="items-list daily-squad-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
                             </div>`;
                         }
-                        function colHTMLLegacy(tareas, titulo, svgIcon, subtitulo, emptyMsg) {
+                        function colHTMLLegacy(tareas, titulo, svgIcon, subtitulo, emptyMsg, colaColumna) {
                             return `<div class="daily-squad-column" style="flex:1; min-width:280px; border-top:3px solid var(--primary-color); padding-top:1.1rem; padding-bottom:0.25rem;">
                                 <div class="daily-squad-header" style="display:flex; align-items:center; gap:0.55rem; margin-bottom:0.85rem;">
                                     ${svgIcon}
@@ -10209,19 +10478,19 @@ function renderDashboardView() {
                                 </div>
                                 ${tareas.length === 0
                                     ? `<div class="empty-state empty-state--compact"><div><strong>${emptyMsg}</strong><p>Esta columna se llenar\u00e1 autom\u00e1ticamente cuando entren trabajos de esa especialidad.</p></div></div>`
-                                    : `<div class="items-list daily-squad-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>`}
+                                    : `<div class="items-list daily-squad-list">${tareas.map(t => _htmlTareaCard(t, isAdmin, colaColumna)).join('')}</div>`}
                             </div>`;
                         }
                         return `<div class="daily-squad-grid" style="display:flex; gap:1.5rem; flex-wrap:wrap; align-items:flex-start;">
-                            ${colHTMLLegacy(vibraciones, 'Equipo Vibraciones', _svgGear, '', 'Sin trabajos de vibraciones')}
-                            ${colHTMLLegacy(lubricacion, 'Equipo Lubricación', _svgDrop, '', 'Sin trabajos de lubricación')}
+                            ${colHTMLLegacy(vibraciones, 'Equipo Vibraciones', _svgGear, '', 'Sin trabajos de vibraciones', colaVibraciones)}
+                            ${colHTMLLegacy(lubricacion, 'Equipo Lubricación', _svgDrop, '', 'Sin trabajos de lubricación', colaLubricacion)}
                         </div>
                         ${otros.length > 0 ? `<div class="daily-squad-extra" style="margin-top:1.25rem; border-top:1px solid var(--border-color); padding-top:0.85rem;">
                             <h3 class="daily-squad-extra-title" style="font-size:0.95rem; margin:0 0 0.75rem 0; display:flex; align-items:center; gap:0.5rem; color:var(--text-muted);">
                                 <span>📋</span><span>Otros trabajos</span>
                                 <span class="daily-squad-extra-count" style="background:#6b728022; color:#6b7280; border-radius:999px; padding:0.1rem 0.55rem; font-size:0.75rem; font-weight:700;">${otros.length}</span>
                             </h3>
-                            <div class="items-list daily-squad-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaTareas)).join('')}</div>
+                            <div class="items-list daily-squad-list">${otros.map(t => _htmlTareaCard(t, isAdmin, colaOtros)).join('')}</div>
                         </div>` : ''}`;
                     })()}
                 </div>
@@ -11669,13 +11938,20 @@ async function iniciarTareaDirecto(id) {
     const tarea = estado.tareas.find(t => t.id === id);
     if (!tarea) return;
     const hora = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const ahoraIso = new Date().toISOString();
     estado.tareas = estado.tareas.map(t => t.id === id
-        ? { ...t, estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora }
+        ? { ...t, estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora, fechaAsignacion: ahoraIso }
         : t
     );
+    _marcarTransicionLocalTarea(id, 'en_curso', 'activo');
     vistaActual = 'dashboard';
     renderizarVistaActual();
-    await _db.update('tareas', id, { estado_tarea: 'en_curso', hora_asignacion: hora });
+    await _db.update('tareas', id, {
+        estado_tarea: 'en_curso',
+        estado_ejecucion: 'activo',
+        hora_asignacion: hora,
+        fecha_inicio: ahoraIso
+    });
 }
 
 // Iniciar desde cola diaria (estadoEjecucion en_cola → activo)
@@ -11688,6 +11964,7 @@ async function iniciarDesdeColaExposed(id) {
         ? { ...t, estadoTarea: 'en_curso', estadoEjecucion: 'activo', horaAsignacion: hora, fechaAsignacion: ahoraIso }
         : t
     );
+    _marcarTransicionLocalTarea(id, 'en_curso', 'activo');
     renderizarVistaActual();
     await _db.update('tareas', id, {
         estado_tarea: 'en_curso',
@@ -11714,18 +11991,29 @@ async function ponerEnColaExposed(id) {
 }
 window.ponerEnColaExposed = ponerEnColaExposed;
 
-// Mover tarea en el orden visual (up/down)
+// Mover tarea en el orden visual (up/down).
+// Colas independientes: el movimiento se mantiene dentro de la MISMA columna
+// (especialidad) y del mismo grupo (cola "por iniciar" vs activos), de modo que
+// izquierda y derecha nunca se reordenan entre sí.
 async function moverOrdenExposed(id, direccion) {
-    const enCola = _tareasDiariasOrdenadas();
-    const idx = enCola.findIndex(t => t.id === id);
+    const ordenadas = _tareasDiariasOrdenadas();
+    const grupos = _clasificarTareasPorEspecialidad(ordenadas);
+    let columna = grupos.otros;
+    if (grupos.vibraciones.some(t => t.id === id)) columna = grupos.vibraciones;
+    else if (grupos.lubricacion.some(t => t.id === id)) columna = grupos.lubricacion;
+    const tareaMov = columna.find(t => t.id === id);
+    if (!tareaMov) return;
+    const enColaMov = _esTareaPendienteInicio(tareaMov);
+    const lista = columna.filter(t => _esTareaPendienteInicio(t) === enColaMov);
+    const idx = lista.findIndex(t => t.id === id);
     if (idx === -1) return;
     const idxDestino = direccion === 'up' ? idx - 1 : idx + 1;
-    if (idxDestino < 0 || idxDestino >= enCola.length) return;
+    if (idxDestino < 0 || idxDestino >= lista.length) return;
     // Intercambiar órdenes
-    const ordenA = enCola[idx].orden || 0;
-    const ordenB = enCola[idxDestino].orden || 0;
-    const idA = enCola[idx].id;
-    const idB = enCola[idxDestino].id;
+    const ordenA = lista[idx].orden || 0;
+    const ordenB = lista[idxDestino].orden || 0;
+    const idA = lista[idx].id;
+    const idB = lista[idxDestino].id;
     // Si los órdenes son iguales, asignar valores distintos
     const nuevoA = ordenB === ordenA ? ordenA + (direccion === 'up' ? -1 : 1) : ordenB;
     const nuevoB = ordenA;
@@ -13841,6 +14129,465 @@ function renderVibracionesHub() {
     `;
 }
 
+// Detecta si un registro del historial corresponde a un trabajo de termografía
+// (incluye excitatriz/escobillas, que también son termografía).
+function esTrabajoTermografia(item) {
+    if (!item) return false;
+    const texto = `${item.tipo || ''} ${item.subtitulo || ''}`
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    return texto.includes('TERMOGRAF') || texto.includes('EXCITATRIZ')
+        || texto.includes('ESCOBILLA') || texto.includes('CARBON');
+}
+
+// ── Sección Termografía ──────────────────────────────────────────────────
+// Hub con dos entradas (como Vibraciones): "Trabajos actuales" (tareas en
+// curso hasta que se finalicen) e "Historial". El historial agrupa por equipo
+// (ej. Excitatriz U3/U4/U5) → trabajos por fecha → detalle generado con los
+// datos capturados + opción de descargar la planilla.
+let vistaTermografiaEstado = { seccion: null, equipoKey: null, registroId: null };
+
+function _tgUnidadDe(item) {
+    if (item.ubicacion) {
+        const u = String(item.ubicacion).toUpperCase();
+        return u.includes('U') ? item.ubicacion : `U${u.replace(/\D/g, '')}`;
+    }
+    const n = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+    return n ? `U${n}` : '';
+}
+function _tgFmtFecha(s) {
+    const d = new Date(s || 0);
+    return isNaN(d.getTime()) ? '—' : `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+}
+function _tgFmtFechaLarga(s) {
+    const d = new Date(s || 0);
+    if (isNaN(d.getTime())) return '—';
+    const f = d.toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    const h = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    return `${f.charAt(0).toUpperCase()}${f.slice(1)} · ${h}`;
+}
+function _tgEsExc(item) {
+    return (typeof esTareaEscobillas === 'function' && esTareaEscobillas({ tipo: item.tipo, subtitulo: item.subtitulo }))
+        && [3, 4, 5].includes(obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion }));
+}
+function _tgTitulo(item) {
+    return String(item.tipo || 'Trabajo de termografía')
+        .replace(/^\[[^\]]+\]\s*/, '').replace(/\s*\([^)]+\)\s*$/, '').trim();
+}
+function _tgAyudantes(item) {
+    const raw = item.ayudantes_nombres ?? item.ayudantesNombres;
+    return Array.isArray(raw)
+        ? raw
+        : String(raw || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
+}
+// Equipo (grupo) al que pertenece el registro.
+function _tgGrupo(item) {
+    const unidad = _tgUnidadDe(item);
+    if (_tgEsExc(item)) return { key: `exc-${unidad}`, nombre: `Excitatriz ${unidad}`, esExc: true, unidad };
+    const titulo = _tgTitulo(item);
+    return { key: `${unidad}|${titulo}`.toLowerCase(), nombre: unidad ? `${titulo} ${unidad}` : titulo, esExc: false, unidad };
+}
+function _tgTrabajos() {
+    return (estado.historialTareas || [])
+        .filter(esTrabajoTermografia)
+        .slice()
+        .sort((a, b) => new Date(b.fecha_termino || b.created_at || 0) - new Date(a.fecha_termino || a.created_at || 0));
+}
+// Tareas de termografía en curso (aún no finalizadas).
+function _tgActuales() {
+    return (estado.tareas || [])
+        .filter(esTrabajoTermografia)
+        .slice()
+        .sort((a, b) => new Date(b.fechaAsignacion || b.created_at || 0) - new Date(a.fechaAsignacion || a.created_at || 0));
+}
+
+window.termografiaAbrirSeccion = function (sec) {
+    vistaTermografiaEstado.seccion = sec;
+    vistaTermografiaEstado.equipoKey = null;
+    vistaTermografiaEstado.registroId = null;
+    renderTermografiaView();
+};
+window.termografiaAbrirEquipo = function (key) {
+    vistaTermografiaEstado.equipoKey = key;
+    vistaTermografiaEstado.registroId = null;
+    renderTermografiaView();
+};
+window.termografiaAbrirRegistro = function (id) {
+    vistaTermografiaEstado.registroId = id;
+    renderTermografiaView();
+};
+window.termografiaVolver = function () {
+    if (vistaTermografiaEstado.registroId) vistaTermografiaEstado.registroId = null;
+    else if (vistaTermografiaEstado.equipoKey) vistaTermografiaEstado.equipoKey = null;
+    else vistaTermografiaEstado.seccion = null;
+    renderTermografiaView();
+};
+
+function renderTermografiaView() {
+    if (vistaTermografiaEstado.registroId) { renderTermografiaDetalle(vistaTermografiaEstado.registroId); return; }
+    if (vistaTermografiaEstado.seccion === 'actuales') { renderTermografiaActuales(); return; }
+    if (vistaTermografiaEstado.seccion === 'historial') {
+        if (vistaTermografiaEstado.equipoKey) { renderTermografiaTrabajos(vistaTermografiaEstado.equipoKey); return; }
+        renderTermografiaHistorial();
+        return;
+    }
+    renderTermografiaHub();
+}
+
+// Hub con dos entradas: Trabajos actuales / Historial.
+function renderTermografiaHub() {
+    const nActuales = _tgActuales().length;
+    const nHistorial = _tgTrabajos().length;
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.05em;">Programa predictivo</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;"><i class="fa-solid fa-temperature-half" style="color:#dc2626;"></i> Termografía</h1>
+                        <p style="color:#64748b; margin:0;">Elige si quieres ver los trabajos en curso o el historial de termografías finalizadas.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-circle-play" style="color:#10b981;"></i> ${nActuales} en curso</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-flag-checkered" style="color:#dc2626;"></i> ${nHistorial} finalizado${nHistorial !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.9rem;">
+                <button type="button" onclick="window.termografiaAbrirSeccion('actuales')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(16,185,129,0.28); background:#fff; transition:transform 160ms, box-shadow 160ms;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#ecfdf5; color:#10b981; margin-bottom:0.75rem;"><i class="fa-solid fa-person-digging"></i></span>
+                    <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Trabajos actuales <span style="background:#dcfce7; color:#15803d; font-size:0.74rem; font-weight:800; padding:0.1rem 0.5rem; border-radius:999px; margin-left:0.3rem;">${nActuales}</span></h2>
+                    <p style="margin:0; color:#64748b; font-size:0.9rem;">Termografías que se están realizando ahora. Permanecen aquí hasta que se finalicen.</p>
+                </button>
+
+                <button type="button" onclick="window.termografiaAbrirSeccion('historial')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(220,38,38,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
+                    <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#fef2f2; color:#dc2626; margin-bottom:0.75rem;"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                    <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Historial <span style="background:#fee2e2; color:#b91c1c; font-size:0.74rem; font-weight:800; padding:0.1rem 0.5rem; border-radius:999px; margin-left:0.3rem;">${nHistorial}</span></h2>
+                    <p style="margin:0; color:#64748b; font-size:0.9rem;">Trabajos finalizados agrupados por equipo. Entra para ver el detalle y descargar la planilla.</p>
+                </button>
+            </section>
+        </div>
+    `;
+}
+
+// Sección "Trabajos actuales": tareas de termografía en curso (sin finalizar).
+function renderTermografiaActuales() {
+    const tareas = _tgActuales();
+
+    const estadoLabel = (t) => {
+        const e = String(t.estadoTarea || t.estado_tarea || '').toLowerCase();
+        if (e === 'en_curso') return { txt: 'En curso', bg: '#dcfce7', col: '#15803d', icon: 'fa-circle-play' };
+        return { txt: 'En cola', bg: '#f1f5f9', col: '#475569', icon: 'fa-clock' };
+    };
+
+    const card = (t) => {
+        const unidad = _tgUnidadDe(t);
+        const color = colorUnidad(unidad || '');
+        const ayudantes = _tgAyudantes(t);
+        const titulo = _tgTitulo(t);
+        const esExc = _tgEsExc(t);
+        const st = estadoLabel(t);
+        const lider = t.liderNombre || t.lider_nombre || '—';
+        const lid = t.liderId || t.lider_id || '';
+        const aids = (t.ayudantesIds || t.ayudantes_ids || []).join(',');
+        const onOpen = `window.completarTareaExposed('${String(t.id).replace(/'/g, "\\'")}','${String(lid).replace(/'/g, "\\'")}','${aids}')`;
+        return `<article onclick="if(!event.target.closest('button')) ${onOpen}"
+            style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.04); cursor:pointer;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.55rem;">
+                <div style="display:flex; align-items:center; gap:0.45rem; flex-wrap:wrap;">
+                    ${unidad ? `<span style="background:${color}; color:#fff; font-size:0.72rem; font-weight:800; padding:0.22rem 0.6rem; border-radius:999px;">${escapeHtml(unidad)}</span>` : ''}
+                    ${esExc ? `<span style="background:#fee2e2; color:#b91c1c; font-size:0.72rem; font-weight:800; padding:0.22rem 0.6rem; border-radius:999px;"><i class="fa-solid fa-bolt-lightning"></i> Excitatriz</span>` : ''}
+                </div>
+                <span style="background:${st.bg}; color:${st.col}; font-size:0.72rem; font-weight:800; padding:0.22rem 0.6rem; border-radius:999px;"><i class="fa-solid ${st.icon}"></i> ${st.txt}</span>
+            </div>
+            <h2 style="margin:0 0 0.4rem 0; color:#0f172a; font-size:0.98rem; line-height:1.3;">${escapeHtml(titulo)}</h2>
+            <div style="display:flex; gap:0.7rem; flex-wrap:wrap; color:#64748b; font-size:0.8rem; margin-bottom:0.75rem;">
+                ${t.otNumero || t.ot_numero ? `<span><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(String(t.otNumero || t.ot_numero))}</span>` : ''}
+                <span><i class="fa-solid fa-user-tie"></i> ${escapeHtml(lider)}</span>
+                ${ayudantes.length ? `<span><i class="fa-solid fa-users"></i> ${ayudantes.length} técnico${ayudantes.length !== 1 ? 's' : ''}</span>` : ''}
+                ${t.subtitulo ? `<span><i class="fa-solid fa-cube"></i> ${escapeHtml(t.subtitulo)}</span>` : ''}
+            </div>
+            <button onclick="${onOpen}"
+                style="width:100%; background:linear-gradient(135deg, #16a34a 0%, #22c55e 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 0.9rem; font-weight:800; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.5rem; box-shadow:0 4px 12px rgba(22,163,74,0.2);">
+                <i class="fa-solid fa-flag-checkered"></i> Abrir trabajo
+            </button>
+        </article>`;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.termografiaVolver()" style="background:none; border:none; color:#dc2626; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a Termografía
+            </button>
+
+            <section class="panel" style="background:linear-gradient(135deg,#ecfdf5 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(16,185,129,0.24); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#15803d; text-transform:uppercase; letter-spacing:0.05em;">En curso</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;"><i class="fa-solid fa-person-digging" style="color:#10b981;"></i> Trabajos actuales</h1>
+                        <p style="color:#64748b; margin:0;">Termografías asignadas que aún no se finalizan. Al cerrarlas pasan al historial.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-circle-play" style="color:#10b981;"></i> ${tareas.length} en curso</span>
+                    </div>
+                </div>
+            </section>
+
+            <section style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem;">
+                ${tareas.length
+                    ? tareas.map(card).join('')
+                    : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin trabajos en curso</strong><p>No hay termografías asignadas en este momento. Cuando se inicie una, aparecerá aquí hasta finalizarla.</p></div></div>`}
+            </section>
+        </div>
+    `;
+}
+
+// Historial: equipos con trabajos de termografía finalizados.
+function renderTermografiaHistorial() {
+    const trabajos = _tgTrabajos();
+    const grupos = new Map();
+    trabajos.forEach(item => {
+        const g = _tgGrupo(item);
+        if (!grupos.has(g.key)) grupos.set(g.key, { ...g, items: [] });
+        grupos.get(g.key).items.push(item);
+    });
+    const lista = [...grupos.values()].sort((a, b) => {
+        if (a.esExc !== b.esExc) return a.esExc ? -1 : 1;
+        return a.nombre.localeCompare(b.nombre, 'es');
+    });
+
+    const card = (g) => {
+        const ultimo = g.items[0];
+        const color = colorUnidad(g.unidad || '');
+        return `<button type="button" onclick="window.termografiaAbrirEquipo('${String(g.key).replace(/'/g, "\\'")}')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid ${g.esExc ? 'rgba(220,38,38,0.24)' : 'rgba(14,165,233,0.2)'}; background:#fff; transition:transform 160ms, box-shadow 160ms;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.7rem;">
+                <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:${g.esExc ? '#fef2f2' : '#eff6ff'}; color:${g.esExc ? '#dc2626' : '#0ea5e9'};"><i class="fa-solid ${g.esExc ? 'fa-bolt-lightning' : 'fa-temperature-half'}"></i></span>
+                ${g.unidad ? `<span style="background:${color}; color:#fff; font-size:0.72rem; font-weight:800; padding:0.22rem 0.6rem; border-radius:999px;">${escapeHtml(g.unidad)}</span>` : ''}
+            </div>
+            <h2 style="margin:0 0 0.3rem 0; color:#0f172a; font-size:1.05rem;">${escapeHtml(g.nombre)}</h2>
+            <p style="margin:0; color:#64748b; font-size:0.86rem;">
+                <strong style="color:#0f172a;">${g.items.length}</strong> trabajo${g.items.length !== 1 ? 's' : ''} · último ${_tgFmtFecha(ultimo.fecha_termino || ultimo.created_at)}
+            </p>
+        </button>`;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.termografiaVolver()" style="background:none; border:none; color:#dc2626; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a Termografía
+            </button>
+
+            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.05em;">Historial</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;"><i class="fa-solid fa-clock-rotate-left" style="color:#dc2626;"></i> Historial de termografía</h1>
+                        <p style="color:#64748b; margin:0;">Selecciona un equipo para ver sus últimos trabajos. Al entrar a un trabajo verás el detalle y podrás descargar la planilla.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-gears" style="color:#dc2626;"></i> ${lista.length} equipo${lista.length !== 1 ? 's' : ''}</span>
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-flag-checkered" style="color:#0ea5e9;"></i> ${trabajos.length} trabajo${trabajos.length !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem;">
+                ${lista.length
+                    ? lista.map(card).join('')
+                    : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin trabajos de termografía</strong><p>Cuando finalices una tarea de termografía (incluida excitatriz), su equipo aparecerá aquí.</p></div></div>`}
+            </section>
+        </div>
+    `;
+}
+
+// Nivel 2: trabajos (por fecha) de un equipo.
+function renderTermografiaTrabajos(equipoKey) {
+    const trabajos = _tgTrabajos().filter(item => _tgGrupo(item).key === equipoKey);
+    if (!trabajos.length) { vistaTermografiaEstado.equipoKey = null; renderTermografiaView(); return; }
+    const g = _tgGrupo(trabajos[0]);
+    const color = colorUnidad(g.unidad || '');
+
+    const card = (item) => {
+        const ayudantes = _tgAyudantes(item);
+        const esExc = _tgEsExc(item);
+        return `<article onclick="if(!event.target.closest('button')) window.termografiaAbrirRegistro('${String(item.id).replace(/'/g, "\\'")}')"
+            style="background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.04); cursor:pointer;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                <span style="display:inline-flex; align-items:center; gap:0.4rem; color:#0f172a; font-weight:800; font-size:1rem;">
+                    <i class="fa-regular fa-calendar-check" style="color:${color};"></i> ${_tgFmtFecha(item.fecha_termino || item.created_at)}
+                </span>
+                ${item.ot_numero ? `<span style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:0.76rem; color:#0369a1; font-weight:800;"><i class="fa-solid fa-hashtag"></i> ${escapeHtml(item.ot_numero)}</span>` : ''}
+            </div>
+            <div style="display:flex; gap:0.7rem; flex-wrap:wrap; color:#64748b; font-size:0.8rem; margin-bottom:0.75rem;">
+                <span><i class="fa-solid fa-user-tie"></i> ${escapeHtml(item.lider_nombre || '—')}</span>
+                ${ayudantes.length ? `<span><i class="fa-solid fa-users"></i> ${ayudantes.length} técnico${ayudantes.length !== 1 ? 's' : ''}</span>` : ''}
+                ${item.hh_trabajo ? `<span><i class="fa-solid fa-user-clock"></i> ${escapeHtml(String(item.hh_trabajo))} HH</span>` : ''}
+            </div>
+            <button onclick="window.termografiaAbrirRegistro('${String(item.id).replace(/'/g, "\\'")}')"
+                style="width:100%; background:#fff; color:#0f172a; border:1px solid #cbd5e1; border-radius:10px; padding:0.6rem 0.9rem; font-weight:700; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+                <i class="fa-solid fa-eye"></i> Ver detalle
+            </button>
+        </article>`;
+    };
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.termografiaVolver()" style="background:none; border:none; color:#dc2626; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver al historial
+            </button>
+
+            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.05em;">Trabajos de termografía</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;">${g.esExc ? '<i class="fa-solid fa-bolt-lightning" style="color:#dc2626;"></i> ' : ''}${escapeHtml(g.nombre)}</h1>
+                        <p style="color:#64748b; margin:0;">Últimos trabajos registrados. Selecciona una fecha para ver el detalle.</p>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
+                        ${g.unidad ? `<span class="dashboard-hero-badge" style="background:${color}; color:#fff; border:none;">${escapeHtml(g.unidad)}</span>` : ''}
+                        <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-flag-checkered" style="color:#dc2626;"></i> ${trabajos.length} trabajo${trabajos.length !== 1 ? 's' : ''}</span>
+                    </div>
+                </div>
+            </section>
+
+            <section style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem;">
+                ${trabajos.map(card).join('')}
+            </section>
+        </div>
+    `;
+}
+
+// Nivel 3: detalle generado del trabajo (datos capturados + descargar planilla).
+function renderTermografiaDetalle(registroId) {
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { vistaTermografiaEstado.registroId = null; renderTermografiaView(); return; }
+
+    const g = _tgGrupo(item);
+    const esExc = g.esExc;
+    const color = colorUnidad(g.unidad || '');
+    const ayudantes = _tgAyudantes(item);
+    const fechaLarga = _tgFmtFechaLarga(item.fecha_termino || item.created_at);
+
+    const chip = (icon, label, c = '#475569', bg = '#f8fafc') =>
+        `<span style="display:inline-flex; align-items:center; gap:0.35rem; background:${bg}; color:${c}; border:1px solid ${c}33; border-radius:999px; padding:0.25rem 0.7rem; font-size:0.8rem; font-weight:700;"><i class="fa-solid ${icon}"></i> ${escapeHtml(String(label))}</span>`;
+
+    let cuerpo = '';
+    if (esExc) {
+        const { escobillas, header } = _parseExcitatrizAcciones(item.acciones_realizadas);
+        const filas = escobillas.map(e => {
+            const alta = e.alta === 'SI';
+            const normNo = e.norm === 'NO';
+            return `<tr style="border-top:1px solid #e5e7eb; ${alta ? 'background:#fef2f2;' : ''}">
+                <td style="padding:0.4rem 0.6rem; font-weight:700; color:#475569;">${escapeHtml(e.pos)}</td>
+                <td style="padding:0.4rem 0.6rem; text-align:center; ${alta ? 'color:#dc2626; font-weight:700;' : 'color:#0f172a;'}">${e.temp || '—'}</td>
+                <td style="padding:0.4rem 0.6rem; text-align:center; color:#0f172a;">${e.corr || '—'}</td>
+                <td style="padding:0.4rem 0.6rem; text-align:center; font-weight:700; color:${alta ? '#dc2626' : '#94a3b8'};">${e.alta || '—'}</td>
+                <td style="padding:0.4rem 0.6rem; text-align:center; font-weight:700; color:${normNo ? '#b45309' : (e.norm === 'SI' ? '#16a34a' : '#94a3b8')};">${e.norm || '—'}</td>
+            </tr>`;
+        }).join('');
+
+        const campoH = (label, val, unidad) => `
+            <div style="display:flex; justify-content:space-between; gap:0.5rem; padding:0.3rem 0; border-bottom:1px dashed #f1f5f9;">
+                <span style="color:#64748b; font-size:0.84rem;">${label}</span>
+                <strong style="color:#0f172a; font-size:0.88rem;">${val ? `${escapeHtml(val)} ${unidad}` : '—'}</strong>
+            </div>`;
+
+        cuerpo = `
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0.85rem; margin-top:0.85rem;">
+                <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:0.9rem;">
+                    <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;"><i class="fa-solid fa-temperature-half" style="color:#dc2626;"></i> Info. termografía</div>
+                    ${campoH('Humedad', header.hum, '%')}
+                    ${campoH('Temp. ambiente', header.temp, '°C')}
+                </div>
+                <div style="border:1px solid #e5e7eb; border-radius:12px; background:#fff; padding:0.9rem;">
+                    <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;"><i class="fa-solid fa-bolt" style="color:#eab308;"></i> Potencia de unidad</div>
+                    ${campoH('Generación', header.gen, 'MW')}
+                    ${campoH('V Campo', header.vcampo, 'V')}
+                    ${campoH('I Campo', header.icampo, 'A')}
+                </div>
+            </div>
+
+            <div style="margin-top:0.85rem; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+                <div style="background:#fff7ed; color:#9a3412; padding:0.6rem 0.9rem; font-size:0.84rem; font-weight:800;">
+                    <i class="fa-solid fa-bolt-lightning"></i> Mediciones por escobilla (${escobillas.length})
+                </div>
+                ${escobillas.length ? `
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.84rem; min-width:420px;">
+                        <thead>
+                            <tr style="background:#f8fafc; color:#475569; text-align:left;">
+                                <th style="padding:0.5rem 0.6rem;">N° Escob</th>
+                                <th style="padding:0.5rem 0.6rem; text-align:center;">Temp [°C]</th>
+                                <th style="padding:0.5rem 0.6rem; text-align:center;">Corr [A]</th>
+                                <th style="padding:0.5rem 0.6rem; text-align:center;">Alta temp</th>
+                                <th style="padding:0.5rem 0.6rem; text-align:center;">¿Normalizado?</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>` : `<div style="padding:1rem; color:#64748b; font-size:0.9rem;">No se pudieron reconstruir las escobillas de este registro.</div>`}
+            </div>`;
+    } else {
+        const seccion = (titulo, contenido, icon) => contenido
+            ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
+                    <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;"><i class="fa-solid ${icon}" style="color:#dc2626;"></i> ${escapeHtml(titulo)}</div>
+                    <div style="font-size:0.92rem; color:#1f2937; white-space:pre-wrap; line-height:1.5;">${escapeHtml(contenido)}</div>
+                </div>`
+            : '';
+        cuerpo = `${seccion('Acciones realizadas', item.acciones_realizadas, 'fa-list-check')}
+                  ${seccion('Observaciones', item.observaciones, 'fa-comment-dots')}
+                  ${seccion('Análisis técnico', item.analisis, 'fa-magnifying-glass-chart')}`
+            || `<div class="empty-state" style="margin-top:0.85rem;"><div><strong>Sin detalle técnico</strong><p>Este trabajo se cerró sin mediciones registradas.</p></div></div>`;
+    }
+
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem;">
+            <button onclick="window.termografiaVolver()" style="background:none; border:none; color:#dc2626; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
+                <i class="fa-solid fa-arrow-left"></i> Volver a ${escapeHtml(g.nombre)}
+            </button>
+
+            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1rem;">
+                <div class="dashboard-hero-head">
+                    <div>
+                        <div style="font-size:0.78rem; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.05em;">Detalle del trabajo</div>
+                        <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;">${esExc ? '<i class="fa-solid fa-bolt-lightning" style="color:#dc2626;"></i> ' : ''}${escapeHtml(g.nombre)}</h1>
+                        <p style="color:#64748b; margin:0;"><i class="fa-regular fa-calendar-check"></i> ${fechaLarga}</p>
+                    </div>
+                    ${esExc ? `<div>
+                        <button onclick="window.generarPlanillaExcitatrizHistorial('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:linear-gradient(135deg, #dc2626 0%, #f97316 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(220,38,38,0.25);">
+                            <i class="fa-solid fa-file-excel"></i> Descargar planilla
+                        </button>
+                    </div>` : ''}
+                </div>
+            </section>
+
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.4rem;">
+                ${g.unidad ? chip('fa-location-dot', g.unidad, '#047857', '#ecfdf5') : ''}
+                ${item.ot_numero ? chip('fa-hashtag', `OT ${item.ot_numero}`, '#9a3412', '#fff7f0') : ''}
+                ${item.numero_aviso ? chip('fa-bell', `Aviso ${item.numero_aviso}`, '#7c3aed', '#f5f3ff') : ''}
+                ${item.hh_trabajo ? chip('fa-user-clock', `${item.hh_trabajo} HH`, '#b45309', '#fffbeb') : ''}
+            </div>
+
+            <div style="padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-top:0.5rem;">
+                <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;"><i class="fa-solid fa-people-group" style="color:#dc2626;"></i> Equipo de trabajo</div>
+                <div style="display:flex; gap:0.45rem; flex-wrap:wrap; font-size:0.9rem; color:#1f2937;">
+                    <span><strong>Líder:</strong> ${escapeHtml(item.lider_nombre || '—')}</span>
+                    ${ayudantes.length ? `<span><strong>Técnicos:</strong> ${escapeHtml(ayudantes.join(', '))}</span>` : ''}
+                </div>
+            </div>
+
+            ${cuerpo}
+
+            ${item.observaciones && esExc ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
+                <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;"><i class="fa-solid fa-comment-dots" style="color:#dc2626;"></i> Observaciones</div>
+                <div style="font-size:0.92rem; color:#1f2937; white-space:pre-wrap; line-height:1.5;">${escapeHtml(item.observaciones)}</div>
+            </div>` : ''}
+        </div>
+    `;
+}
+
 function renderRutasHistorial() {
     // Refrescar desde Supabase y repintar si hay datos nuevos
     if (window.supabaseClient && !renderRutasHistorial._refreshing) {
@@ -14447,8 +15194,12 @@ function renderRutasDetalle(idx) {
 // ── Acciones expuestas en window ──────────────────────────────────────────
 window.rutasAbrirDetalle = function(idx) {
     invalidarIndiceEquipos(); // refrescar match cada vez que entras a un detalle
+    // Navegación completa: permite entrar al detalle desde cualquier vista
+    // (p.ej. al clickear una ruta en el panel de Control), no solo desde Rutas.
+    vistaActual = 'rutas';
+    vistaRutasEstado.seccionActiva = 'rutas';
     vistaRutasEstado.rutaActivaIdx = idx;
-    renderRutasView();
+    renderizarVistaActual();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 window.rutasAbrirFichaEquipo = function(equipoId) {
@@ -15207,6 +15958,7 @@ const navConfig = {
     'nav-mis-horas': 'mis_horas',
     'nav-semanal': 'semanal',
     'nav-rutas': 'rutas',
+    'nav-termografia': 'termografia',
     'nav-avisos': 'avisos-sap',
     'nav-historial': 'historial',
     'nav-equipos': 'equipos',
@@ -15275,6 +16027,9 @@ function renderizarVistaActual() {
         case 'rutas':
             renderRutasView();
             break;
+        case 'termografia':
+            renderTermografiaView();
+            break;
         case 'trabajador-rutas':
             renderTrabajadorRutasView();
             break;
@@ -15308,6 +16063,24 @@ function renderizarVistaActual() {
     // (El menú móvil no se cierra automáticamente al navegar)
 }
 
+// Navegación programática a una vista (mismo efecto que clickear el nav):
+// cambia la vista activa, resetea el sub-estado de la sección y re-renderiza.
+// La usan paneles como el de Rutas en Control (botón "Ver rutas").
+window.mostrarVista = function(vista) {
+    if (!vista) return;
+    vistaActual = vista;
+    if (vista === 'rutas') {
+        vistaRutasEstado.seccionActiva = '';
+        vistaRutasEstado.rutaActivaIdx = null;
+    }
+    if (vista === 'termografia') {
+        vistaTermografiaEstado.seccion = null;
+        vistaTermografiaEstado.equipoKey = null;
+        vistaTermografiaEstado.registroId = null;
+    }
+    renderizarVistaActual();
+};
+
 Object.keys(navConfig).forEach(id => {
     const btn = document.getElementById(id);
     if (btn) {
@@ -15316,6 +16089,11 @@ Object.keys(navConfig).forEach(id => {
             if (vistaActual === 'rutas') {
                 vistaRutasEstado.seccionActiva = '';
                 vistaRutasEstado.rutaActivaIdx = null;
+            }
+            if (vistaActual === 'termografia') {
+                vistaTermografiaEstado.seccion = null;
+                vistaTermografiaEstado.equipoKey = null;
+                vistaTermografiaEstado.registroId = null;
             }
             renderizarVistaActual();
         });
@@ -15872,6 +16650,139 @@ function _buildPanelSalaElectrica(container) {
     });
 }
 
+// Configuración de la planilla de terreno completa de Excitatriz por unidad.
+// `escobillas` = nº de escobillas; `posiciones` = mediciones por escobilla
+// (U5 llega a .3, U3 llega a .4). Se irá ampliando por unidad.
+const ESCOB_PLANILLA_COMPLETA = {
+    3: { escobillas: 14, posiciones: 4 },
+    4: { escobillas: 14, posiciones: 3 },
+    5: { escobillas: 14, posiciones: 3 }
+};
+
+// Ubicación del porta escobillas según el número de escobilla (1-14).
+// Foto de terreno U3: 1-4 Norte(+), 5-7 Sur(+), 8-11 Norte(-), 12-14 Sur(-).
+const ESCOB_UBICACIONES_U3 = [
+    { hasta: 4,  label: 'NORTE (+)' },
+    { hasta: 7,  label: 'SUR (+)' },
+    { hasta: 11, label: 'NORTE (-)' },
+    { hasta: 14, label: 'SUR (-)' }
+];
+// U4/U5: igual que U3 en (+), pero los negativos van invertidos —
+// 8-11 Sur(-), 12-14 Norte(-) (confirmado por foto de terreno).
+const ESCOB_UBICACIONES_U45 = [
+    { hasta: 4,  label: 'NORTE (+)' },
+    { hasta: 7,  label: 'SUR (+)' },
+    { hasta: 11, label: 'SUR (-)' },
+    { hasta: 14, label: 'NORTE (-)' }
+];
+const ESCOB_UBICACIONES_DEFAULT = ESCOB_UBICACIONES_U3;
+const ESCOB_UBICACIONES = {
+    3: ESCOB_UBICACIONES_U3,
+    4: ESCOB_UBICACIONES_U45,
+    5: ESCOB_UBICACIONES_U45
+};
+function _ubicacionEscobilla(unidadNum, n) {
+    const tabla = ESCOB_UBICACIONES[unidadNum] || ESCOB_UBICACIONES_DEFAULT;
+    const fila = tabla.find(r => n <= r.hasta);
+    return fila ? fila.label : '';
+}
+
+// Planilla de terreno completa para Excitatriz.
+// Pide temperatura y corriente de TODAS las escobillas (según la config de la
+// unidad), info termográfica (humedad, temp.) y potencia de unidad
+// (Gen MW, V campo, I campo) + comentarios. La cabecera (fecha, técnicos,
+// orden de trabajo, horas inicio/término) se completa con los datos de la ruta.
+function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
+    const N_ESCOB = cfg.escobillas;
+    const N_POS = cfg.posiciones;
+
+    const siNoSelect = (cls, label) => `
+        <label style="display:grid; gap:0.15rem;">
+            <span style="font-size:0.66rem; color:#64748b; font-weight:700; text-transform:uppercase;">${label}</span>
+            <select class="form-control ${cls}" style="font-size:0.82rem; padding:0.35rem 0.4rem;">
+                <option value="">—</option>
+                <option value="SI">SÍ</option>
+                <option value="NO">NO</option>
+            </select>
+        </label>`;
+
+    const posInput = (pos) => `
+        <div class="escu5-row" data-pos="${pos}" style="border:1px solid #f1f5f9; border-radius:8px; padding:0.45rem 0.5rem; margin-bottom:0.4rem; background:#fafbfc;">
+            <div style="display:grid; grid-template-columns: 36px 1fr 1fr; gap:0.4rem; align-items:center; margin-bottom:0.4rem;">
+                <span style="font-size:0.8rem; font-weight:700; color:#475569;">${pos}</span>
+                <input type="number" class="form-control escu5-temp" min="-50" step="0.1" placeholder="°C"
+                    style="font-size:0.84rem; padding:0.4rem 0.45rem;" inputmode="decimal">
+                <input type="number" class="form-control escu5-corr" min="0" step="0.1" placeholder="A"
+                    style="font-size:0.84rem; padding:0.4rem 0.45rem;" inputmode="decimal">
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem;">
+                ${siNoSelect('escu5-alta', 'Alta temp')}
+                ${siNoSelect('escu5-norm', '¿Normalizado?')}
+            </div>
+        </div>`;
+
+    const escobCard = (n) => {
+        const ubic = _ubicacionEscobilla(unidadNum, n);
+        return `
+        <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; overflow:hidden;">
+            <div style="background:#eff6ff; color:#1e40af; font-weight:800; font-size:0.82rem; padding:0.45rem 0.7rem; border-bottom:1px solid #dbeafe; display:flex; align-items:center; justify-content:space-between; gap:0.4rem;">
+                <span>Escobilla N°${n}</span>
+                ${ubic ? `<span style="font-size:0.68rem; font-weight:800; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:999px; padding:0.12rem 0.55rem; white-space:nowrap;">${ubic}</span>` : ''}
+            </div>
+            <div style="padding:0.55rem 0.6rem;">
+                ${Array.from({ length: N_POS }, (_, p) => posInput(`${n}.${p + 1}`)).join('')}
+            </div>
+        </div>`;
+    };
+
+    const cards = Array.from({ length: N_ESCOB }, (_, i) => escobCard(i + 1)).join('');
+
+    const campoNum = (id, label, unidad) => `
+        <label style="display:grid; grid-template-columns: 1fr 110px; gap:0.5rem; align-items:center; margin-bottom:0.5rem;">
+            <span style="font-size:0.84rem; color:#334155; font-weight:600;">${label}</span>
+            <input type="number" id="${id}" class="form-control" step="0.1" inputmode="decimal" style="font-size:0.88rem;" title="${unidad}">
+        </label>`;
+
+    container.innerHTML = `
+        <div id="exc-u5-panel" data-unidad="${unidadNum}">
+            <div style="font-size:0.85rem; font-weight:600; color:#374151; margin-bottom:0.6rem;
+                padding-bottom:0.45rem; border-bottom:2px solid #FF6900; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fa-solid fa-bolt-lightning" style="color:#FF6900;"></i>
+                Excitatriz U${unidadNum} — Planilla de terreno
+            </div>
+            <div style="font-size:0.76rem; color:#64748b; background:#f8fafc; border:1px solid #e5e7eb; border-radius:8px; padding:0.55rem 0.7rem; margin-bottom:0.9rem;">
+                <i class="fa-solid fa-circle-info" style="color:#0ea5e9;"></i>
+                La fecha, técnicos, orden de trabajo y horas de inicio/término se completan con los datos de la ruta. Aquí registra todas las temperaturas y corrientes.
+            </div>
+
+            <div style="font-size:0.78rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.03em; margin:0 0 0.5rem;">
+                Temperatura y corriente por escobilla
+            </div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.6rem;">
+                ${cards}
+            </div>
+
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:0.8rem; margin-top:1rem;">
+                <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:0.8rem;">
+                    <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; margin-bottom:0.6rem;">Info. termografía</div>
+                    ${campoNum('excu5-hum', 'Humedad [%]', '%')}
+                    ${campoNum('excu5-tamb', 'Temp. [T°]', '°C')}
+                </div>
+                <div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:0.8rem;">
+                    <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; margin-bottom:0.6rem;">Potencia de unidad</div>
+                    ${campoNum('excu5-gen', 'Gen. [MW]', 'MW')}
+                    ${campoNum('excu5-vcampo', 'V Campo [V]', 'V')}
+                    ${campoNum('excu5-icampo', 'I Campo [A]', 'A')}
+                </div>
+            </div>
+
+            <div style="margin-top:0.9rem;">
+                <label style="font-size:0.78rem; font-weight:700; color:#334155; display:block; margin-bottom:0.3rem;">Comentarios</label>
+                <textarea id="excu5-coment" class="form-control" rows="2" placeholder="Comentarios adicionales (opcional)" style="font-size:0.88rem; resize:vertical;"></textarea>
+            </div>
+        </div>`;
+}
+
 // Panel especializado para Excitatriz / Escobillas / Carbones.
 // Métricas globales de la unidad + lista de escobillas con anormalidades.
 function _buildPanelEscobillas(container, tarea) {
@@ -15880,6 +16791,15 @@ function _buildPanelEscobillas(container, tarea) {
         const m = t.match(/\bU\s?([1-9]\d?)\b/i);
         return m ? `U${m[1]}` : '';
     })();
+
+    // Planilla de terreno completa (todas las escobillas con temperatura y
+    // corriente + termografía + potencia de unidad). Se habilita por unidad;
+    // cada una define cuántas escobillas y cuántas posiciones por escobilla.
+    const unidadNum = obtenerUnidadTarea(tarea);
+    if (ESCOB_PLANILLA_COMPLETA[unidadNum]) {
+        _buildPanelEscobillasCompleto(container, tarea, unidadNum, ESCOB_PLANILLA_COMPLETA[unidadNum]);
+        return;
+    }
 
     const filaEscobilla = (idx) => `
         <div class="esc-row" data-idx="${idx}" style="display:grid; grid-template-columns: 80px 1fr 1fr 36px; gap:0.4rem; margin-bottom:0.4rem; align-items:center;">
@@ -16113,6 +17033,57 @@ if (btnConfirmarFinalizar) {
                 });
             });
 
+            // Panel especial Excitatriz U5: planilla de terreno completa. Cada
+            // posición de escobilla con dato se guarda como componente
+            // "Escobilla X.Y" (temperatura + corriente). Termografía y potencia
+            // de unidad quedan en un componente "Excitatriz U5".
+            const u5Panel = medContainer.querySelector('#exc-u5-panel');
+            if (u5Panel) {
+                u5Panel.querySelectorAll('.escu5-row').forEach(row => {
+                    const pos  = row.dataset.pos || '';
+                    const temp = row.querySelector('.escu5-temp')?.value.trim() || '';
+                    const corr = row.querySelector('.escu5-corr')?.value.trim() || '';
+                    const alta = row.querySelector('.escu5-alta')?.value || '';
+                    const norm = row.querySelector('.escu5-norm')?.value || '';
+                    if (!temp && !corr && !alta && !norm) return; // posición sin datos → ignorar
+                    const partesPos = [];
+                    if (corr) partesPos.push(`Corriente: ${corr} A`);
+                    if (alta) partesPos.push(`Alta temp: ${alta}`);
+                    if (norm) partesPos.push(`Normalizado: ${norm}`);
+                    medicionesData.push({
+                        componente: `Escobilla ${pos}`,
+                        activo: true,
+                        vibracion: null,
+                        temperatura: temp || null,
+                        temperaturas: temp ? [temp] : [],
+                        acciones: partesPos.length ? partesPos.join(' | ') : null
+                    });
+                });
+                const hum    = u5Panel.querySelector('#excu5-hum')?.value.trim()    || '';
+                const tamb   = u5Panel.querySelector('#excu5-tamb')?.value.trim()   || '';
+                const gen    = u5Panel.querySelector('#excu5-gen')?.value.trim()    || '';
+                const vcampo = u5Panel.querySelector('#excu5-vcampo')?.value.trim() || '';
+                const icampo = u5Panel.querySelector('#excu5-icampo')?.value.trim() || '';
+                const coment = u5Panel.querySelector('#excu5-coment')?.value.trim() || '';
+                const partesU5 = [];
+                if (hum)    partesU5.push(`Humedad: ${hum} %`);
+                if (tamb)   partesU5.push(`Temp. termografía: ${tamb} °C`);
+                if (gen)    partesU5.push(`Generación: ${gen} MW`);
+                if (vcampo) partesU5.push(`V campo: ${vcampo} V`);
+                if (icampo) partesU5.push(`I campo: ${icampo} A`);
+                if (coment) partesU5.push(`Comentarios: ${coment}`);
+                if (partesU5.length) {
+                    const uNum = u5Panel.dataset.unidad || '';
+                    medicionesData.push({
+                        componente: uNum ? `Excitatriz U${uNum}` : 'Excitatriz',
+                        activo: true,
+                        vibracion: null,
+                        temperatura: null,
+                        temperaturas: [],
+                        acciones: partesU5.join(' | ')
+                    });
+                }
+            } else {
             // Panel especial Excitatriz / Escobillas: métricas globales + lista
             // de escobillas con anormalidades. Cada escobilla marcada se vuelve
             // un componente "Escobilla N°X" con su temperatura.
@@ -16152,6 +17123,7 @@ if (btnConfirmarFinalizar) {
                     });
                 });
             }
+            } // fin else (panel escobillas no-U5)
 
             // Panel especial Trafos Rectificadores: cada trafo marcado se
             // vuelve un componente con su código KKS y todas sus mediciones.
@@ -16668,6 +17640,7 @@ function renderFichaTecnicaModal() {
                         </div>
                     </div>
                     <div id="tab-lubricacion" class="tab-pane" style="display:none;">
+                        <div id="ficha-aceite-especificacion" style="margin-bottom:1rem;"></div>
                         <div class="planify-ficha-card">
                             <div class="planify-ficha-card-head">
                                 <div>
@@ -17170,7 +18143,10 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
         <button class="btn btn-outline planify-ficha-action-btn" onclick="window.abrirVistaUnidad('${String(equipo.ubicacion || '').replace(/'/g, "\\'")}')"><i class="fa-solid fa-location-dot"></i> Unidad</button>
     `;
 
+    const lubricantesEquipo = (window.PLANIFY_ACEITES && window.PLANIFY_ACEITES.get(equipo)) || null;
+
     document.getElementById('ficha-equipo-overview').innerHTML = [
+        renderTarjetaAceiteFicha(lubricantesEquipo),
         crearTarjetaResumenFicha({ label: 'Estado actual', value: overallStatus.label, meta: vibSummary.count || termoSummary.count ? `Vibracion ${vibSummary.count ? vibSummary.status.label : 'sin dato'} / Termografia ${termoSummary.count ? termoSummary.status.label : 'sin dato'}` : 'Aun no existen mediciones registradas para este activo.', icon: 'fa-shield-heart', tone: overallStatus.tone }),
         crearTarjetaResumenFicha({ label: 'Pulso del activo', value: pulsoActivo.value, meta: pulsoActivo.meta, icon: 'fa-heart-pulse', tone: pulsoActivo.tone }),
         crearTarjetaResumenFicha({ label: 'Ultima vibracion', value: vibSummary.latest ? `${numeroFicha(vibSummary.latest.valor, 2)} ${vibSummary.latest.unidad || 'mm/s'}` : 'Sin dato', meta: vibSummary.latest ? `${formatearFechaFicha(vibSummary.latest.fecha)} / ${vibSummary.latest.punto_medicion || 'General'} / ${vibSummary.status.label}` : 'Sin lecturas de vibracion.', icon: 'fa-wave-square', tone: vibSummary.count ? vibSummary.status.tone : '' }),
@@ -17178,6 +18154,18 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
         crearTarjetaResumenFicha({ label: 'Intervenciones', value: numeroFicha(tareasRelacionadas.length), meta: ultimaActividad ? `Ultimo cierre: ${formatearFechaFicha(ultimaActividad.created_at || ultimaActividad.fecha_termino || ultimaActividad.fecha_inicio)} / ${numeroFicha(totalLecturas)} lectura(s) asociadas` : `${numeroFicha(totalLecturas)} lectura(s) en el historial del activo.`, icon: 'fa-screwdriver-wrench' }),
         crearTarjetaResumenFicha({ label: 'Comparativa del activo', value: comparativaValue, meta: comparativaMeta, icon: 'fa-code-compare', tone: comparativaTone })
     ].join('');
+
+    const especAceite = document.getElementById('ficha-aceite-especificacion');
+    if (especAceite) {
+        especAceite.innerHTML = lubricantesEquipo
+            ? `<div class="planify-ficha-card"><div class="planify-ficha-card-head"><div>
+                    <h3><i class="fa-solid fa-oil-can" style="color:#b45309;"></i> Aceite / lubricante del equipo</h3>
+                    <span>Tipo de aceite y cantidad según planilla de lubricación.</span>
+                </div></div>
+                <div class="planify-aceite-lista" style="margin-top:.5rem;">${_lubricantesFilasFicha(lubricantesEquipo)}</div>
+               </div>`
+            : '';
+    }
 
     document.getElementById('ficha-resumen-vibracion').innerHTML = vibSummary.count ? [
         crearTarjetaMiniFicha({ label: 'Tendencia', value: vibSummary.trend.label, meta: vibSummary.trend.meta, tone: vibSummary.trend.className }),
@@ -18156,7 +19144,7 @@ if (searchInputOriginal) {
 
         const tareasOT = estado.tareas.filter(t => t.otNumero && t.otNumero.toLowerCase().includes(query));
         const historialOT = estado.historialTareas.filter(t => t.ot_numero && t.ot_numero.toLowerCase().includes(query));
-        const equipos = estado.equipos.filter(eq =>
+        const equipos = filtrarEquiposDuplicados(estado.equipos).filter(eq =>
             (eq.activo || '').toLowerCase().includes(query) ||
             (eq.componente || '').toLowerCase().includes(query) ||
             (eq.kks || '').toLowerCase().includes(query) ||
@@ -18430,6 +19418,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-dashboard':          ['admin', 'trabajador', 'visita'],
         'nav-semanal':            ['admin'],
         'nav-rutas':              ['admin', 'administrador', 'trabajador'],
+        'nav-termografia':        ['admin', 'administrador', 'trabajador'],
         'nav-avisos':             ['admin', 'administrador'],
         'nav-historial':          ['admin'],
         'nav-trabajadores':       ['admin'],

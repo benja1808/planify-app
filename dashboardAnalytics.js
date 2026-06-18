@@ -4421,6 +4421,27 @@ ${conditionKpiHtml}
 
         setPreset('mensual');
         draw();
+
+        // El panel "Avance de rutas" lee el cache local de rutas
+        // (planify_rutas_ejecuciones / _historial), que solo llenaba la vista de
+        // Vibraciones. Sin esto, al abrir el dashboard sin pasar antes por
+        // Vibraciones, el avance salía en 0 aunque hubiera rutas activas en la
+        // BD. Sincronizamos en segundo plano y re-dibujamos si cambió algo.
+        if (window.supabaseClient && !renderDashboard._syncRutas) {
+            renderDashboard._syncRutas = true;
+            const snapRutas = () => `${localStorage.getItem('planify_rutas_ejecuciones') || ''}¦${localStorage.getItem('planify_rutas_historial') || ''}`;
+            const antes = snapRutas();
+            Promise.all([
+                window.refrescarRutasEjecucionesDesdeSupabase ? window.refrescarRutasEjecucionesDesdeSupabase() : null,
+                window.refrescarHistorialDesdeSupabase ? window.refrescarHistorialDesdeSupabase() : null
+            ]).then(() => {
+                renderDashboard._syncRutas = false;
+                // Solo re-dibujar si llegaron datos nuevos y el panel sigue montado.
+                if (snapRutas() !== antes && document.querySelector('.analytics-route-panel')) {
+                    draw();
+                }
+            }).catch(() => { renderDashboard._syncRutas = false; });
+        }
     }
 
     window.renderControlView = renderDashboard;

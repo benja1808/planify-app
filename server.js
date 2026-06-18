@@ -462,6 +462,90 @@ async function generarPlanillaMoncon(body) {
     return { buffer: Buffer.from(buffer), filename };
 }
 
+// ── Generador de planilla de terreno Excitatriz (escobillas) ─────────────
+// A diferencia de las MONCON (mapeo equipo→fila por nombre), la excitatriz se
+// rellena por POSICIÓN de escobilla (1.1, 1.2…) buscando el código en la
+// columna A. Las hojas se llaman "Formato planilla exc 3/4/5".
+const EXCITATRIZ_TEMPLATE = 'Formato Planilla de terreno Excitatriz.xlsx';
+const EXCITATRIZ_HOJAS = { 3: 'Formato planilla exc 3', 4: 'Formato planilla exc 4', 5: 'Formato planilla exc 5' };
+
+async function generarPlanillaExcitatriz(body) {
+    const { unidad, fecha, ot, tecnicos, hum, temp, gen, vcampo, icampo, escobillas } = body || {};
+    const uNum = Number(String(unidad || '').replace(/\D/g, ''));
+    const hojaName = EXCITATRIZ_HOJAS[uNum];
+    if (!hojaName) throw new Error(`Unidad de excitatriz no soportada: ${unidad}. Solo U3, U4 y U5.`);
+
+    const templatePath = path.join(FORMATOS_DIR, EXCITATRIZ_TEMPLATE);
+    if (!fs.existsSync(templatePath)) throw new Error(`Plantilla no encontrada: ${EXCITATRIZ_TEMPLATE}`);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+    const ws = workbook.getWorksheet(hojaName);
+    if (!ws) throw new Error(`Hoja "${hojaName}" no encontrada. Disponibles: ${workbook.worksheets.map(s => s.name).join(', ')}`);
+
+    const toNum = (v) => {
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(String(v).replace(',', '.'));
+        return Number.isFinite(n) ? n : v;
+    };
+
+    // Cabecera (posiciones fijas del template)
+    setCellSafe(ws, 1, 2, fecha || '');      // B1 Fecha
+    setCellSafe(ws, 2, 2, ot || '');         // B2 OT
+    setCellSafe(ws, 4, 1, tecnicos || '');   // A4 Tecnicos (merge A4:C4)
+    setCellSafe(ws, 2, 5, toNum(hum));       // E2 Hum. [%]
+    setCellSafe(ws, 3, 5, toNum(temp));      // E3 Temp. [T°]
+    setCellSafe(ws, 2, 7, toNum(gen));       // G2 Gen. [MW]
+    setCellSafe(ws, 3, 7, toNum(vcampo));    // G3 V Campo [V]
+    setCellSafe(ws, 4, 7, toNum(icampo));    // G4 I Campo [A]
+
+    // Mapa posición ("1.1") → fila, leyendo la columna A desde la fila 6.
+    const posRow = {};
+    ws.getColumn(1).eachCell({ includeEmpty: false }, (cell, rowNum) => {
+        if (rowNum < 6) return;
+        const v = String(cell.value == null ? '' : cell.value).trim();
+        if (v) posRow[v] = rowNum;
+    });
+
+    (escobillas || []).forEach(e => {
+        const row = posRow[String(e.pos || '').trim()];
+        if (!row) return;
+        setCellSafe(ws, row, 2, toNum(e.temp));  // B Temperatura [°C]
+        setCellSafe(ws, row, 4, toNum(e.corr));  // D Corriente [A]
+        if (e.alta) setCellSafe(ws, row, 6, String(e.alta).toUpperCase());  // F Alta Temp SI/NO
+        if (e.norm) setCellSafe(ws, row, 7, String(e.norm).toUpperCase());  // G Normalizado SI/NO
+    });
+
+    // Quitar las hojas de las otras unidades (deja solo la de esta unidad).
+    workbook.worksheets.slice().forEach(sheet => {
+        if (sheet.name !== hojaName) {
+            try { workbook.removeWorksheet(sheet.id); } catch (e) { /* noop */ }
+        }
+    });
+    // Reapuntar la pestaña activa a la única hoja restante (evita que Excel
+    // abra con una pestaña fuera de rango tras eliminar las otras).
+    workbook.views = [{ activeTab: 0 }];
+
+    // Impresión: vertical, ajustar al ancho a 1 página.
+    if (!ws.pageSetup) ws.pageSetup = {};
+    ws.pageSetup.orientation = 'portrait';
+    ws.pageSetup.paperSize = 9;            // A4
+    ws.pageSetup.fitToPage = true;
+    ws.pageSetup.fitToWidth = 1;
+    ws.pageSetup.fitToHeight = 999;
+    ws.pageSetup.horizontalCentered = true;
+    ws.pageSetup.margins = { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 };
+
+    const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+    const d = new Date();
+    const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
+    const filename = `Planilla Excitatriz U${uNum} — OT ${ot || 'sn'} — ${fechaArchivo}.xlsx`
+        .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return { buffer: Buffer.from(buffer), filename };
+}
+
 function writeJson(res, status, payload) {
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(payload));
@@ -892,6 +976,24 @@ const server = http.createServer(async (req, res) => {
             res.end(result.buffer);
         } catch (error) {
             console.error('[server] /generar-planilla error:', error.message);
+            writeJson(res, 500, { ok: false, error: error.message });
+        }
+        return;
+    }
+
+    // POST /generar-planilla-excitatriz — planilla de escobillas (U3/U4/U5)
+    if (req.method === 'POST' && pathname === '/generar-planilla-excitatriz') {
+        try {
+            const body = await readBody(req);
+            const result = await generarPlanillaExcitatriz(body);
+            res.writeHead(200, {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(result.filename)}"`,
+                'Content-Length': result.buffer.length
+            });
+            res.end(result.buffer);
+        } catch (error) {
+            console.error('[server] /generar-planilla-excitatriz error:', error.message);
             writeJson(res, 500, { ok: false, error: error.message });
         }
         return;
