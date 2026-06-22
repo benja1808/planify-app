@@ -131,6 +131,18 @@ function _aplicarTransicionesLocalesTareas(tareas) {
     return tareas;
 }
 
+// ── Requerimientos (trabajos sin OT) ──────────────────────────────────────────
+// Se marcan reusando el campo ot_numero con el prefijo "REQ" (evita cambios de
+// esquema). Opcionalmente llevan un nombre: "REQ: <nombre>".
+function esRequerimiento(otNumero) {
+    return /^\s*REQ\b/i.test(String(otNumero || ''));
+}
+function nombreRequerimiento(otNumero) {
+    const m = String(otNumero || '').match(/^\s*REQ\s*:?\s*(.*)$/i);
+    return m && m[1] ? m[1].trim() : '';
+}
+window.esRequerimiento = esRequerimiento;
+
 let semanalExcelImportState = {
     fileName: '',
     total: 0,
@@ -146,7 +158,7 @@ let tareasEliminandose = new Set();
 // Se mantiene entre re-renders mientras el usuario esté en la vista semanal.
 let weeklyBulkSelected = new Set();
 
-let vistaActual = 'checkin'; // 'checkin', 'dashboard', 'trabajadores', 'historial', 'semanal', 'perfil'
+let vistaActual = 'control'; // 'control', 'dashboard', 'trabajadores', 'historial', 'semanal', 'perfil'
 
 // Habilidades / tipos de trabajo (deben coincidir exactamente con las habilidades en la BD)
 const tipicosTrabajos = [
@@ -1421,15 +1433,16 @@ async function inicializarDatos() {
             ...t,
             disponible: _checkinVigente(t)
         }));
-        // Mergear inhabilitados de Supabase al set local (sincronización multi-dispositivo)
+        // Sincronizar inhabilitados desde Supabase (columna `disponible`: false =
+        // inhabilitado) al set local, para que persistan entre dispositivos.
         try {
             const localSet = obtenerTrabajadoresInhabilitados();
             (trabajadores || []).forEach(t => {
-                if (t.inhabilitado === true) localSet.add(t.id);
-                else if (t.inhabilitado === false) localSet.delete(t.id);
+                if (t.disponible === false) localSet.add(t.id);
+                else localSet.delete(t.id);
             });
             guardarTrabajadoresInhabilitados(localSet);
-        } catch (e) { /* columna inhabilitado puede no existir */ }
+        } catch (e) { /* noop */ }
         estado.tareas = (tareas || []).map(t => ({
             id: t.id, tipo: t.tipo,
             liderId: t.lider_id, liderNombre: t.lider_nombre,
@@ -1485,7 +1498,7 @@ async function inicializarDatos() {
                 ? supabaseClient.from(tablasDb.historial).select('*').order('created_at', { ascending: false }).limit(200)
                 : Promise.resolve({ data: [], error: null })
         ]);
-        estado.historialMediciones = medResult.data  || [];
+        estado.historialMediciones = (medResult.data || []).map(_decodificarNotasMedicion);
         estado.historialTareas     = histResult.data || [];
         await refrescarDatosInsumos({ preferRemote: true });
 
@@ -1561,7 +1574,7 @@ async function inicializarDatos() {
                 }));
                 estado.equipos            = equipos    || [];
                 estado.historialTareas    = historial  || [];
-                estado.historialMediciones = mediciones || [];
+                estado.historialMediciones = (mediciones || []).map(_decodificarNotasMedicion);
                 await refrescarDatosInsumos({ preferRemote: false });
                 console.log('[offline] Datos locales cargados correctamente.');
                 if (window.syncQueue) window.syncQueue.actualizar();
@@ -1580,10 +1593,10 @@ async function inicializarDatos() {
 // Verifica si el check-in de un trabajador sigue vigente (mismo día)
 // No bloquea por hora — el reset de las 20:00 ocurre una sola vez y permite turnos de noche
 function _checkinVigente(t) {
-    if (!t.disponible) return false;
-    if (!t.checkin_fecha) return false;
-    const hoy = new Date().toISOString().slice(0, 10);
-    return (t.checkin_fecha.slice(0, 10) === hoy);
+    // Modalidad de check-in eliminada. La columna `disponible` se reutiliza como
+    // flag de HABILITADO: false = inhabilitado (vacaciones/licencia). Así las
+    // inhabilitaciones persisten en Supabase y se sincronizan entre dispositivos.
+    return t.disponible !== false;
 }
 
 // Resetea todos los check-in si estamos pasadas las 20:00 y no se ha reseteado hoy
@@ -1682,7 +1695,7 @@ function configurarRealtime() {
         );
         if (pendingMediciones && tablasDb.mediciones) fetches.push(
             supabaseClient.from(tablasDb.mediciones).select('*').order('fecha', { ascending: false }).limit(200).then(({ data }) => {
-                estado.historialMediciones = data || [];
+                estado.historialMediciones = (data || []).map(_decodificarNotasMedicion);
                 if (data?.length) window.localDB?.mediciones.bulk(data).catch(() => {});
             })
         );
@@ -1922,6 +1935,22 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
     document.getElementById('modal-ayudantes-ids').value = ayudantesIdsStr || '';
     document.getElementById('modal-numero-aviso').value = '';
     document.getElementById('modal-hh-trabajo').value = '1';
+    const esReq = esRequerimiento(tarea.otNumero);
+    const hhGrupo = document.getElementById('modal-hh-grupo');
+    const horarioGrupo = document.getElementById('modal-horario-requerimiento');
+    const horaInicioInput = document.getElementById('modal-hora-inicio');
+    const horaTerminoInput = document.getElementById('modal-hora-termino');
+    const callout = document.getElementById('modal-finalizar-callout');
+    if (hhGrupo) hhGrupo.style.display = esReq ? 'none' : '';
+    if (horarioGrupo) horarioGrupo.style.display = esReq ? '' : 'none';
+    if (horaInicioInput) horaInicioInput.value = esReq ? normalizarHoraInput(tarea.horaAsignacion) : '';
+    if (horaTerminoInput) horaTerminoInput.value = esReq ? horaActualInput() : '';
+    if (callout) {
+        callout.textContent = esReq
+            ? 'Indica el horario real del requerimiento y describe brevemente lo realizado.'
+            : 'Por favor, describe brevemente lo que se hizo para el informe de gestión.';
+    }
+    actualizarDuracionRequerimiento();
     document.getElementById('modal-acciones').value = '';
     document.getElementById('modal-observaciones').value = '';
     document.getElementById('modal-analisis').value = '';
@@ -1934,9 +1963,20 @@ function completarTarea(id, liderId, ayudantesIdsStr) {
 }
 
 async function completarTareaConPrompts(id, liderId, ayudantesIdsStr) {
+    const tarea = estado.tareas.find(t => t.id === id);
     const observaciones = prompt("Ingrese breve reporte/observaciones del trabajo finalizado:");
     const numeroAviso = prompt("Ingrese n\u00famero de Aviso / Notificaci\u00f3n SAP (Opcional):");
-    const hhTrabajo = prompt("Ingrese Horas Hombre (HH) consumidas:", "1");
+    const esReq = esRequerimiento(tarea?.otNumero);
+    const horaInicio = esReq
+        ? prompt("Ingrese hora de inicio del requerimiento (HH:MM):", normalizarHoraInput(tarea?.horaAsignacion))
+        : '';
+    const horaTermino = esReq
+        ? prompt("Ingrese hora de término del requerimiento (HH:MM):", horaActualInput())
+        : '';
+    if (esReq && (!horaInicio || !horaTermino)) return;
+    const hhTrabajo = esReq
+        ? calcularHorasEntre(horaInicio, horaTermino)
+        : prompt("Ingrese Horas Hombre (HH) consumidas:", "1");
 
     await guardarTareaFinalizada({
         id,
@@ -1946,6 +1986,8 @@ async function completarTareaConPrompts(id, liderId, ayudantesIdsStr) {
         observaciones: observaciones || '',
         numeroAviso: numeroAviso || '',
         hhTrabajo: hhTrabajo || '1',
+        horaInicio,
+        horaTermino,
         analisisTecnico: '',
         recomendacionAnalista: ''
     });
@@ -1956,6 +1998,46 @@ function normalizarHHTrabajo(value) {
     return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : '1';
 }
 
+function horaActualInput() {
+    const ahora = new Date();
+    return `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+}
+
+function normalizarHoraInput(value) {
+    const texto = String(value || '').trim().toLowerCase();
+    const match = texto.match(/(\d{1,2}):(\d{2})/);
+    if (!match) return '';
+    let hora = Number(match[1]);
+    const minuto = Number(match[2]);
+    if (/p\.?\s*m\.?/.test(texto) && hora < 12) hora += 12;
+    if (/a\.?\s*m\.?/.test(texto) && hora === 12) hora = 0;
+    if (hora > 23 || minuto > 59) return '';
+    return `${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
+}
+
+function calcularHorasEntre(horaInicio, horaTermino) {
+    const [hi, mi] = String(horaInicio || '').split(':').map(Number);
+    const [ht, mt] = String(horaTermino || '').split(':').map(Number);
+    if (![hi, mi, ht, mt].every(Number.isFinite)) return null;
+    let minutos = (ht * 60 + mt) - (hi * 60 + mi);
+    if (minutos < 0) minutos += 24 * 60;
+    return minutos > 0 ? Math.round((minutos / 60) * 100) / 100 : null;
+}
+
+function actualizarDuracionRequerimiento() {
+    const salida = document.getElementById('modal-horario-duracion');
+    if (!salida) return;
+    const inicio = document.getElementById('modal-hora-inicio')?.value;
+    const termino = document.getElementById('modal-hora-termino')?.value;
+    const horas = calcularHorasEntre(inicio, termino);
+    salida.textContent = horas
+        ? `Duración calculada: ${String(horas).replace('.', ',')} hora(s).`
+        : 'Completa ambas horas para calcular la duración.';
+}
+
+document.getElementById('modal-hora-inicio')?.addEventListener('input', actualizarDuracionRequerimiento);
+document.getElementById('modal-hora-termino')?.addEventListener('input', actualizarDuracionRequerimiento);
+
 async function guardarTareaFinalizada({
     id,
     liderId,
@@ -1964,6 +2046,8 @@ async function guardarTareaFinalizada({
     observaciones,
     numeroAviso,
     hhTrabajo,
+    horaInicio = '',
+    horaTermino = '',
     analisisTecnico,
     recomendacionAnalista,
     medicionesData = []
@@ -1984,21 +2068,37 @@ async function guardarTareaFinalizada({
 
     const ayudantesIds = ayudantesIdsStr ? ayudantesIdsStr.split(',').filter(Boolean) : [];
     const histId = crypto.randomUUID();
-    const fechaTermino = new Date().toISOString();
+    const esReq = esRequerimiento(tarea.otNumero);
+    const inicioReq = esReq ? normalizarHoraInput(horaInicio) : '';
+    const terminoReq = esReq ? normalizarHoraInput(horaTermino) : '';
+    const duracionReq = esReq ? calcularHorasEntre(inicioReq, terminoReq) : null;
+    const fechaBase = new Date(tarea.fechaAsignacion || Date.now());
+    const fechaInicioRegistro = new Date(fechaBase);
+    const fechaTerminoRegistro = new Date(fechaBase);
+    if (esReq && inicioReq && terminoReq) {
+        const [hi, mi] = inicioReq.split(':').map(Number);
+        const [ht, mt] = terminoReq.split(':').map(Number);
+        fechaInicioRegistro.setHours(hi, mi, 0, 0);
+        fechaTerminoRegistro.setHours(ht, mt, 0, 0);
+        if (fechaTerminoRegistro <= fechaInicioRegistro) {
+            fechaTerminoRegistro.setDate(fechaTerminoRegistro.getDate() + 1);
+        }
+    }
+    const fechaTermino = (esReq && inicioReq && terminoReq ? fechaTerminoRegistro : new Date()).toISOString();
     const hhTrabajoFinal = normalizarHHTrabajo(hhTrabajo);
     const registroHistorial = {
         id: histId,
         tipo: tarea.tipo,
         lider_nombre: tarea.liderNombre,
         ayudantes_nombres: tarea.ayudantesNombres,
-        hora_asignacion: tarea.horaAsignacion,
-        fecha_inicio: tarea.fechaAsignacion || null,
+        hora_asignacion: inicioReq || tarea.horaAsignacion,
+        fecha_inicio: esReq && inicioReq ? fechaInicioRegistro.toISOString() : (tarea.fechaAsignacion || null),
         fecha_termino: fechaTermino,
-        hora_termino: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
+        hora_termino: terminoReq || new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
         acciones_realizadas: accionesRealizadas || '',
         observaciones: observaciones || '',
         numero_aviso: numeroAviso || '',
-        hh_trabajo: hhTrabajoFinal,
+        hh_trabajo: duracionReq ? String(duracionReq) : hhTrabajoFinal,
         ot_numero: tarea.otNumero,
         analisis: analisisTecnico || '',
         recomendacion_analista: recomendacionAnalista || '',
@@ -2102,9 +2202,42 @@ async function guardarTareaFinalizada({
 }
 
 // ── Guardar una medición en Supabase + localDB ────────────────────────────────
+// La tabla `mediciones` no tiene columnas de técnico ni observaciones, pero sí
+// `notas`. Persistimos ambos ahí (JSON) para que NO se pierdan en el round-trip
+// a Supabase. Al cargar se decodifican de vuelta con _decodificarNotasMedicion.
+function _codificarNotasMedicion(tecnicos, observaciones) {
+    const t = Array.isArray(tecnicos) ? tecnicos.filter(Boolean) : [];
+    const o = String(observaciones || '').trim();
+    if (!t.length && !o) return null;
+    return JSON.stringify({ t, o });
+}
+function _decodificarNotasMedicion(row) {
+    if (!row || typeof row !== 'object') return row;
+    let tecnicos = [], obs = '';
+    const notas = row.notas;
+    if (typeof notas === 'string' && notas.trim().startsWith('{')) {
+        try { const p = JSON.parse(notas); tecnicos = Array.isArray(p.t) ? p.t : []; obs = p.o || ''; }
+        catch (e) { obs = notas; }
+    } else if (notas) {
+        obs = String(notas);
+    }
+    const yaTec = Array.isArray(row.tecnicos_nombres) && row.tecnicos_nombres.length;
+    return {
+        ...row,
+        tecnicos_nombres: yaTec ? row.tecnicos_nombres : tecnicos,
+        tecnico_nombre: row.tecnico_nombre || (tecnicos.length ? tecnicos.join(', ') : null),
+        observaciones: row.observaciones || obs || null
+    };
+}
+
 async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha, observaciones, tecnico_nombre = null, tecnicos_nombres = [] }) {
     const unidad = tipo === 'vibracion' ? 'mm/s' : tipo === 'termografia' ? '°C' : '';
     const id = crypto.randomUUID();
+    const tecnicosArr = Array.isArray(tecnicos_nombres) ? tecnicos_nombres.filter(Boolean) : [];
+    if (!tecnicosArr.length && tecnico_nombre) {
+        tecnicosArr.push(...String(tecnico_nombre).split(',').map(s => s.trim()).filter(Boolean));
+    }
+    const notas = _codificarNotasMedicion(tecnicosArr, observaciones);
     const payload = {
         id,
         equipo_id,
@@ -2114,18 +2247,19 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
         punto_medicion,
         componente: componente || null,
         fecha,
-        tecnico_nombre: tecnico_nombre || null,
-        tecnicos_nombres: Array.isArray(tecnicos_nombres) ? tecnicos_nombres.filter(Boolean) : [],
+        notas,
+        tecnico_nombre: tecnicosArr.join(', ') || null,
+        tecnicos_nombres: tecnicosArr,
         observaciones: observaciones || null,
         synced: false
     };
-    const remotePayload = { id, equipo_id, tipo, valor, unidad, punto_medicion, fecha };
+    const remotePayload = { id, equipo_id, tipo, valor, unidad, punto_medicion, fecha, notas };
     if (componente) remotePayload.componente = componente;
     if (window.localDB) await window.localDB.mediciones.upsert(payload).catch(() => {});
     estado.historialMediciones = [payload, ...estado.historialMediciones];
 
     if (navigator.onLine && supabaseClient) {
-        const insertData = { equipo_id, tipo, valor, unidad, punto_medicion, fecha };
+        const insertData = { equipo_id, tipo, valor, unidad, punto_medicion, fecha, notas };
         if (componente) insertData.componente = componente;
         const { error } = await supabaseClient.from(tablasDb.mediciones).insert([insertData]);
         if (error) {
@@ -2550,6 +2684,120 @@ function _parseExcitatrizAcciones(texto) {
     return { escobillas, header };
 }
 
+// Serializa un panel #exc-u5-panel al MISMO texto que produce el cierre normal,
+// para que _parseExcitatrizAcciones lo reconstruya y la planilla se genere.
+function _serializarEscobillasPanel(panel, unidadNum) {
+    const escobLines = [];   // [Escobilla X.Y] Corriente… | Alta temp… | Normalizado…
+    const resumenLines = []; // • Escobilla X.Y → Temp… | Corriente… | …
+    panel.querySelectorAll('.escu5-row').forEach(row => {
+        const pos  = row.dataset.pos || '';
+        const temp = row.querySelector('.escu5-temp')?.value.trim() || '';
+        const corr = row.querySelector('.escu5-corr')?.value.trim() || '';
+        const altaChecked = !!row.querySelector('.escu5-alta')?.checked;
+        const normChecked = !!row.querySelector('.escu5-norm')?.checked;
+        if (!temp && !corr && !altaChecked && !normChecked) return;
+        const alta = altaChecked ? 'SI' : 'NO';
+        const norm = normChecked ? 'SI' : 'NO';
+        const partes = [];
+        if (corr) partes.push(`Corriente: ${corr} A`);
+        partes.push(`Alta temp: ${alta}`);
+        partes.push(`Normalizado: ${norm}`);
+        escobLines.push(`[Escobilla ${pos}] ${partes.join(' | ')}`);
+        const rp = [];
+        if (temp) rp.push(`Temp: ${temp} °C`);
+        rp.push(...partes);
+        resumenLines.push(`• Escobilla ${pos} → ${rp.join(' | ')}`);
+    });
+    const g = id => panel.querySelector(id)?.value.trim() || '';
+    const hum = g('#excu5-hum'), tamb = g('#excu5-tamb'), gen = g('#excu5-gen');
+    const vcampo = g('#excu5-vcampo'), icampo = g('#excu5-icampo'), coment = g('#excu5-coment');
+    const hp = [];
+    if (hum)    hp.push(`Humedad: ${hum} %`);
+    if (tamb)   hp.push(`Temp. termografía: ${tamb} °C`);
+    if (gen)    hp.push(`Generación: ${gen} MW`);
+    if (vcampo) hp.push(`V campo: ${vcampo} V`);
+    if (icampo) hp.push(`I campo: ${icampo} A`);
+    if (coment) hp.push(`Comentarios: ${coment}`);
+    let headerComp = '', headerResumen = '';
+    if (hp.length) {
+        headerComp    = `[Excitatriz U${unidadNum}] ${hp.join(' | ')}`;
+        headerResumen = `• Excitatriz U${unidadNum} → ${hp.join(' | ')}`;
+    }
+    const comp    = [...escobLines, headerComp].filter(Boolean).join('\n');
+    const resumen = [...resumenLines, headerResumen].filter(Boolean).join('\n');
+    return [comp, resumen].filter(Boolean).join('\n\n');
+}
+
+// Abre un modal para rellenar/editar las mediciones de escobillas de un registro
+// de historial de excitatriz (p.ej. trabajos cerrados sin datos). Reusa el mismo
+// formulario del cierre, precargado con lo que ya tenga el registro.
+window.editarMedicionesExcitatriz = function(registroId) {
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { alert('Registro no encontrado'); return; }
+    const unidadNum = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+    if (![3, 4, 5].includes(unidadNum)) { alert('La edición de escobillas solo está disponible para U3, U4 y U5.'); return; }
+
+    document.getElementById('modal-editar-excitatriz')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-editar-excitatriz';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:12000; display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem; overflow:auto;';
+    overlay.innerHTML = `
+        <div style="background:#fff; border-radius:16px; max-width:820px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem 1.2rem; border-bottom:1px solid #eef2f7; position:sticky; top:0; background:#fff; border-radius:16px 16px 0 0;">
+                <strong style="font-size:1rem; color:#0f172a;"><i class="fa-solid fa-pen-to-square" style="color:#dc2626;"></i> Rellenar mediciones — Excitatriz U${unidadNum}</strong>
+                <button onclick="document.getElementById('modal-editar-excitatriz').remove()" style="background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; color:#94a3b8;">&times;</button>
+            </div>
+            <div id="editar-exc-form" style="padding:1rem 1.2rem;"></div>
+            <div style="display:flex; gap:0.6rem; justify-content:flex-end; padding:1rem 1.2rem; border-top:1px solid #eef2f7; position:sticky; bottom:0; background:#fff; border-radius:0 0 16px 16px;">
+                <button onclick="document.getElementById('modal-editar-excitatriz').remove()" style="background:#fff; border:1px solid #e5e7eb; border-radius:9px; padding:0.6rem 1.1rem; font-weight:700; cursor:pointer; color:#475569;">Cancelar</button>
+                <button onclick="window.guardarMedicionesExcitatriz('${String(registroId).replace(/'/g, "\\'")}')" style="background:linear-gradient(135deg,#dc2626,#f97316); color:#fff; border:none; border-radius:9px; padding:0.6rem 1.3rem; font-weight:800; cursor:pointer;"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    const formCont = overlay.querySelector('#editar-exc-form');
+    _buildPanelEscobillasCompleto(formCont, { tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion }, unidadNum, ESCOB_PLANILLA_COMPLETA[unidadNum]);
+
+    // Precargar lo que ya tenga el registro.
+    const { escobillas, header } = _parseExcitatrizAcciones(item.acciones_realizadas);
+    const panel = formCont.querySelector('#exc-u5-panel');
+    escobillas.forEach(e => {
+        const row = panel.querySelector(`.escu5-row[data-pos="${e.pos}"]`);
+        if (!row) return;
+        if (e.temp) row.querySelector('.escu5-temp').value = e.temp;
+        if (e.corr) row.querySelector('.escu5-corr').value = e.corr;
+        if (e.alta === 'SI') row.querySelector('.escu5-alta').checked = true;
+        if (e.norm === 'SI') row.querySelector('.escu5-norm').checked = true;
+    });
+    const setv = (id, v) => { const el = panel.querySelector(id); if (el && v) el.value = v; };
+    setv('#excu5-hum', header.hum); setv('#excu5-tamb', header.temp); setv('#excu5-gen', header.gen);
+    setv('#excu5-vcampo', header.vcampo); setv('#excu5-icampo', header.icampo);
+};
+
+// Guarda las mediciones editadas en el registro de historial (local + Supabase).
+window.guardarMedicionesExcitatriz = async function(registroId) {
+    const item = (estado.historialTareas || []).find(t => t.id === registroId);
+    if (!item) { alert('Registro no encontrado'); return; }
+    const panel = document.querySelector('#modal-editar-excitatriz #exc-u5-panel');
+    if (!panel) return;
+    const unidadNum = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+    const acciones = _serializarEscobillasPanel(panel, unidadNum);
+
+    item.acciones_realizadas = acciones;
+    try {
+        await _db.update(tablasDb.historial, registroId, { acciones_realizadas: acciones });
+    } catch (e) {
+        console.warn('[excitatriz] no se pudo guardar acciones:', e?.message);
+    }
+    document.getElementById('modal-editar-excitatriz')?.remove();
+    if (typeof renderTermografiaDetalle === 'function' && vistaTermografiaEstado?.registroId === registroId) {
+        renderTermografiaDetalle(registroId);
+    }
+    if (typeof mostrarToastNotificacion === 'function') {
+        mostrarToastNotificacion('Mediciones guardadas', 'Ya puedes descargar la planilla.', { type: 'success', duration: 2500 });
+    }
+};
+
 // Genera y descarga la planilla de terreno de excitatriz desde un registro de
 // historial ya finalizado, usando el backend (formatos/Formato Planilla de
 // terreno Excitatriz.xlsx).
@@ -2573,10 +2821,9 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
     const fecha = !isNaN(fechaObj.getTime())
         ? `${String(fechaObj.getDate()).padStart(2, '0')}/${String(fechaObj.getMonth() + 1).padStart(2, '0')}/${fechaObj.getFullYear()}`
         : '';
-    const ayudantes = Array.isArray(item.ayudantes_nombres)
-        ? item.ayudantes_nombres
-        : String(item.ayudantes_nombres || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
-    const tecnicos = [item.lider_nombre, ...ayudantes].filter(Boolean).join(' / ');
+    // La planilla separa al líder del equipo técnico: usar ayudantes/técnicos
+    // registrados y recurrir al líder solo cuando no exista otra información.
+    const tecnicos = getNombresTecnicosFicha(item).join(' / ');
 
     const payload = {
         unidad, fecha, ot: item.ot_numero || '', tecnicos,
@@ -5875,7 +6122,7 @@ function renderTrabajadoresView() {
     const htmlDisponibles = disponibles.length
         ? disponibles.sort((a,b)=>a.nombre.localeCompare(b.nombre))
             .map(t => cardWorker(t,'var(--success-color)','DISPONIBLE','var(--success-color)')).join('')
-        : `<p style="color:var(--text-muted); grid-column:1/-1; padding:1rem;">Sin personal con check-in hoy.</p>`;
+        : `<p style="color:var(--text-muted); grid-column:1/-1; padding:1rem;">Sin personal disponible.</p>`;
 
     const htmlAusentes = ausentes.length
         ? ausentes.sort((a,b)=>a.nombre.localeCompare(b.nombre))
@@ -5893,7 +6140,6 @@ function renderTrabajadoresView() {
                 <div style="display:flex; gap:0.8rem;">
                     <span class="badge badge-success" style="padding:0.5rem 1rem;">Disponibles: ${disponibles.length}</span>
                     <span class="badge badge-warning" style="padding:0.5rem 1rem;">Trabajando: ${ocupados.length}</span>
-                    <span class="badge" style="background:#64748b; color:white; padding:0.5rem 1rem;">Ausentes: ${ausentes.length}</span>
                 </div>
             </div>
 
@@ -6455,6 +6701,7 @@ function renderHistorialView() {
     let filtroTipo = 'todos';
     let filtroUnidad = 'todos';
     let filtroLider = 'todos';
+    let filtroClase = 'todos'; // 'todos' | 'ordenes' | 'requerimientos'
     let textoBusqueda = '';
     let rango = getPresetRange(presetActivo);
 
@@ -6493,6 +6740,11 @@ function renderHistorialView() {
         if (hasta && (!fecha || Number.isNaN(fecha.getTime()) || fecha > hasta)) return false;
         if (filtroUnidad !== 'todos' && normalizar(registro.unidad) !== filtroUnidad) return false;
         if (filtroLider !== 'todos' && normalizar(registro.lider) !== filtroLider) return false;
+        if (filtroClase !== 'todos') {
+            const esReq = esRequerimiento(registro.otNumero);
+            if (filtroClase === 'requerimientos' && !esReq) return false;
+            if (filtroClase === 'ordenes' && esReq) return false;
+        }
         if (textoBusqueda && !getBusquedaTexto(registro).includes(normalizar(textoBusqueda))) return false;
         if (!omitTipo && !coincideFiltroTipo(registro, filtroTipo)) return false;
         return true;
@@ -6617,7 +6869,12 @@ function renderHistorialView() {
 
     const renderRegistro = (registro) => {
         const stats = [];
-        if (registro.otNumero) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(registro.otNumero)}</span>`);
+        if (esRequerimiento(registro.otNumero)) {
+            const nombreReq = nombreRequerimiento(registro.otNumero);
+            stats.push(`<span class="history-stat-chip" style="background:#fff7ed; color:#9a3412; border-color:rgba(249,115,22,0.28);"><i class="fa-solid fa-clipboard-list"></i> Requerimiento${nombreReq ? `: ${escapeHtml(nombreReq)}` : ''}</span>`);
+        } else if (registro.otNumero) {
+            stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(registro.otNumero)}</span>`);
+        }
         if (registro.aviso) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-bell"></i> Aviso ${escapeHtml(registro.aviso)}</span>`);
         stats.push(`<span class="history-stat-chip"><i class="fa-regular fa-clock"></i> ${formatearHora(registro.fecha)}</span>`);
         if (registro.hh > 0) stats.push(`<span class="history-stat-chip"><i class="fa-solid fa-user-clock"></i> ${formatearNumero(registro.hh)} HH</span>`);
@@ -6849,6 +7106,14 @@ function renderHistorialView() {
                         </select>
                     </div>
                     <div class="form-group">
+                        <label for="historial-filtro-clase">Clase</label>
+                        <select id="historial-filtro-clase" class="form-control">
+                            <option value="todos">Todos</option>
+                            <option value="ordenes">Órdenes / OT</option>
+                            <option value="requerimientos">Requerimientos</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
                         <label for="historial-fecha-desde">Desde</label>
                         <input id="historial-fecha-desde" class="form-control" type="date" value="${escapeHtml(rango.desde)}">
                     </div>
@@ -6888,6 +7153,11 @@ function renderHistorialView() {
 
     document.getElementById('historial-filtro-lider')?.addEventListener('change', (event) => {
         filtroLider = event.target.value || 'todos';
+        renderTodo();
+    });
+
+    document.getElementById('historial-filtro-clase')?.addEventListener('change', (event) => {
+        filtroClase = event.target.value || 'todos';
         renderTodo();
     });
 
@@ -7330,11 +7600,12 @@ function renderTrabajadoresView() {
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)));
     const inhabilitadosSet = obtenerTrabajadoresInhabilitados();
-    const trabActivos = estado.trabajadores.filter(t => !inhabilitadosSet.has(t.id));
-    const ocupados    = trabActivos.filter(t => t.disponible && idsEnTarea.has(t.id));
-    const disponibles = trabActivos.filter(t => t.disponible && !idsEnTarea.has(t.id));
-    const ausentes    = trabActivos.filter(t => !t.disponible);
-    const inhabilitados = estado.trabajadores.filter(t => inhabilitadosSet.has(t.id));
+    const esInhab = (t) => inhabilitadosSet.has(t.id) || t.disponible === false;
+    const trabActivos = estado.trabajadores.filter(t => !esInhab(t));
+    const ocupados    = trabActivos.filter(t => idsEnTarea.has(t.id));
+    const disponibles = trabActivos.filter(t => !idsEnTarea.has(t.id));
+    const ausentes    = [];
+    const inhabilitados = estado.trabajadores.filter(esInhab);
 
     const normalizar = (valor) => String(valor || '')
         .normalize('NFD')
@@ -7479,17 +7750,12 @@ function renderTrabajadoresView() {
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-circle-check"></i> Disponibles</span>
                         <div class="crew-kpi-value">${disponibles.length}</div>
-                        <div class="crew-kpi-meta">Con check-in libre</div>
+                        <div class="crew-kpi-meta">Libres para asignar</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-person-digging"></i> Trabajando</span>
                         <div class="crew-kpi-value">${ocupados.length}</div>
                         <div class="crew-kpi-meta">En ejecucion</div>
-                    </article>
-                    <article class="crew-kpi-card">
-                        <span class="crew-kpi-label"><i class="fa-solid fa-user-clock"></i> Sin check-in</span>
-                        <div class="crew-kpi-value">${ausentes.length}</div>
-                        <div class="crew-kpi-meta">Fuera de jornada</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-user-slash" style="color:#dc2626;"></i> Inhabilitados</span>
@@ -7507,7 +7773,6 @@ function renderTrabajadoresView() {
                     <div class="crew-tabs">
                         <button type="button" class="crew-tab is-active" data-crew-tab="disponible" style="background:var(--success-color);">Disponibles (${disponibles.length})</button>
                         <button type="button" class="crew-tab" data-crew-tab="ocupado">Trabajando (${ocupados.length})</button>
-                        <button type="button" class="crew-tab" data-crew-tab="ausente">Sin check-in (${ausentes.length})</button>
                         <button type="button" class="crew-tab" data-crew-tab="inhabilitado">Inhabilitados (${inhabilitados.length})</button>
                     </div>
                     <div style="display:flex; gap:0.65rem; align-items:center; flex-wrap:wrap;">
@@ -7522,7 +7787,7 @@ function renderTrabajadoresView() {
 
             <section class="panel">
                 <div id="crew-panel-disponible" class="crew-grid" data-crew-container="disponible">
-                    ${disponibles.length ? disponibles.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'disponible')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin personal disponible</strong><p>Todos los trabajadores con check-in estan ejecutando trabajo o aun no hay ingreso registrado.</p></div></div>`}
+                    ${disponibles.length ? disponibles.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'disponible')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin personal disponible</strong><p>Todos los trabajadores estan ejecutando trabajo en este momento.</p></div></div>`}
                 </div>
                 <div id="crew-panel-ocupado" class="crew-grid" data-crew-container="ocupado" style="display:none;">
                     ${ocupados.length ? ocupados.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')).map(trabajador => renderCard(trabajador, 'ocupado')).join('') : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin personal trabajando</strong><p>Cuando una tarea pase a ejecucion aparecera aqui el equipo en terreno.</p></div></div>`}
@@ -7873,16 +8138,16 @@ function renderTrabajadoresView() {
         }
     });
 
-    const _pushInhabilitadoSupabase = async (trabajadorId, valor) => {
+    // Persiste el estado en Supabase usando la columna `disponible`
+    // (false = inhabilitado). Así se sincroniza entre dispositivos.
+    const _pushInhabilitadoSupabase = async (trabajadorId, inhabilitado) => {
         if (!window.supabaseClient) return;
         try {
             const { error } = await window.supabaseClient
                 .from('trabajadores')
-                .update({ inhabilitado: valor })
+                .update({ disponible: !inhabilitado })
                 .eq('id', trabajadorId);
-            if (error && error.code !== '42703') {
-                console.warn('[trabajadores] sync inhabilitado:', error.message);
-            }
+            if (error) console.warn('[trabajadores] sync inhabilitado:', error.message);
         } catch (e) { /* offline o falla → queda solo local */ }
     };
     const inhabilitarTrabajador = async (trabajadorId) => {
@@ -7890,7 +8155,7 @@ function renderTrabajadoresView() {
         set.add(trabajadorId);
         guardarTrabajadoresInhabilitados(set);
         const t = estado.trabajadores.find(x => x.id === trabajadorId);
-        if (t) { t.inhabilitado = true; mostrarToastTrabajadores(`${t.nombre} fue marcado como inhabilitado.`); }
+        if (t) { t.disponible = false; mostrarToastTrabajadores(`${t.nombre} fue marcado como inhabilitado.`); }
         _pushInhabilitadoSupabase(trabajadorId, true);
     };
     const rehabilitarTrabajador = async (trabajadorId) => {
@@ -7898,7 +8163,7 @@ function renderTrabajadoresView() {
         set.delete(trabajadorId);
         guardarTrabajadoresInhabilitados(set);
         const t = estado.trabajadores.find(x => x.id === trabajadorId);
-        if (t) { t.inhabilitado = false; mostrarToastTrabajadores(`${t.nombre} vuelve a estar habilitado.`); }
+        if (t) { t.disponible = true; mostrarToastTrabajadores(`${t.nombre} vuelve a estar habilitado.`); }
         _pushInhabilitadoSupabase(trabajadorId, false);
     };
 
@@ -8130,7 +8395,7 @@ function renderPerfilView() {
                                         <h2 style="margin:0;">${seleccionado.nombre}</h2>
                                         <div class="profile-role">${seleccionado.puesto}</div>
                                         <div class="crew-card-actions" style="margin-top:0.5rem;">
-                                            <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${seleccionado.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                                            <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${seleccionado.ocupado ? 'Trabajando' : 'Disponible'}</span>
                                             <span class="crew-chip"><i class="fa-solid fa-screwdriver-wrench"></i> ${(seleccionado.habilidades || []).length} habilidad(es)</span>
                                         </div>
                                     </div>
@@ -8203,7 +8468,7 @@ function renderPerfilView() {
                             <h2 style="margin:0;">${trabajador.nombre}</h2>
                             <div class="profile-role">${trabajador.puesto}</div>
                             <div class="crew-card-actions" style="margin-top:0.5rem;">
-                                <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${trabajador.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                                <span class="crew-chip"><i class="fa-solid fa-circle-check"></i> ${trabajador.ocupado ? 'Trabajando' : 'Disponible'}</span>
                                 <span class="crew-chip"><i class="fa-solid fa-screwdriver-wrench"></i> ${(trabajador.habilidades || []).length} habilidad(es)</span>
                             </div>
                         </div>
@@ -9384,7 +9649,7 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
     return `
     <div class="list-item daily-task-card ${pendienteInicio ? 'is-queue' : 'is-active'}" style="border-left: 3px solid ${pendienteInicio ? '#9ca3af' : 'var(--warning-color)'}; padding: 1rem 1.1rem; display:flex; flex-direction:column; gap:0; align-items:stretch;">
         <!-- 1. Nombre del equipo / trabajo -->
-        <div class="daily-task-title" style="font-size:1.05rem; font-weight:700; color:var(--primary-color); line-height:1.3;">${tituloHtml}${tarea.otNumero ? `&nbsp;<span class="daily-task-inline-pill" style="font-size:0.78rem; font-weight:600; background:#fff3e0; color:#e65100; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : ''}</div>
+        <div class="daily-task-title" style="font-size:1.05rem; font-weight:700; color:var(--primary-color); line-height:1.3;">${tituloHtml}${esRequerimiento(tarea.otNumero) ? `&nbsp;<span class="daily-task-inline-pill" style="font-size:0.78rem; font-weight:600; background:#fff7ed; color:#9a3412; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-clipboard-list" style="font-size:0.7rem;"></i> Requerimiento</span>` : (tarea.otNumero ? `&nbsp;<span class="daily-task-inline-pill" style="font-size:0.78rem; font-weight:600; background:#fff3e0; color:#e65100; border-radius:6px; padding:1px 7px; vertical-align:middle;"><i class="fa-solid fa-hashtag" style="font-size:0.7rem;"></i> ${tarea.otNumero}</span>` : '')}</div>
 
         <!-- 2. Tipos de trabajo (chips) -->
         ${tiposBadgesHtml ? `<div class="daily-task-badges" style="display:flex; flex-wrap:wrap; gap:0.3rem; margin-top:0.45rem;">${tiposBadgesHtml}</div>` : ''}
@@ -9522,9 +9787,11 @@ function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
     const estadoHtml = tarea._enCola
         ? `<span class="daily-task-status-pill is-queue"><span class="daily-task-status-order">${tarea._pos}</span> Por iniciar</span>`
         : `<span class="daily-task-status-pill is-active"><i class="fa-solid fa-circle-play" style="font-size:0.72rem;"></i> Activo</span>`;
-    const otHtml = tarea.otNumero
-        ? `<span class="daily-task-meta-pill is-accent"><i class="fa-solid fa-hashtag"></i> OT ${tarea.otNumero}</span>`
-        : '';
+    const otHtml = esRequerimiento(tarea.otNumero)
+        ? `<span class="daily-task-meta-pill is-accent"><i class="fa-solid fa-clipboard-list"></i> Requerimiento${nombreRequerimiento(tarea.otNumero) ? `: ${nombreRequerimiento(tarea.otNumero)}` : ''}</span>`
+        : (tarea.otNumero
+            ? `<span class="daily-task-meta-pill is-accent"><i class="fa-solid fa-hashtag"></i> OT ${tarea.otNumero}</span>`
+            : '');
     const ubicacionHtml = ubicacionTexto
         ? `<a href="#" onclick="window.abrirVistaUnidad('${ubicacionSafeHtml}'); return false;" class="daily-task-meta-pill is-link"><i class="fa-solid fa-location-dot"></i> ${ubicacionTexto}</a>`
         : '';
@@ -9674,14 +9941,14 @@ function renderControlView() {
                             <div class="dashboard-metric-label">Por iniciar</div>
                         </article>
                         <article class="dashboard-metric-card">
-                            <span class="dashboard-metric-icon" style="background:#ecfdf5; color:#047857;"><i class="fa-solid fa-user-check"></i></span>
-                            <div class="dashboard-metric-value">${trabajadoresConCheckIn}</div>
-                            <div class="dashboard-metric-label">Personal con check-in</div>
+                            <span class="dashboard-metric-icon" style="background:#ecfdf5; color:#047857;"><i class="fa-solid fa-users"></i></span>
+                            <div class="dashboard-metric-value">${estado.trabajadores.length}</div>
+                            <div class="dashboard-metric-label">Personal total</div>
                         </article>
                         <article class="dashboard-metric-card">
-                            <span class="dashboard-metric-icon" style="background:#fef2f2; color:#b91c1c;"><i class="fa-solid fa-user-clock"></i></span>
-                            <div class="dashboard-metric-value">${trabajadoresSinCheckIn}</div>
-                            <div class="dashboard-metric-label">Sin check-in hoy</div>
+                            <span class="dashboard-metric-icon" style="background:#fff7ed; color:#c2410c;"><i class="fa-solid fa-user-gear"></i></span>
+                            <div class="dashboard-metric-value">${trabajadoresOcupados}</div>
+                            <div class="dashboard-metric-label">Trabajando ahora</div>
                         </article>
                     </div>
 
@@ -9944,7 +10211,7 @@ function renderDashboardView() {
         {
             value: trabajadoresOcupados,
             label: 'Personal desplegado',
-            meta: `${trabajadoresConCheckIn} con check-in hoy`,
+            meta: `${estado.trabajadores.length} en el equipo`,
             tone: 'slate',
             icon: 'fa-users'
         }
@@ -9985,10 +10252,8 @@ function renderDashboardView() {
             .sort((a, b) => (a.orden || 0) - (b.orden || 0))
         : [];
     const estadoUsuarioDashboard = isAdmin
-        ? `${trabajadoresConCheckIn} con check-in hoy`
-        : (trabajadorActual?.disponible
-            ? (trabajadorActual?.ocupado ? 'En terreno ahora' : 'Disponible para asignacion')
-            : 'Sin check-in registrado');
+        ? `${estado.trabajadores.length} en el equipo`
+        : (trabajadorActual?.ocupado ? 'En terreno ahora' : 'Disponible para asignacion');
     const ubicacionUsuarioDashboard = isAdmin
         ? (unidadFocoDiaria?.nombre || 'Sin unidad foco')
         : (tareasPersonales[0] ? obtenerUbicacionTarea(tareasPersonales[0]) : 'Sin unidad asignada');
@@ -9996,7 +10261,7 @@ function renderDashboardView() {
         ? [
             { label: 'Activos', value: tareasActivas.length, meta: 'OT en ejecucion', icon: 'fa-person-digging' },
             { label: 'Por iniciar', value: colaTareas.length, meta: 'Listas para partir', icon: 'fa-layer-group' },
-            { label: 'Cobertura', value: `${coberturaTurno}%`, meta: 'Personal con check-in', icon: 'fa-user-check' },
+            { label: 'Personal', value: `${estado.trabajadores.length}`, meta: 'En el equipo', icon: 'fa-users' },
             { label: 'Alertas', value: unidadesConAlerta, meta: 'Unidades a revisar', icon: 'fa-triangle-exclamation' }
         ]
         : [
@@ -10066,7 +10331,7 @@ function renderDashboardView() {
             <div class="worker-now-card ${tareaActualMobile ? 'has-task' : 'is-empty'}">
                 <div class="worker-now-head">
                     <span class="worker-now-label">${tareaActualMobile ? 'Trabajo actual' : 'Jornada sin trabajo activo'}</span>
-                    <span class="worker-now-state">${trabajadorActual?.disponible ? 'Con check-in' : 'Sin check-in'}</span>
+                    <span class="worker-now-state">${trabajadorActual?.ocupado ? 'Trabajando' : 'Disponible'}</span>
                 </div>
                 <strong>${escapeHtml(tareaActualMobile ? tareaActualTitulo : 'Sin OT activa por ahora')}</strong>
                 <p>${escapeHtml(tareaActualMobile ? tareaActualSubtitulo : 'Cuando te asignen una tarea, aparecera aqui con su accion principal.')}</p>
@@ -10309,8 +10574,17 @@ function renderDashboardView() {
                 <div style="padding:1.2rem 1.4rem; flex:1; overflow-y:auto; background:#fff;">
 
                 <div style="margin-bottom:1rem;">
-                    <label style="${_lbl}"><i class="fa-solid fa-hashtag" style="color:var(--primary-color);"></i> Número de OT <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
+                    <label style="${_lbl}"><i class="fa-solid fa-list-check" style="color:var(--primary-color);"></i> Tipo de registro</label>
+                    <div id="toggle-clase-trabajo" style="display:flex; gap:0.5rem;">
+                        <button type="button" data-clase="orden" class="clase-trabajo-btn is-active" style="flex:1; padding:0.6rem 0.5rem; border-radius:8px; border:1.5px solid var(--primary-color); background:#fff7ed; color:#9a3412; font-weight:700; font-size:0.85rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:0.4rem;"><i class="fa-solid fa-hashtag"></i> Orden / OT</button>
+                        <button type="button" data-clase="requerimiento" class="clase-trabajo-btn" style="flex:1; padding:0.6rem 0.5rem; border-radius:8px; border:1.5px solid #e2e8f0; background:#fff; color:#64748b; font-weight:700; font-size:0.85rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:0.4rem;"><i class="fa-solid fa-clipboard-list"></i> Requerimiento</button>
+                    </div>
+                </div>
+
+                <div id="ot-field-wrap" style="margin-bottom:1rem;">
+                    <label id="ot-field-label" style="${_lbl}"><i class="fa-solid fa-hashtag" style="color:var(--primary-color);"></i> Número de OT <span style="font-weight:400; color:#64748b;">(Opcional)</span></label>
                     <input type="text" id="input-ot-trabajo" class="form-control" placeholder="Ej: OT-1052" style="${_inp} text-transform:uppercase;">
+                    <div id="req-hint" style="display:none; font-size:0.78rem; color:#9a3412; margin-top:0.35rem;"><i class="fa-solid fa-circle-info"></i> Requerimiento sin OT. El nombre es opcional; quedará en la sección Requerimientos del historial.</div>
                 </div>
 
                 <div style="${_div}">
@@ -10540,6 +10814,30 @@ function renderDashboardView() {
         const btnAsignar = document.getElementById('btn-asignar');
         const btnAgregarEquipo = document.getElementById('btn-agregar-equipo');
         const inputOt = document.getElementById('input-ot-trabajo');
+
+        // ── Toggle Orden/OT vs Requerimiento ─────────────────────────────────
+        document.querySelectorAll('.clase-trabajo-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.clase-trabajo-btn').forEach(b => {
+                    const activo = b === btn;
+                    b.classList.toggle('is-active', activo);
+                    b.style.borderColor = activo ? 'var(--primary-color)' : '#e2e8f0';
+                    b.style.background = activo ? '#fff7ed' : '#fff';
+                    b.style.color = activo ? '#9a3412' : '#64748b';
+                });
+                const esReq = btn.dataset.clase === 'requerimiento';
+                const otLabel = document.getElementById('ot-field-label');
+                const reqHint = document.getElementById('req-hint');
+                if (otLabel) otLabel.innerHTML = esReq
+                    ? '<i class="fa-solid fa-clipboard-list" style="color:var(--primary-color);"></i> Nombre del requerimiento <span style="font-weight:400; color:#64748b;">(Opcional)</span>'
+                    : '<i class="fa-solid fa-hashtag" style="color:var(--primary-color);"></i> Número de OT <span style="font-weight:400; color:#64748b;">(Opcional)</span>';
+                if (inputOt) {
+                    inputOt.placeholder = esReq ? 'Ej: Revisión fuga línea 3' : 'Ej: OT-1052';
+                    inputOt.style.textTransform = esReq ? 'none' : 'uppercase';
+                }
+                if (reqHint) reqHint.style.display = esReq ? 'block' : 'none';
+            });
+        });
 
         // ── Espacio confinado + vigía ────────────────────────────────────────
         const vigiaWrap = document.getElementById('asign-vigia-wrap');
@@ -10878,7 +11176,10 @@ function renderDashboardView() {
         btnAsignar.addEventListener('click', () => {
             const ubicacion = selectUbicacion.value;
             const liderId = selectEmpleado.value;
-            const otNumero = inputOt.value.trim().toUpperCase();
+            const esReq = document.querySelector('.clase-trabajo-btn.is-active')?.dataset.clase === 'requerimiento';
+            const otRaw = inputOt.value.trim();
+            // Requerimiento → sin OT real, marcado con "REQ" (+ nombre opcional).
+            const otNumero = esReq ? ('REQ' + (otRaw ? `: ${otRaw}` : '')) : otRaw.toUpperCase();
             const equipoId = selectEquipo.value;
 
             const activo = selectedEquipoData?.activo || '';
@@ -13209,7 +13510,7 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
             <button type="button" class="cap-kizeo-modo btn" data-modo="no" style="flex:1; padding:0.6rem; border-radius:10px; border:2px solid #94a3b8; background:${prev.kizeo && prev.kizeo.notificado === false ? '#475569' : '#fff'}; color:${prev.kizeo && prev.kizeo.notificado === false ? '#fff' : '#475569'}; font-weight:700; font-size:0.85rem; min-height:42px;">No notificado</button>
           </div>
           <div id="cap-kizeo-campos" style="display:${prev.kizeo && prev.kizeo.notificado ? 'block' : 'none'};">
-            <label style="display:block; font-size:0.72rem; color:#5b21b6; font-weight:700; margin-bottom:0.2rem;">Detalle del mensaje</label>
+            <label style="display:block; font-size:0.72rem; color:#5b21b6; font-weight:700; margin-bottom:0.2rem;">Detalle del mensaje <span style="font-weight:400; color:#8b5cf6;">(opcional)</span></label>
             <textarea id="cap-kizeo-detalle" rows="2" class="form-control" placeholder="Ej: Vibración aumentada, derivado a inspección." style="font-size:0.9rem; resize:vertical;">${escapeHtml(prev.kizeo && prev.kizeo.detalle ? prev.kizeo.detalle : '')}</textarea>
           </div>
         </section>
@@ -13304,11 +13605,10 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
             temperaturas = [{ punto: puntoTempA, valor: 'N/A' }];
         }
 
-        // Kizeo: si dijo "Sí notificado", requerimos detalle
+        // Kizeo: el detalle del mensaje es opcional.
         let kizeoData = null;
         if (kizeoModo === 'si') {
             const detalle = (overlay.querySelector('#cap-kizeo-detalle').value || '').trim();
-            if (!detalle) return showErr('Escribe el detalle del mensaje notificado en Kizeo, o marca "No notificado".');
             kizeoData = { notificado: true, detalle, ts: new Date().toISOString() };
         } else if (kizeoModo === 'no') {
             kizeoData = { notificado: false, detalle: '', ts: new Date().toISOString() };
@@ -14357,28 +14657,55 @@ function renderTermografiaHistorial() {
         return a.nombre.localeCompare(b.nombre, 'es');
     });
 
+    const _tgTituloLimpio = (nombre) => String(nombre || '')
+        .replace(/^\s*MP\s+M[EM]\s+(REV\s+Y\s+)?/i, '')   // quita prefijo MP ME / MP MM
+        .replace(/\b(TERMOGRAFIA|TERMOGRAFICA|INSPEC\.?|REV\.?)\s+/gi, '') // quita verbos genéricos
+        .replace(/\s+\d+[SMD]\b/gi, '')                     // quita frecuencia 1S/1M/15D
+        .replace(/(\s+U\d+)+\s*$/i, '')                     // quita unidad(es) al final (la muestra el badge)
+        .replace(/\s{2,}/g, ' ')
+        .trim() || String(nombre || '');
+
     const card = (g) => {
         const ultimo = g.items[0];
-        const color = colorUnidad(g.unidad || '');
-        return `<button type="button" onclick="window.termografiaAbrirEquipo('${String(g.key).replace(/'/g, "\\'")}')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid ${g.esExc ? 'rgba(220,38,38,0.24)' : 'rgba(14,165,233,0.2)'}; background:#fff; transition:transform 160ms, box-shadow 160ms;">
-            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.7rem;">
-                <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:${g.esExc ? '#fef2f2' : '#eff6ff'}; color:${g.esExc ? '#dc2626' : '#0ea5e9'};"><i class="fa-solid ${g.esExc ? 'fa-bolt-lightning' : 'fa-temperature-half'}"></i></span>
-                ${g.unidad ? `<span style="background:${color}; color:#fff; font-size:0.72rem; font-weight:800; padding:0.22rem 0.6rem; border-radius:999px;">${escapeHtml(g.unidad)}</span>` : ''}
+        const color = colorUnidad(g.unidad || '') || (g.esExc ? '#dc2626' : '#0ea5e9');
+        const icon = g.esExc ? 'fa-bolt-lightning' : 'fa-temperature-half';
+        const titulo = g.esExc ? g.nombre : _tgTituloLimpio(g.nombre);
+        return `<button type="button" class="tg-hist-card" style="--tg-accent:${color};" onclick="window.termografiaAbrirEquipo('${String(g.key).replace(/'/g, "\\'")}')" title="${escapeHtml(g.nombre)}">
+            <div class="tg-hist-head">
+                <span class="tg-hist-icon"><i class="fa-solid ${icon}"></i></span>
+                ${g.unidad ? `<span class="tg-hist-unidad">${escapeHtml(g.unidad)}</span>` : ''}
             </div>
-            <h2 style="margin:0 0 0.3rem 0; color:#0f172a; font-size:1.05rem;">${escapeHtml(g.nombre)}</h2>
-            <p style="margin:0; color:#64748b; font-size:0.86rem;">
-                <strong style="color:#0f172a;">${g.items.length}</strong> trabajo${g.items.length !== 1 ? 's' : ''} · último ${_tgFmtFecha(ultimo.fecha_termino || ultimo.created_at)}
-            </p>
+            <h3 class="tg-hist-title">${escapeHtml(titulo)}</h3>
+            <div class="tg-hist-foot">
+                <span class="tg-hist-count">${g.items.length} trabajo${g.items.length !== 1 ? 's' : ''}</span>
+                <span class="tg-hist-date"><i class="fa-regular fa-calendar"></i> ${_tgFmtFecha(ultimo.fecha_termino || ultimo.created_at)}</span>
+            </div>
+            <span class="tg-hist-arrow">Ver trabajos <i class="fa-solid fa-arrow-right"></i></span>
         </button>`;
     };
 
     mainContent.innerHTML = `
+        <style>
+            .tg-hist-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:1rem;}
+            .tg-hist-card{position:relative;text-align:left;cursor:pointer;background:#fff;border:1px solid #eef1f5;border-radius:16px;padding:1.25rem 1.15rem 1.05rem;overflow:hidden;display:flex;flex-direction:column;gap:0.75rem;min-height:178px;box-shadow:0 1px 2px rgba(15,23,42,0.05);transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;font:inherit;}
+            .tg-hist-card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;background:var(--tg-accent);}
+            .tg-hist-card:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(15,23,42,0.11);border-color:color-mix(in srgb, var(--tg-accent) 42%, #eef1f5);}
+            .tg-hist-head{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;}
+            .tg-hist-icon{display:inline-flex;align-items:center;justify-content:center;width:46px;height:46px;border-radius:13px;font-size:1.15rem;background:color-mix(in srgb, var(--tg-accent) 13%, #fff);color:var(--tg-accent);}
+            .tg-hist-unidad{font-size:0.72rem;font-weight:800;letter-spacing:0.03em;color:#fff;background:var(--tg-accent);padding:0.26rem 0.62rem;border-radius:999px;}
+            .tg-hist-title{margin:0;color:#0f172a;font-size:1.02rem;font-weight:800;line-height:1.28;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.55em;}
+            .tg-hist-foot{display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-top:auto;flex-wrap:wrap;}
+            .tg-hist-count{font-size:0.74rem;font-weight:800;color:var(--tg-accent);background:color-mix(in srgb, var(--tg-accent) 11%, #fff);border:1px solid color-mix(in srgb, var(--tg-accent) 24%, #fff);padding:0.22rem 0.6rem;border-radius:999px;white-space:nowrap;}
+            .tg-hist-date{font-size:0.76rem;color:#64748b;display:inline-flex;align-items:center;gap:0.32rem;white-space:nowrap;}
+            .tg-hist-arrow{display:inline-flex;align-items:center;gap:0.38rem;font-size:0.78rem;font-weight:800;color:var(--tg-accent);opacity:0;max-height:0;transform:translateX(-4px);transition:opacity .18s ease, transform .18s ease;}
+            .tg-hist-card:hover .tg-hist-arrow{opacity:1;max-height:1.4em;transform:translateX(0);}
+        </style>
         <div class="fade-in" style="padding:1rem;">
             <button onclick="window.termografiaVolver()" style="background:none; border:none; color:#dc2626; font-size:0.88rem; font-weight:700; cursor:pointer; display:inline-flex; align-items:center; gap:0.35rem; margin-bottom:0.85rem; padding:0.35rem 0;">
                 <i class="fa-solid fa-arrow-left"></i> Volver a Termografía
             </button>
 
-            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1rem;">
+            <section class="panel" style="background:linear-gradient(135deg,#fef2f2 0%,#ffffff 58%,#fff7ed 100%); border-color:rgba(220,38,38,0.2); margin-bottom:1.25rem;">
                 <div class="dashboard-hero-head">
                     <div>
                         <div style="font-size:0.78rem; font-weight:800; color:#b91c1c; text-transform:uppercase; letter-spacing:0.05em;">Historial</div>
@@ -14392,7 +14719,7 @@ function renderTermografiaHistorial() {
                 </div>
             </section>
 
-            <section style="display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:0.9rem;">
+            <section class="tg-hist-grid">
                 ${lista.length
                     ? lista.map(card).join('')
                     : `<div class="empty-state" style="grid-column:1/-1;"><div><strong>Sin trabajos de termografía</strong><p>Cuando finalices una tarea de termografía (incluida excitatriz), su equipo aparecerá aquí.</p></div></div>`}
@@ -14554,7 +14881,11 @@ function renderTermografiaDetalle(registroId) {
                         <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;">${esExc ? '<i class="fa-solid fa-bolt-lightning" style="color:#dc2626;"></i> ' : ''}${escapeHtml(g.nombre)}</h1>
                         <p style="color:#64748b; margin:0;"><i class="fa-regular fa-calendar-check"></i> ${fechaLarga}</p>
                     </div>
-                    ${esExc ? `<div>
+                    ${esExc ? `<div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="window.editarMedicionesExcitatriz('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:#fff; color:#dc2626; border:1px solid #fca5a5; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem;">
+                            <i class="fa-solid fa-pen-to-square"></i> Rellenar valores
+                        </button>
                         <button onclick="window.generarPlanillaExcitatrizHistorial('${String(item.id).replace(/'/g, "\\'")}')"
                             style="background:linear-gradient(135deg, #dc2626 0%, #f97316 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(220,38,38,0.25);">
                             <i class="fa-solid fa-file-excel"></i> Descargar planilla
@@ -15972,8 +16303,7 @@ const navConfig = {
     'nav-mobile-perfil': 'perfil',
     'nav-mobile-insumos': 'insumos',
     'nav-mobile-rutas': 'trabajador-rutas',
-    'nav-perfil': 'perfil',
-    'nav-checkin': 'checkin'
+    'nav-perfil': 'perfil'
 };
 
 function renderizarVistaActual() {
@@ -16692,33 +17022,56 @@ function _ubicacionEscobilla(unidadNum, n) {
 // unidad), info termográfica (humedad, temp.) y potencia de unidad
 // (Gen MW, V campo, I campo) + comentarios. La cabecera (fecha, técnicos,
 // orden de trabajo, horas inicio/término) se completa con los datos de la ruta.
+// Enter en un input de temp/corr avanza al siguiente en orden de lectura:
+// temp 1.1 → corr 1.1 → temp 1.2 → corr 1.2 → … (mismo orden del DOM).
+window._escNavEnter = function(event) {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    const panel = event.target.closest('#exc-u5-panel');
+    if (!panel) return;
+    const inputs = [...panel.querySelectorAll('input.escu5-temp, input.escu5-corr')];
+    const i = inputs.indexOf(event.target);
+    if (i > -1 && i + 1 < inputs.length) {
+        const next = inputs[i + 1];
+        next.focus();
+        next.select?.();
+    } else {
+        event.target.blur();
+    }
+};
+
 function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
     const N_ESCOB = cfg.escobillas;
     const N_POS = cfg.posiciones;
 
-    const siNoSelect = (cls, label) => `
-        <label style="display:grid; gap:0.15rem;">
-            <span style="font-size:0.66rem; color:#64748b; font-weight:700; text-transform:uppercase;">${label}</span>
-            <select class="form-control ${cls}" style="font-size:0.82rem; padding:0.35rem 0.4rem;">
-                <option value="">—</option>
-                <option value="SI">SÍ</option>
-                <option value="NO">NO</option>
-            </select>
-        </label>`;
+    // Casilla en blanco: sin marcar = NO (no hay alta temp / no se normaliza).
+    // El técnico solo la marca si detecta algo. Se guarda SI/NO según el tilde.
+    // Layout tipo tabla: cada fila es  pos | Temp | Corr | Alta temp | ¿Normalizado?
+    // (las casillas de alta/normalizado van a la DERECHA de temp/corr).
+    const GRID = 'grid-template-columns: 30px minmax(56px,1fr) minmax(56px,1fr) 60px 84px; gap:0.4rem; align-items:center;';
+
+    const headRow = `
+        <div style="display:grid; ${GRID} padding:0.2rem 0.45rem; font-size:0.6rem; font-weight:800; color:#94a3b8; text-transform:uppercase; letter-spacing:0.02em;">
+            <span></span>
+            <span>Temp °C</span>
+            <span>Corr A</span>
+            <span style="text-align:center;">Alta temp</span>
+            <span style="text-align:center;">¿Norm.?</span>
+        </div>`;
 
     const posInput = (pos) => `
-        <div class="escu5-row" data-pos="${pos}" style="border:1px solid #f1f5f9; border-radius:8px; padding:0.45rem 0.5rem; margin-bottom:0.4rem; background:#fafbfc;">
-            <div style="display:grid; grid-template-columns: 36px 1fr 1fr; gap:0.4rem; align-items:center; margin-bottom:0.4rem;">
-                <span style="font-size:0.8rem; font-weight:700; color:#475569;">${pos}</span>
-                <input type="number" class="form-control escu5-temp" min="-50" step="0.1" placeholder="°C"
-                    style="font-size:0.84rem; padding:0.4rem 0.45rem;" inputmode="decimal">
-                <input type="number" class="form-control escu5-corr" min="0" step="0.1" placeholder="A"
-                    style="font-size:0.84rem; padding:0.4rem 0.45rem;" inputmode="decimal">
-            </div>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.4rem;">
-                ${siNoSelect('escu5-alta', 'Alta temp')}
-                ${siNoSelect('escu5-norm', '¿Normalizado?')}
-            </div>
+        <div class="escu5-row" data-pos="${pos}" style="display:grid; ${GRID} padding:0.32rem 0.45rem; border-top:1px solid #f3f4f6;">
+            <span style="font-size:0.78rem; font-weight:700; color:#475569;">${pos}</span>
+            <input type="number" class="form-control escu5-temp" min="-50" step="0.1" placeholder="°C"
+                onkeydown="window._escNavEnter(event)"
+                style="font-size:0.82rem; padding:0.35rem 0.4rem;" inputmode="decimal">
+            <input type="number" class="form-control escu5-corr" min="0" step="0.1" placeholder="A"
+                onkeydown="window._escNavEnter(event)"
+                style="font-size:0.82rem; padding:0.35rem 0.4rem;" inputmode="decimal">
+            <input type="checkbox" class="escu5-alta" title="Alta temperatura"
+                style="width:18px; height:18px; accent-color:#dc2626; cursor:pointer; justify-self:center;">
+            <input type="checkbox" class="escu5-norm" title="¿Normalizado?"
+                style="width:18px; height:18px; accent-color:#16a34a; cursor:pointer; justify-self:center;">
         </div>`;
 
     const escobCard = (n) => {
@@ -16729,7 +17082,8 @@ function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
                 <span>Escobilla N°${n}</span>
                 ${ubic ? `<span style="font-size:0.68rem; font-weight:800; color:#0369a1; background:#e0f2fe; border:1px solid #bae6fd; border-radius:999px; padding:0.12rem 0.55rem; white-space:nowrap;">${ubic}</span>` : ''}
             </div>
-            <div style="padding:0.55rem 0.6rem;">
+            <div style="padding:0.35rem 0.45rem 0.5rem;">
+                ${headRow}
                 ${Array.from({ length: N_POS }, (_, p) => posInput(`${n}.${p + 1}`)).join('')}
             </div>
         </div>`;
@@ -16758,7 +17112,7 @@ function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
             <div style="font-size:0.78rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.03em; margin:0 0 0.5rem;">
                 Temperatura y corriente por escobilla
             </div>
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:0.6rem;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:0.6rem;">
                 ${cards}
             </div>
 
@@ -17043,13 +17397,17 @@ if (btnConfirmarFinalizar) {
                     const pos  = row.dataset.pos || '';
                     const temp = row.querySelector('.escu5-temp')?.value.trim() || '';
                     const corr = row.querySelector('.escu5-corr')?.value.trim() || '';
-                    const alta = row.querySelector('.escu5-alta')?.value || '';
-                    const norm = row.querySelector('.escu5-norm')?.value || '';
-                    if (!temp && !corr && !alta && !norm) return; // posición sin datos → ignorar
+                    const altaChecked = !!row.querySelector('.escu5-alta')?.checked;
+                    const normChecked = !!row.querySelector('.escu5-norm')?.checked;
+                    // Posición sin ningún dato (ni medición ni tilde) → ignorar.
+                    if (!temp && !corr && !altaChecked && !normChecked) return;
+                    // Casilla sin marcar = NO (no hay alta temp / no se normaliza).
+                    const alta = altaChecked ? 'SI' : 'NO';
+                    const norm = normChecked ? 'SI' : 'NO';
                     const partesPos = [];
                     if (corr) partesPos.push(`Corriente: ${corr} A`);
-                    if (alta) partesPos.push(`Alta temp: ${alta}`);
-                    if (norm) partesPos.push(`Normalizado: ${norm}`);
+                    partesPos.push(`Alta temp: ${alta}`);
+                    partesPos.push(`Normalizado: ${norm}`);
                     medicionesData.push({
                         componente: `Escobilla ${pos}`,
                         activo: true,
@@ -17236,6 +17594,21 @@ if (btnConfirmarFinalizar) {
             return;
         }
 
+        const tareaIdCierre = document.getElementById('modal-tarea-id').value;
+        const tareaCierre = estado.tareas.find(t => t.id === tareaIdCierre);
+        const esReq = esRequerimiento(tareaCierre?.otNumero);
+        const horaInicio = esReq ? document.getElementById('modal-hora-inicio')?.value : '';
+        const horaTermino = esReq ? document.getElementById('modal-hora-termino')?.value : '';
+        const duracionReq = esReq ? calcularHorasEntre(horaInicio, horaTermino) : null;
+        if (esReq && (!horaInicio || !horaTermino)) {
+            alert('Debes ingresar la hora de inicio y la hora de término del requerimiento.');
+            return;
+        }
+        if (esReq && !duracionReq) {
+            alert('La hora de inicio y término no pueden ser iguales.');
+            return;
+        }
+
         const originalHtml = btnConfirmarFinalizar.innerHTML;
         btnConfirmarFinalizar.disabled = true;
         btnConfirmarFinalizar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
@@ -17268,13 +17641,15 @@ if (btnConfirmarFinalizar) {
 
         try {
             await guardarTareaFinalizada({
-                id: document.getElementById('modal-tarea-id').value,
+                id: tareaIdCierre,
                 liderId: document.getElementById('modal-lider-id').value,
                 ayudantesIdsStr: document.getElementById('modal-ayudantes-ids').value,
                 accionesRealizadas: accionesFinal,
                 observaciones: document.getElementById('modal-observaciones').value.trim(),
                 numeroAviso: document.getElementById('modal-numero-aviso').value.trim(),
-                hhTrabajo: document.getElementById('modal-hh-trabajo').value.trim(),
+                hhTrabajo: esReq ? String(duracionReq) : document.getElementById('modal-hh-trabajo').value.trim(),
+                horaInicio,
+                horaTermino,
                 analisisTecnico: document.getElementById('modal-analisis').value.trim(),
                 recomendacionAnalista: document.getElementById('modal-recomendacion-analista').value.trim(),
                 medicionesData
@@ -17615,6 +17990,7 @@ function renderFichaTecnicaModal() {
                         </div>
                     </div>
                     <div id="tab-termografia" class="tab-pane" style="display:none;">
+                        <div id="ficha-termo-excitatriz" style="margin-bottom:1rem;"></div>
                         <div class="planify-ficha-grid">
                             <div class="planify-ficha-stack">
                                 <div id="ficha-resumen-termografia" class="planify-ficha-subgrid"></div>
@@ -17815,6 +18191,50 @@ function fechaClaveFicha(valor) {
     return Number.isNaN(fecha.getTime()) ? '' : fecha.toISOString().slice(0, 10);
 }
 
+// La tabla `mediciones` no guarda técnico. Pero las mediciones de ruta heredan
+// el técnico de la EJECUCIÓN de ruta (lider/ayudante asignados). Aquí derivamos
+// los técnicos de las ejecuciones (activas + historial) que cubren este equipo,
+// agrupados por fecha, para mostrarlos en la ficha.
+function _tecnicosRutaPorEquipoFicha(equipo) {
+    const ut = String(equipo?.ubicacion_tecnica || equipo?.kks || '').trim().toUpperCase();
+    if (!ut) return [];
+    const seed = (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED : [];
+    const out = [];
+    const procesar = (ej, rutaIdx) => {
+        if (!ej) return;
+        const r = seed[rutaIdx];
+        if (!r) return;
+        const cubre = (r.equipos || []).some(eq => (eq.componentes || []).some(c =>
+            String(c.ubicacion_tecnica || '').trim().toUpperCase() === ut));
+        if (!cubre) return;
+        const tecnicos = (Array.isArray(ej.tecnicosNombres) && ej.tecnicosNombres.length)
+            ? ej.tecnicosNombres.filter(Boolean)
+            : [ej.liderNombre, ej.ayudanteNombre].filter(Boolean);
+        if (!tecnicos.length) return;
+        out.push({ fecha: fechaClaveFicha(ej.fechaCierre || ej.fechaInicio || ''), tecnicos });
+    };
+    const activas = (typeof getRutasEjecuciones === 'function') ? getRutasEjecuciones() : {};
+    Object.entries(activas || {}).forEach(([idx, ej]) => procesar(ej, Number(idx)));
+    let hist = [];
+    try { hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch (e) {}
+    (hist || []).forEach(h => procesar(h, h.rutaIdx));
+    return out;
+}
+
+function enriquecerMedicionesConRutaFicha(mediciones, equipo) {
+    if (!Array.isArray(mediciones) || !mediciones.length) return mediciones;
+    const fuentes = _tecnicosRutaPorEquipoFicha(equipo);
+    if (!fuentes.length) return mediciones;
+    return mediciones.map(m => {
+        if (getNombresTecnicosFicha(m).length) return m;
+        const fm = fechaClaveFicha(m.fecha);
+        let src = fuentes.find(f => f.fecha && f.fecha === fm);
+        if (!src && fuentes.length === 1) src = fuentes[0];
+        if (!src) return m;
+        return { ...m, tecnico_nombre: src.tecnicos.join(', '), tecnicos_nombres: src.tecnicos };
+    });
+}
+
 function enriquecerMedicionesConTecnicosFicha(mediciones, tareasRelacionadas) {
     const tareas = Array.isArray(tareasRelacionadas) ? tareasRelacionadas : [];
     return (mediciones || []).map(medicion => {
@@ -17905,6 +18325,10 @@ function renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds) {
 }
 
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
+    // 1º técnico desde la ejecución de ruta (las mediciones de ruta no guardan
+    // técnico en la tabla, lo heredan de la ruta asignada); 2º desde tareas.
+    medicionesEquipo = enriquecerMedicionesConRutaFicha(medicionesEquipo, equipo);
+    medicionesGrupo = enriquecerMedicionesConRutaFicha(medicionesGrupo, equipo);
     medicionesEquipo = enriquecerMedicionesConTecnicosFicha(medicionesEquipo, tareasRelacionadas);
     medicionesGrupo = enriquecerMedicionesConTecnicosFicha(medicionesGrupo, tareasRelacionadas);
     const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
@@ -18076,6 +18500,10 @@ async function cargarAvisosSapDeFicha(equipo) {
 }
 
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
+    // 1º técnico desde la ejecución de ruta (las mediciones de ruta no guardan
+    // técnico en la tabla, lo heredan de la ruta asignada); 2º desde tareas.
+    medicionesEquipo = enriquecerMedicionesConRutaFicha(medicionesEquipo, equipo);
+    medicionesGrupo = enriquecerMedicionesConRutaFicha(medicionesGrupo, equipo);
     medicionesEquipo = enriquecerMedicionesConTecnicosFicha(medicionesEquipo, tareasRelacionadas);
     medicionesGrupo = enriquecerMedicionesConTecnicosFicha(medicionesGrupo, tareasRelacionadas);
     const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
@@ -18183,6 +18611,19 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
 
     document.getElementById('lista-mediciones-vibracion').innerHTML = vibs.length ? vibs.slice(0, 6).map(item => renderLecturaFicha(item, 'vibracion')).join('') : emptyFichaState('Sin vibraciones recientes', 'No hay lecturas de vibracion para este equipo en el rango disponible.');
     document.getElementById('lista-mediciones-termografia').innerHTML = termos.length ? termos.slice(0, 6).map(item => renderLecturaFicha(item, 'termografia')).join('') : emptyFichaState('Sin inspecciones termicas', 'Aun no se registran inspecciones termicas para este equipo.');
+
+    // Excitatriz: historial de termografías de carbones (escobillas) como tarjetas.
+    const excitatrizCont = document.getElementById('ficha-termo-excitatriz');
+    if (excitatrizCont) {
+        const esEquipoExc = /excitatriz|escobilla|carbon/i.test(`${equipo.activo || ''} ${equipo.componente || ''}`)
+            || (tareasRelacionadas || []).some(t => esTrabajoTermografia(t));
+        const trabajosExc = esEquipoExc
+            ? (tareasRelacionadas || [])
+                .filter(t => esTrabajoTermografia(t))
+                .sort((a, b) => new Date(b.fecha_termino || b.created_at || 0) - new Date(a.fecha_termino || a.created_at || 0))
+            : [];
+        excitatrizCont.innerHTML = renderFichaTermoExcitatriz(trabajosExc, esEquipoExc);
+    }
 document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${escapeHtml(getNombresTecnicosFicha(item).join(', ') || 'Sin técnico')}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
@@ -18190,6 +18631,109 @@ document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length 
     document.getElementById('ficha-vib-subtitulo').textContent = vibSummary.count ? `${numeroFicha(vibSummary.count)} lectura(s) registradas / ultima ${String(vibSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(vibSummary.max, 2)} mm/s.` : 'No hay tendencia suficiente para este componente.';
     document.getElementById('ficha-termo-subtitulo').textContent = termoSummary.count ? `${numeroFicha(termoSummary.count)} lectura(s) termicas / ultima ${String(termoSummary.status.label || '').toLowerCase()} / pico ${numeroFicha(termoSummary.max, 1)} C.` : 'No hay tendencia termica disponible para este componente.';
 }
+
+// Tarjetas de termografía de carbones (escobillas) para la pestaña Termografía
+// de la ficha. Cada trabajo es expandible al detalle de escobillas + descarga.
+function renderFichaTermoExcitatriz(trabajos, esEquipoExc) {
+    if (!esEquipoExc) return '';
+    if (!trabajos || !trabajos.length) {
+        return `<div class="planify-ficha-card">
+            <div class="planify-ficha-card-head"><div>
+                <h3><i class="fa-solid fa-bolt-lightning" style="color:#dc2626;"></i> Termografías de carbones</h3>
+                <span>Las inspecciones de escobillas iran apareciendo aqui a medida que se cierren.</span>
+            </div></div>
+            ${emptyFichaState('Sin termografias de carbones', 'Cuando se finalice una termografia de escobillas, se vera aqui como tarjeta con el detalle de cada carbon.')}
+        </div>`;
+    }
+    const cards = trabajos.slice(0, 8).map(item => {
+        const { escobillas, header } = _parseExcitatrizAcciones(item.acciones_realizadas);
+        const fecha = _tgFmtFechaLarga(item.fecha_termino || item.created_at);
+        const lider = escapeHtml(item.lider_nombre || 'Sin técnico');
+        const ot = item.ot_numero ? escapeHtml(String(item.ot_numero)) : '';
+        const unidad = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+        const puedePlanilla = [3, 4, 5].includes(unidad) && escobillas.length;
+        const nAlta = escobillas.filter(e => e.alta === 'SI').length;
+        const nNoNorm = escobillas.filter(e => e.norm === 'NO').length;
+        const detId = `ficha-exc-det-${escapeHtml(String(item.id))}`;
+
+        const filas = escobillas.map(e => {
+            const alta = e.alta === 'SI';
+            const normNo = e.norm === 'NO';
+            return `<tr style="border-top:1px solid #e5e7eb; ${alta ? 'background:#fef2f2;' : ''}">
+                <td style="padding:0.35rem 0.55rem; font-weight:700; color:#475569;">${escapeHtml(e.pos)}</td>
+                <td style="padding:0.35rem 0.55rem; text-align:center; ${alta ? 'color:#dc2626; font-weight:700;' : 'color:#0f172a;'}">${escapeHtml(e.temp || '—')}</td>
+                <td style="padding:0.35rem 0.55rem; text-align:center; color:#0f172a;">${escapeHtml(e.corr || '—')}</td>
+                <td style="padding:0.35rem 0.55rem; text-align:center; font-weight:700; color:${alta ? '#dc2626' : '#94a3b8'};">${escapeHtml(e.alta || '—')}</td>
+                <td style="padding:0.35rem 0.55rem; text-align:center; font-weight:700; color:${normNo ? '#b45309' : (e.norm === 'SI' ? '#16a34a' : '#94a3b8')};">${escapeHtml(e.norm || '—')}</td>
+            </tr>`;
+        }).join('');
+
+        const kpi = (val, label, color) => `<span style="display:inline-flex; flex-direction:column; align-items:center; min-width:54px;">
+            <strong style="font-size:1.05rem; color:${color}; line-height:1;">${val}</strong>
+            <span style="font-size:0.66rem; color:#64748b; text-transform:uppercase; letter-spacing:0.03em; margin-top:0.15rem;">${label}</span>
+        </span>`;
+
+        return `<article style="border:1px solid #fde0d5; border-radius:14px; background:#fff; overflow:hidden; box-shadow:0 4px 12px rgba(220,38,38,0.05);">
+            <div style="padding:0.85rem 0.95rem; background:linear-gradient(135deg,#fff7ed 0%,#ffffff 70%); border-bottom:1px solid #f1f5f9;">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.6rem;">
+                    <div>
+                        <div style="font-weight:800; color:#0f172a; font-size:0.95rem;"><i class="fa-regular fa-calendar-check" style="color:#dc2626;"></i> ${escapeHtml(fecha)}</div>
+                        <div style="font-size:0.8rem; color:#64748b; margin-top:0.2rem;"><i class="fa-solid fa-user-gear"></i> ${lider}${ot ? ` &nbsp;·&nbsp; <i class="fa-solid fa-clipboard-list"></i> OT ${ot}` : ''}</div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.6rem; margin-top:0.7rem;">
+                    ${kpi(escobillas.length, 'mediciones', '#0f172a')}
+                    ${kpi(nAlta, 'alta temp', nAlta ? '#dc2626' : '#94a3b8')}
+                    ${kpi(nNoNorm, 'sin normalizar', nNoNorm ? '#b45309' : '#94a3b8')}
+                </div>
+            </div>
+            <div style="display:flex; gap:0.5rem; padding:0.6rem 0.95rem; flex-wrap:wrap;">
+                <button type="button" onclick="window._toggleFichaExcDet('${detId}', this)" style="flex:1; min-width:120px; background:#fff; border:1px solid #e5e7eb; border-radius:9px; padding:0.5rem 0.8rem; font-weight:700; font-size:0.83rem; color:#334155; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:0.4rem;">
+                    <i class="fa-solid fa-table-list"></i> Ver detalle
+                </button>
+                ${puedePlanilla ? `<button type="button" onclick="window.generarPlanillaExcitatrizHistorial('${escapeHtml(String(item.id))}')" style="flex:1; min-width:120px; background:linear-gradient(135deg, #dc2626 0%, #f97316 100%); color:#fff; border:none; border-radius:9px; padding:0.5rem 0.8rem; font-weight:800; font-size:0.83rem; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:0.4rem;">
+                    <i class="fa-solid fa-file-arrow-down"></i> Planilla
+                </button>` : ''}
+            </div>
+            <div id="${detId}" style="display:none; padding:0 0.95rem 0.95rem;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.6rem; font-size:0.78rem;">
+                    <div style="background:#f8fafc; border:1px solid #eef2f7; border-radius:8px; padding:0.4rem 0.55rem;">Hum: <strong>${escapeHtml(header.hum || '—')}%</strong> · Temp: <strong>${escapeHtml(header.temp || '—')}°C</strong></div>
+                    <div style="background:#f8fafc; border:1px solid #eef2f7; border-radius:8px; padding:0.4rem 0.55rem;">Gen: <strong>${escapeHtml(header.gen || '—')}MW</strong> · Vc: <strong>${escapeHtml(header.vcampo || '—')}</strong> · Ic: <strong>${escapeHtml(header.icampo || '—')}</strong></div>
+                </div>
+                ${escobillas.length ? `<div style="overflow-x:auto; border:1px solid #e5e7eb; border-radius:10px;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.8rem; min-width:380px;">
+                        <thead><tr style="background:#f8fafc; color:#475569; text-align:left;">
+                            <th style="padding:0.45rem 0.55rem;">Escob</th>
+                            <th style="padding:0.45rem 0.55rem; text-align:center;">Temp °C</th>
+                            <th style="padding:0.45rem 0.55rem; text-align:center;">Corr A</th>
+                            <th style="padding:0.45rem 0.55rem; text-align:center;">Alta</th>
+                            <th style="padding:0.45rem 0.55rem; text-align:center;">Norm.</th>
+                        </tr></thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>` : `<div style="padding:0.6rem; color:#64748b; font-size:0.85rem;">No se pudieron reconstruir las escobillas de este registro.</div>`}
+            </div>
+        </article>`;
+    }).join('');
+
+    return `<div class="planify-ficha-card">
+        <div class="planify-ficha-card-head"><div>
+            <h3><i class="fa-solid fa-bolt-lightning" style="color:#dc2626;"></i> Termografías de carbones</h3>
+            <span>Ultimas inspecciones de escobillas. Toca "Ver detalle" para las mediciones de cada carbon.</span>
+        </div></div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:0.85rem; margin-top:0.6rem;">${cards}</div>
+    </div>`;
+}
+
+window._toggleFichaExcDet = function(detId, btn) {
+    const el = document.getElementById(detId);
+    if (!el) return;
+    const abierto = el.style.display !== 'none';
+    el.style.display = abierto ? 'none' : 'block';
+    if (btn) btn.innerHTML = abierto
+        ? '<i class="fa-solid fa-table-list"></i> Ver detalle'
+        : '<i class="fa-solid fa-chevron-up"></i> Ocultar detalle';
+};
 
 window.abrirFichaTecnica = async function(equipoId) {
     const equipo = estado.equipos.find(item => String(item.id) === String(equipoId));
@@ -18505,6 +19049,59 @@ function setupFichaEvents() {
     });
 }
 
+// Línea de tendencia (regresión lineal por mínimos cuadrados). Devuelve un
+// dataset recto que muestra la dirección general aunque haya pocos puntos.
+function _datasetTendenciaFicha(valores, color) {
+    const ys = valores.map(Number).filter(v => Number.isFinite(v));
+    const n = ys.length;
+    if (n < 2) return null;
+    const xs = ys.map((_, i) => i);
+    const sumX = xs.reduce((a, b) => a + b, 0);
+    const sumY = ys.reduce((a, b) => a + b, 0);
+    const sumXY = xs.reduce((a, x, i) => a + x * ys[i], 0);
+    const sumXX = xs.reduce((a, x) => a + x * x, 0);
+    const denom = (n * sumXX - sumX * sumX) || 1;
+    const m = (n * sumXY - sumX * sumY) / denom;
+    const b = (sumY - m * sumX) / n;
+    return {
+        label: 'Tendencia',
+        data: xs.map(x => Number((m * x + b).toFixed(3))),
+        borderColor: color,
+        borderDash: [8, 5],
+        borderWidth: 2,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        fill: false,
+        tension: 0,
+        order: 50
+    };
+}
+
+// Plugin inline: dibuja el valor numérico encima de cada punto de la serie
+// principal (dataset 0), para leer la tendencia sin pasar el mouse.
+function _pluginValoresFicha(decimales) {
+    return {
+        id: 'valoresPuntosFicha',
+        afterDatasetsDraw(chart) {
+            const meta = chart.getDatasetMeta(0);
+            const ds = chart.data.datasets[0];
+            if (!meta || !ds) return;
+            const ctx = chart.ctx;
+            ctx.save();
+            ctx.font = '700 11px Inter, system-ui, sans-serif';
+            ctx.fillStyle = '#0f172a';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            meta.data.forEach((pt, i) => {
+                const v = ds.data[i];
+                if (v === null || v === undefined || !pt) return;
+                ctx.fillText(numeroFicha(v, decimales), pt.x, pt.y - 9);
+            });
+            ctx.restore();
+        }
+    };
+}
+
 function initFichaCharts(mediciones) {
     activeCharts.forEach(chart => chart?.destroy?.());
     activeCharts = [];
@@ -18555,12 +19152,14 @@ function initFichaCharts(mediciones) {
                         pointBorderWidth: 2,
                         order: 1
                     },
+                    ...(_datasetTendenciaFicha(vibraciones.map(item => Number(item.valor || 0)), 'rgba(255,105,0,0.55)') ? [_datasetTendenciaFicha(vibraciones.map(item => Number(item.valor || 0)), 'rgba(255,105,0,0.55)')] : []),
                     ...(labelsVib.length ? [
                         crearLineaUmbral(labelsVib, 3.2, 'rgba(217,119,6,0.9)', 'Seguimiento'),
                         crearLineaUmbral(labelsVib, 4.5, 'rgba(220,38,38,0.9)', 'Crítico')
                     ] : [])
                 ]
             },
+            plugins: [_pluginValoresFicha(2)],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -18581,6 +19180,7 @@ function initFichaCharts(mediciones) {
                 },
                 scales: {
                     x: {
+                        offset: true,
                         ticks: { color: '#64748b' },
                         grid: { color: 'rgba(226,232,240,0.75)' }
                     },
@@ -18626,12 +19226,14 @@ function initFichaCharts(mediciones) {
                         pointBorderWidth: 2,
                         order: 1
                     },
+                    ...(_datasetTendenciaFicha(termografias.map(item => Number(item.valor || 0)), 'rgba(15,118,110,0.55)') ? [_datasetTendenciaFicha(termografias.map(item => Number(item.valor || 0)), 'rgba(15,118,110,0.55)')] : []),
                     ...(labelsTermo.length ? [
                         crearLineaUmbral(labelsTermo, 65, 'rgba(217,119,6,0.9)', 'Seguimiento'),
                         crearLineaUmbral(labelsTermo, 80, 'rgba(220,38,38,0.9)', 'Crítico')
                     ] : [])
                 ]
             },
+            plugins: [_pluginValoresFicha(1)],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -18652,6 +19254,7 @@ function initFichaCharts(mediciones) {
                 },
                 scales: {
                     x: {
+                        offset: true,
                         ticks: { color: '#64748b' },
                         grid: { color: 'rgba(226,232,240,0.75)' }
                     },
@@ -19422,7 +20025,6 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-avisos':             ['admin', 'administrador'],
         'nav-historial':          ['admin'],
         'nav-trabajadores':       ['admin'],
-        'nav-checkin':            ['admin'],
         'nav-horas-extra-admin':  ['admin', 'administrador'],
         'nav-insumos':            ['admin', 'trabajador'],
         'nav-ito':                ['ito'],
@@ -19489,7 +20091,7 @@ function accederApp(rol, trabajadorObj = null) {
     try {
             const vistaGuardada = localStorage.getItem('planify_vista');
             if (vistaGuardada) {
-                const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','checkin','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
+                const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
                 const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
                 const permitidoVisita = ['dashboard','semanal','historial','equipos'];

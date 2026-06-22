@@ -469,6 +469,45 @@ async function generarPlanillaMoncon(body) {
 const EXCITATRIZ_TEMPLATE = 'Formato Planilla de terreno Excitatriz.xlsx';
 const EXCITATRIZ_HOJAS = { 3: 'Formato planilla exc 3', 4: 'Formato planilla exc 4', 5: 'Formato planilla exc 5' };
 
+function buscarCeldaExcitatriz(ws, patron) {
+    for (let row = 1; row <= 5; row++) {
+        for (let col = 1; col <= 7; col++) {
+            const cell = ws.getCell(row, col);
+            if (cell.isMerged && cell.master && cell.master.address !== cell.address) continue;
+            const texto = String(cell.value == null ? '' : cell.value).trim();
+            if (patron.test(texto)) return { row, col };
+        }
+    }
+    return null;
+}
+
+function escribirCabeceraExcitatriz(ws, patron, valor, opciones = {}) {
+    if (valor === undefined || valor === null || valor === '') return;
+    const etiqueta = buscarCeldaExcitatriz(ws, patron);
+    if (!etiqueta) return;
+
+    const row = etiqueta.row + (opciones.filaAbajo ? 1 : 0);
+    const col = etiqueta.col + (opciones.filaAbajo ? 0 : 1);
+    const cell = ws.getCell(row, col);
+    cell.value = valor;
+
+    // Las celdas de entrada vacías del template heredan fuente blanca. Forzamos
+    // texto oscuro para que fecha, OT y técnicos sean visibles al abrir/imprimir.
+    cell.font = {
+        ...(cell.font || {}),
+        color: { argb: 'FF111827' },
+        bold: true,
+        size: 11
+    };
+    cell.alignment = {
+        ...(cell.alignment || {}),
+        horizontal: opciones.centrado ? 'center' : 'left',
+        vertical: 'middle',
+        wrapText: true,
+        shrinkToFit: true
+    };
+}
+
 async function generarPlanillaExcitatriz(body) {
     const { unidad, fecha, ot, tecnicos, hum, temp, gen, vcampo, icampo, escobillas } = body || {};
     const uNum = Number(String(unidad || '').replace(/\D/g, ''));
@@ -489,10 +528,13 @@ async function generarPlanillaExcitatriz(body) {
         return Number.isFinite(n) ? n : v;
     };
 
-    // Cabecera (posiciones fijas del template)
-    setCellSafe(ws, 1, 2, fecha || '');      // B1 Fecha
-    setCellSafe(ws, 2, 2, ot || '');         // B2 OT
-    setCellSafe(ws, 4, 1, tecnicos || '');   // A4 Tecnicos (merge A4:C4)
+    // Cabecera: localizar por etiqueta para resistir desplazamientos del template.
+    escribirCabeceraExcitatriz(ws, /^fecha\s*:?$/i, fecha || '');
+    escribirCabeceraExcitatriz(ws, /^ot\s*:?$/i, ot || '');
+    escribirCabeceraExcitatriz(ws, /^t[eé]cnicos\s*:?$/i, tecnicos || '', {
+        filaAbajo: true,
+        centrado: true
+    });
     setCellSafe(ws, 2, 5, toNum(hum));       // E2 Hum. [%]
     setCellSafe(ws, 3, 5, toNum(temp));      // E3 Temp. [T°]
     setCellSafe(ws, 2, 7, toNum(gen));       // G2 Gen. [MW]

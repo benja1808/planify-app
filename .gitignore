@@ -20,4 +20,10 @@ setup_insumos.sql
 # Edge profile and logs
 .edge-profile/
 server.out.log
+server-start.log
+server-start.err.log
 push-config.json
+
+# Scratch de agentes (Codex/Claude) y artefactos generados
+.codex_spreadsheet_work/
+outputs/
