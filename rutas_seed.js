@@ -15,13 +15,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U1"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11A",
-            "ubicacion_tecnica": "2893-12-LAC01-AP101-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-12-LAC01-AP101-MG01",
             "unidad": "U1"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-12-LAC01-AP101-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11A",
+            "ubicacion_tecnica": "2893-12-LAC01-AP101-KP01",
             "unidad": "U1"
           },
           {
@@ -51,13 +51,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U1"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11B",
-            "ubicacion_tecnica": "2893-12-LAC01-AP102-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-12-LAC01-AP102-MG01",
             "unidad": "U1"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-12-LAC01-AP102-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11B",
+            "ubicacion_tecnica": "2893-12-LAC01-AP102-KP01",
             "unidad": "U1"
           },
           {
@@ -87,13 +87,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U1"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11C",
-            "ubicacion_tecnica": "2893-12-LAC01-AP103-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-12-LAC01-AP103-MG01",
             "unidad": "U1"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-12-LAC01-AP103-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11C",
+            "ubicacion_tecnica": "2893-12-LAC01-AP103-KP01",
             "unidad": "U1"
           },
           {
@@ -291,13 +291,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U2"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11A",
-            "ubicacion_tecnica": "2893-22-LAC01-AP101-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-22-LAC01-AP101-MG01",
             "unidad": "U2"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-22-LAC01-AP101-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11A",
+            "ubicacion_tecnica": "2893-22-LAC01-AP101-KP01",
             "unidad": "U2"
           },
           {
@@ -327,13 +327,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U2"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11B",
-            "ubicacion_tecnica": "2893-22-LAC01-AP102-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-22-LAC01-AP102-MG01",
             "unidad": "U2"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-22-LAC01-AP102-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11B",
+            "ubicacion_tecnica": "2893-22-LAC01-AP102-KP01",
             "unidad": "U2"
           },
           {
@@ -363,13 +363,13 @@ const RUTAS_VIBRACION_SEED = [
             "unidad": "U2"
           },
           {
-            "nombre": "BOMBA AGUA G1-AA.07P11C",
-            "ubicacion_tecnica": "2893-22-LAC01-AP103-KP01",
+            "nombre": "AMPLIFICADOR REVOLUCIONES",
+            "ubicacion_tecnica": "2893-22-LAC01-AP103-MG01",
             "unidad": "U2"
           },
           {
-            "nombre": "AMPLIFICADOR REVOLUCIONES",
-            "ubicacion_tecnica": "2893-22-LAC01-AP103-MG01",
+            "nombre": "BOMBA AGUA G1-AA.07P11C",
+            "ubicacion_tecnica": "2893-22-LAC01-AP103-KP01",
             "unidad": "U2"
           },
           {
@@ -880,11 +880,6 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "VENTILADOR",
             "ubicacion_tecnica": "2893-35-HNC01-AN101-KN01",
-            "unidad": "U3"
-          },
-          {
-            "nombre": "DESCANSOS MOTOR",
-            "ubicacion_tecnica": "2893-35-HNC01-AN101-MU01",
             "unidad": "U3"
           }
         ]

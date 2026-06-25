@@ -321,8 +321,24 @@ async function generarPlanillaMoncon(body) {
         if (nombreLimpio) setCellSafe(ws, filaBase, 1, nombreLimpio);
 
         const comps = eq.componentes || [];
+        // BBA Agua Alimentación U1/U2: en la app el orden es Motor, Amplificador,
+        // Bomba; en la planilla las filas son Motor, Bomba, Amp. Mapeamos cada
+        // componente a su fila por nombre. Además su amplificador tiene 4 puntos
+        // de temperatura, así que esas filas usan las 4 columnas (T°1..T°4).
+        const esBbaAgua = /BOMBA\s+AGUA\s+ALIMENTACION/i.test(String(eq.nombre || ''));
         comps.forEach((comp, compIdx) => {
-            const fila = filaBase + compIdx;
+            let fila = filaBase + compIdx;
+            // Columnas de temperatura: por defecto el 1er componente usa T°1,T°2
+            // (5,6) y el resto T°3,T°4 (7,8). En BBA Agua Alim. cada fila parte en
+            // T°1 (5) y puede ocupar hasta las 4 columnas.
+            let colsTemp = compIdx === 0 ? [5, 6] : [7, 8];
+            if (esBbaAgua) {
+                const n = normStr(comp.nombre);
+                if (/^MOTOR BOMBA AGUA/.test(n))      fila = filaBase + 0;
+                else if (/AMPLIFICADOR/.test(n))      fila = filaBase + 2;
+                else if (/^BOMBA AGUA/.test(n))       fila = filaBase + 1;
+                colsTemp = [5, 6, 7, 8];
+            }
             const k = `${eqIdx}.${compIdx}`;
             const estadoComp = ejecucion.componentesEstado?.[k] || '';
             const med = ejecucion.mediciones?.[k] || null;
@@ -343,21 +359,23 @@ async function generarPlanillaMoncon(body) {
             }
             if (med.punto) setCellSafe(ws, fila, 4, med.punto);
 
-            const colTA = compIdx === 0 ? 5 : 7;
-            const colTB = compIdx === 0 ? 6 : 8;
             if (Array.isArray(med.temperaturas) && med.temperaturas.length) {
                 if (med.temperaturas.length === 1 && med.temperaturas[0].valor === 'N/A') {
-                    setCellSafe(ws, fila, colTA, 'N/A');
+                    setCellSafe(ws, fila, colsTemp[0], 'N/A');
                 } else {
-                    med.temperaturas.forEach((t, idx) => {
-                        const col = idx === 0 ? colTA : colTB;
-                        const tv = Number(String(t.valor).replace(',', '.'));
-                        setCellSafe(ws, fila, col, Number.isFinite(tv) ? tv : t.valor);
-                    });
+                    // El punto opcional sin valor se guardó como "0": se omite para
+                    // no escribir un 0 espurio en la columna de ese punto.
+                    med.temperaturas
+                        .filter(t => t.valor != null && t.valor !== '' && t.valor !== '0')
+                        .forEach((t, idx) => {
+                            if (idx >= colsTemp.length) return;
+                            const tv = Number(String(t.valor).replace(',', '.'));
+                            setCellSafe(ws, fila, colsTemp[idx], Number.isFinite(tv) ? tv : t.valor);
+                        });
                 }
             } else if (med.temperatura != null) {
                 const tv = Number(String(med.temperatura).replace(',', '.'));
-                setCellSafe(ws, fila, colTA, Number.isFinite(tv) ? tv : med.temperatura);
+                setCellSafe(ws, fila, colsTemp[0], Number.isFinite(tv) ? tv : med.temperatura);
             }
 
             if (obs) setCellSafe(ws, fila, cols.obs, obs);
@@ -549,13 +567,22 @@ async function generarPlanillaExcitatriz(body) {
         if (v) posRow[v] = rowNum;
     });
 
+    // Temperatura (B:C) y Corriente (D:E) son celdas combinadas. Centramos el
+    // valor para que quede en medio de la celda y no pegado a la derecha (que
+    // hacía parecer la columna B vacía).
+    const setCentrado = (r, c, val) => {
+        if (val === undefined || val === null || val === '') return;
+        const cell = ws.getCell(r, c);
+        cell.value = val;
+        cell.alignment = { ...(cell.alignment || {}), horizontal: 'center', vertical: 'middle' };
+    };
     (escobillas || []).forEach(e => {
         const row = posRow[String(e.pos || '').trim()];
         if (!row) return;
-        setCellSafe(ws, row, 2, toNum(e.temp));  // B Temperatura [°C]
-        setCellSafe(ws, row, 4, toNum(e.corr));  // D Corriente [A]
-        if (e.alta) setCellSafe(ws, row, 6, String(e.alta).toUpperCase());  // F Alta Temp SI/NO
-        if (e.norm) setCellSafe(ws, row, 7, String(e.norm).toUpperCase());  // G Normalizado SI/NO
+        setCentrado(row, 2, toNum(e.temp));  // B:C Temperatura [°C]
+        setCentrado(row, 4, toNum(e.corr));  // D:E Corriente [A]
+        if (e.alta) setCentrado(row, 6, String(e.alta).toUpperCase());  // F Alta Temp SI/NO
+        if (e.norm) setCentrado(row, 7, String(e.norm).toUpperCase());  // G Normalizado SI/NO
     });
 
     // Quitar las hojas de las otras unidades (deja solo la de esta unidad).
@@ -582,6 +609,169 @@ async function generarPlanillaExcitatriz(body) {
     const d = new Date();
     const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
     const filename = `Planilla Excitatriz U${uNum} — OT ${ot || 'sn'} — ${fechaArchivo}.xlsx`
+        .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return { buffer: Buffer.from(buffer), filename };
+}
+
+// ── Generador de planilla de TRAFOS AT (transformadores) ─────────────────
+// Cada trabajo es un transformador (EXC/EST/AUX/PPAL) de una unidad. La hoja y
+// las celdas dependen del tipo. La planilla EST es compartida (U1-U2, U3-U4).
+function resolverHojaTrafo(tipo, uNum) {
+    switch (tipo) {
+        case 'EST':
+            if (uNum === 1 || uNum === 2) return { archivo: 'Formato TRAFOS AT U1.xlsx', hoja: 'TRAFO EST U1-U2' };
+            if (uNum === 3 || uNum === 4) return { archivo: 'Formato TRAFOS AT U3.xlsx', hoja: 'TRAFO EST U3-U4' };
+            return null;
+        case 'AUX':  return { archivo: `Formato TRAFOS AT U${uNum}.xlsx`, hoja: `TRAFO AUX U${uNum}` };
+        case 'PPAL': return { archivo: `Formato TRAFOS AT U${uNum}.xlsx`, hoja: `TRAFO PPAL U${uNum}` };
+        case 'EXC':  return { archivo: `Formato TRAFOS AT U${uNum}.xlsx`, hoja: `TRAFO EXC U${uNum}` };
+        default: return null;
+    }
+}
+
+// Mapa de celdas por tipo de transformador (dónde escribir cada dato).
+const TRAFO_MAPA = {
+    EST: {
+        cab: { fecha: 'B1', tecnicos: 'B2', tag: 'H1', ot: 'H2' },
+        radiadores: { entradaCol: 2, salidaCol: 4, filaInicio: 6, n: 6 },
+        campos: { generacion: 'I4', tempAceite: 'I5', tempBobinado: 'I6', silicaGel: 'I7', nivelCuba: 'I8', nTap: 'I9' },
+        fases: { R: 'H12', S: 'H13', T: 'H14' },
+        relevantes: { equipoCol: 1, elementoCol: 2, identCol: 6, corrienteCol: 8, tempCol: 9, filaInicio: 20, n: 6 },
+        observaciones: { col: 2, filaInicio: 28, n: 6 },
+    },
+    AUX: {
+        cab: { fecha: 'C2', tecnicos: 'C3', tag: 'I2', ot: 'I3' },
+        radiadores: { entradaCol: 3, salidaCol: 5, filaInicio: 7, n: 8 },
+        campos: { generacion: 'J5', tempAceite: 'J6', tempBobinado: 'J7', silicaGelTR: 'J8', silicaGelTC: 'J9', nivelCubaPrincipal: 'J10', nivelCubaCTBC: 'J11', nTap: 'J12' },
+        fases: { R: 'C17', S: 'C18', T: 'C19' },
+        relevantes: { equipoCol: 2, elementoCol: 3, identCol: 6, corrienteCol: 9, tempCol: 10, filaInicio: 24, n: 6 },
+        observaciones: { col: 3, filaInicio: 31, n: 6 },
+    },
+    PPAL: {
+        cab: { fecha: 'B1', tecnicos: 'B2', tag: 'G1', ot: 'G2' },
+        radiadores: { entradaCol: 7, salidaCol: 9, filaInicio: 12, n: 13 },
+        campos: { generacion: 'H4', tempAceite: 'H5', tempBobinado: 'H6', silicaGel: 'H7', nivelCuba: 'H8', nTap: 'H9' },
+        ventiladores: { onOffCol: 2, tempCol: 3, filaInicio: 5, n: 15 },
+        bombas: { onOffCol: 2, tempCol: 3, filaInicio: 22, n: 4 },
+        relevantes: { equipoCol: 1, elementoCol: 2, identCol: 5, corrienteCol: 7, tempCol: 8, filaInicio: 30, n: 6 },
+        observaciones: { col: 2, filaInicio: 37, n: 6 },
+    },
+    EXC: {
+        cab: { fecha: 'B1', tecnicos: 'B2', tag: 'F1', ot: 'F2' },
+        radiadores: { entradaCol: 2, salidaCol: 3, filaInicio: 6, n: 6 },
+        campos: { generacion: 'G4', tempAceite: 'G5', tempBobinado: 'G6', nivelCuba: 'G7', presionAceite: 'G8' },
+        relevantes: { equipoCol: 1, elementoCol: 2, identCol: 4, corrienteCol: 6, tempCol: 7, filaInicio: 17, n: 6 },
+        observaciones: { col: 2, filaInicio: 24, n: 6 },
+    },
+};
+
+// Campos que son texto (no numéricos) en la planilla.
+const TRAFO_CAMPOS_TEXTO = new Set(['silicaGel', 'silicaGelTR', 'silicaGelTC', 'nivelCuba', 'nivelCubaPrincipal', 'nivelCubaCTBC', 'nTap']);
+
+async function generarPlanillaTrafo(body) {
+    const { unidad, tipo, fecha, tecnicos, tag, ot,
+        radiadores = [], campos = {}, fases = {}, ventiladores = [], bombas = [],
+        relevantes = [], observaciones = [] } = body || {};
+    const uNum = Number(String(unidad || '').replace(/\D/g, ''));
+    const tipoUp = String(tipo || '').toUpperCase();
+    const dest = resolverHojaTrafo(tipoUp, uNum);
+    if (!dest) throw new Error(`Transformador no soportado: unidad ${unidad}, tipo ${tipo}.`);
+    const mapa = TRAFO_MAPA[tipoUp];
+    if (!mapa) throw new Error(`El tipo de transformador "${tipo}" todavía no está implementado.`);
+
+    const templatePath = path.join(FORMATOS_DIR, dest.archivo);
+    if (!fs.existsSync(templatePath)) throw new Error(`Plantilla no encontrada: ${dest.archivo}`);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+    const ws = workbook.getWorksheet(dest.hoja);
+    if (!ws) throw new Error(`Hoja "${dest.hoja}" no encontrada. Disponibles: ${workbook.worksheets.map(s => s.name).join(', ')}`);
+
+    const toNum = (v) => {
+        if (v === undefined || v === null || v === '') return null;
+        const n = Number(String(v).replace(',', '.'));
+        return Number.isFinite(n) ? n : v;
+    };
+    const setA = (addr, val) => { if (val === undefined || val === null || val === '') return; ws.getCell(addr).value = val; };
+
+    // Cabecera
+    setA(mapa.cab.fecha, fecha);
+    setA(mapa.cab.tecnicos, tecnicos);
+    setA(mapa.cab.tag, tag);
+    setA(mapa.cab.ot, ot);
+
+    // Radiadores (entrada/salida)
+    const rad = mapa.radiadores;
+    (radiadores || []).forEach((r, i) => {
+        if (i >= rad.n) return;
+        const fila = rad.filaInicio + i;
+        setCellSafe(ws, fila, rad.entradaCol, toNum(r && r.entrada));
+        setCellSafe(ws, fila, rad.salidaCol, toNum(r && r.salida));
+    });
+
+    // Campos del transformador (generación, aceite, bobinado, silica, nivel, tap…)
+    Object.entries(mapa.campos || {}).forEach(([k, addr]) => {
+        const v = campos[k];
+        setA(addr, TRAFO_CAMPOS_TEXTO.has(k) ? v : toNum(v));
+    });
+
+    // Fases salida (temperatura)
+    if (mapa.fases) {
+        setA(mapa.fases.R, toNum(fases.R));
+        setA(mapa.fases.S, toNum(fases.S));
+        setA(mapa.fases.T, toNum(fases.T));
+    }
+
+    // Ventiladores (On/Off + temperatura) — solo PPAL
+    if (mapa.ventiladores) {
+        (ventiladores || []).forEach((vt, i) => {
+            if (i >= mapa.ventiladores.n) return;
+            const fila = mapa.ventiladores.filaInicio + i;
+            setCellSafe(ws, fila, mapa.ventiladores.onOffCol, vt && vt.onOff);
+            setCellSafe(ws, fila, mapa.ventiladores.tempCol, toNum(vt && vt.temp));
+        });
+    }
+
+    // Bombas de flujo (On/Off + temperatura) — solo PPAL
+    if (mapa.bombas) {
+        (bombas || []).forEach((bo, i) => {
+            if (i >= mapa.bombas.n) return;
+            const fila = mapa.bombas.filaInicio + i;
+            setCellSafe(ws, fila, mapa.bombas.onOffCol, bo && bo.onOff);
+            setCellSafe(ws, fila, mapa.bombas.tempCol, toNum(bo && bo.temp));
+        });
+    }
+
+    // Temperaturas relevantes (tabla dinámica)
+    const rel = mapa.relevantes;
+    (relevantes || []).forEach((it, i) => {
+        if (i >= rel.n) return;
+        const fila = rel.filaInicio + i;
+        setCellSafe(ws, fila, rel.equipoCol, it && it.equipo);
+        setCellSafe(ws, fila, rel.elementoCol, it && it.elemento);
+        setCellSafe(ws, fila, rel.identCol, it && it.identificador);
+        setCellSafe(ws, fila, rel.corrienteCol, toNum(it && it.corriente));
+        setCellSafe(ws, fila, rel.tempCol, toNum(it && it.temperatura));
+    });
+
+    // Observaciones (una por fila)
+    const obs = mapa.observaciones;
+    (observaciones || []).forEach((linea, i) => {
+        if (i >= obs.n) return;
+        setCellSafe(ws, obs.filaInicio + i, obs.col, linea);
+    });
+
+    // Dejar solo la hoja usada (la plantilla trae varias).
+    workbook.worksheets.slice().forEach(sheet => {
+        if (sheet.name !== dest.hoja) { try { workbook.removeWorksheet(sheet.id); } catch (e) {} }
+    });
+    workbook.views = [{ activeTab: 0 }];
+
+    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const d = new Date();
+    const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
+    const filename = `Planilla Trafo ${tipoUp} U${uNum} — OT ${ot || 'sn'} — ${fechaArchivo}.xlsx`
         .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
 
     const buffer = await workbook.xlsx.writeBuffer();
@@ -1036,6 +1226,24 @@ const server = http.createServer(async (req, res) => {
             res.end(result.buffer);
         } catch (error) {
             console.error('[server] /generar-planilla-excitatriz error:', error.message);
+            writeJson(res, 500, { ok: false, error: error.message });
+        }
+        return;
+    }
+
+    // POST /generar-planilla-trafo — planilla de transformadores AT (EXC/EST/AUX/PPAL)
+    if (req.method === 'POST' && pathname === '/generar-planilla-trafo') {
+        try {
+            const body = await readBody(req);
+            const result = await generarPlanillaTrafo(body);
+            res.writeHead(200, {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(result.filename)}"`,
+                'Content-Length': result.buffer.length
+            });
+            res.end(result.buffer);
+        } catch (error) {
+            console.error('[server] /generar-planilla-trafo error:', error.message);
             writeJson(res, 500, { ok: false, error: error.message });
         }
         return;

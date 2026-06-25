@@ -618,7 +618,6 @@ VALUES
   ('R.VENT.6KV', 'GUA3-5HLB10-AN101', 'Unidad 3', 'Ventilador Tiro Forzado', 'Ventilador', '2893-35-HLB10-AN101-KN01', 'VENTILADOR', 'A', 15),
   ('R.VENT.6KV', 'GUA3-5HNC01', 'Unidad 3', 'Ventilador tiro inducido', 'Motor', '2893-35-HNC01-AN101--M01', 'MOTOR ELECTRICO VTI', 'B', 15),
   ('R.VENT.6KV', 'GUA3-5HNC01', 'Unidad 3', 'Ventilador tiro inducido', 'Ventilador', '2893-35-HNC01-AN101-KN01', 'VENTILADOR', 'B', 15),
-  ('R.VENT.6KV', NULL, 'Unidad 3', 'Ventilador tiro inducido', 'DESCANSOS MOTOR', '2893-35-HNC01-AN101-MU01', 'DESCANSOS MOTOR', 'A', NULL),
   ('RUTA.FGD.U3', 'GUA3-5HRA02-AM101', 'Unidad 3', 'Agitador Absorber A FGD U3', 'Agitador', '2893-35-HRA02-AM101', 'AGITADOR -A ESTANQUE DE ABSORBER', 'B', 90),
   ('RUTA.FGD.U3', 'GUA3-5HRA02-AM101', 'Unidad 3', 'Agitador Absorber A FGD U3', 'Motor', '2893-35-HRA02-AM101--M01', 'MOTOR AGITADOR', 'C', 90),
   ('RUTA.FGD.U3', NULL, 'Unidad 3', 'Agitador Absorber A FGD U3', 'Reductor', '2893-35-HRA02-AM101-MG01', 'REDUCTOR DE VELOCIDAD', 'B', 90),
