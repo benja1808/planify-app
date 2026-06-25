@@ -526,8 +526,79 @@ function escribirCabeceraExcitatriz(ws, patron, valor, opciones = {}) {
     };
 }
 
+function parsearEscobillasHistorial(texto) {
+    const porPosicion = new Map();
+    const grab = (re, linea) => {
+        const match = linea.match(re);
+        return match ? match[1] : '';
+    };
+
+    String(texto || '').split(/\r?\n/).forEach(linea => {
+        const matchPos = linea.match(/Escobilla\s+(\d+\.\d+)/i);
+        if (!matchPos) return;
+
+        const pos = matchPos[1];
+        const actual = porPosicion.get(pos) || { pos, temp: '', corr: '', alta: '', norm: '' };
+        const temp = grab(/Temp:\s*([\d.,]+)/i, linea);
+        const corr = grab(/Corriente:\s*([\d.,]+)/i, linea);
+        const alta = grab(/Alta temp:\s*(SI|NO)/i, linea);
+        const norm = grab(/Normalizado:\s*(SI|NO)/i, linea);
+        if (temp) actual.temp = temp.replace(',', '.');
+        if (corr) actual.corr = corr.replace(',', '.');
+        if (alta) actual.alta = alta.toUpperCase();
+        if (norm) actual.norm = norm.toUpperCase();
+        porPosicion.set(pos, actual);
+    });
+
+    return [...porPosicion.values()];
+}
+
+async function completarEscobillasDesdeHistorial({ registroId, ot, unidad, escobillas }) {
+    const recibidas = Array.isArray(escobillas) ? escobillas : [];
+    if (!registroId && !ot) return recibidas;
+
+    const tablas = ['historial_tareas', 'tareas_historial'];
+    let registro = null;
+    for (const tabla of tablas) {
+        let consulta = supabaseServer
+            .from(tabla)
+            .select('id, tipo, ot_numero, acciones_realizadas')
+            .limit(1);
+        consulta = registroId
+            ? consulta.eq('id', registroId)
+            : consulta.eq('ot_numero', String(ot)).order('created_at', { ascending: false });
+        const { data, error } = await consulta.maybeSingle();
+        if (!error && data) {
+            registro = data;
+            break;
+        }
+    }
+    if (!registro) return recibidas;
+
+    const unidadNum = Number(String(unidad || '').replace(/\D/g, ''));
+    const tipo = String(registro.tipo || '');
+    if (unidadNum && !new RegExp(`\\bU\\s*${unidadNum}\\b`, 'i').test(tipo)) return recibidas;
+
+    const guardadas = parsearEscobillasHistorial(registro.acciones_realizadas);
+    if (!guardadas.length) return recibidas;
+
+    const porPosicion = new Map(guardadas.map(item => [String(item.pos), item]));
+    recibidas.forEach(item => {
+        const pos = String(item?.pos || '').trim();
+        if (!pos) return;
+        porPosicion.set(pos, { ...(porPosicion.get(pos) || {}), ...item, pos });
+    });
+    return [...porPosicion.values()];
+}
+
 async function generarPlanillaExcitatriz(body) {
-    const { unidad, fecha, ot, tecnicos, hum, temp, gen, vcampo, icampo, escobillas } = body || {};
+    const { unidad, fecha, ot, tecnicos, hum, temp, gen, vcampo, icampo, registroId } = body || {};
+    const escobillas = await completarEscobillasDesdeHistorial({
+        registroId,
+        ot,
+        unidad,
+        escobillas: body?.escobillas
+    });
     const uNum = Number(String(unidad || '').replace(/\D/g, ''));
     const hojaName = EXCITATRIZ_HOJAS[uNum];
     if (!hojaName) throw new Error(`Unidad de excitatriz no soportada: ${unidad}. Solo U3, U4 y U5.`);
@@ -574,6 +645,14 @@ async function generarPlanillaExcitatriz(body) {
         if (val === undefined || val === null || val === '') return;
         const cell = ws.getCell(r, c);
         cell.value = val;
+        // La última fila de U3 (14.4) viene en la plantilla con fuente blanca
+        // sobre fondo blanco. Sin forzar el color, el dato existe en el XLSX
+        // pero queda invisible al abrirlo en Excel.
+        cell.font = {
+            ...(cell.font || {}),
+            color: { argb: 'FF000000' },
+            bold: false
+        };
         cell.alignment = { ...(cell.alignment || {}), horizontal: 'center', vertical: 'middle' };
     };
     (escobillas || []).forEach(e => {
@@ -607,7 +686,10 @@ async function generarPlanillaExcitatriz(body) {
 
     const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
     const d = new Date();
-    const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]}`;
+    const horaArchivo = [d.getHours(), d.getMinutes(), d.getSeconds()]
+        .map(n => String(n).padStart(2, '0'))
+        .join('-');
+    const fechaArchivo = `${d.getDate()} ${meses[d.getMonth()]} ${horaArchivo}`;
     const filename = `Planilla Excitatriz U${uNum} — OT ${ot || 'sn'} — ${fechaArchivo}.xlsx`
         .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
 
@@ -1221,7 +1303,11 @@ const server = http.createServer(async (req, res) => {
             res.writeHead(200, {
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 'Content-Disposition': `attachment; filename="${encodeURIComponent(result.filename)}"`,
-                'Content-Length': result.buffer.length
+                'Content-Length': result.buffer.length,
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Planify-Generated-At': new Date().toISOString()
             });
             res.end(result.buffer);
         } catch (error) {

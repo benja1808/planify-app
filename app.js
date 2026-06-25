@@ -2633,7 +2633,7 @@ window.abrirDetalleHistorial = function(registroId) {
             </div>
         </div>
 
-        ${seccionTexto('Acciones realizadas', item.acciones_realizadas, 'fa-list-check')}
+        ${seccionTexto('Acciones realizadas', _accionesResumenHistorial(item.acciones_realizadas), 'fa-list-check')}
         ${seccionTexto('Observaciones', item.observaciones, 'fa-comment-dots')}
         ${seccionTexto('Análisis técnico', item.analisis, 'fa-magnifying-glass-chart')}
         ${seccionTexto('Recomendación del analista', item.recomendacion_analista, 'fa-lightbulb')}
@@ -2695,6 +2695,31 @@ function _parseExcitatrizAcciones(texto) {
         return ae - be || ap - bp;
     });
     return { escobillas, header };
+}
+
+// Para mostrar en el historial: cuando "acciones realizadas" es en realidad el
+// volcado completo de mediciones (p.ej. todas las escobillas de una termografía
+// de excitatriz), no queremos llenar la tarjeta/el modal con ese texto enorme.
+// El detalle real ya se ve en las tablas de la pestaña Termografía. Aquí
+// devolvemos una etiqueta corta ("Termografía"); para texto normal lo dejamos
+// tal cual. No usar en informes/planillas: esos necesitan el texto completo.
+function _accionesResumenHistorial(texto) {
+    const t = String(texto || '').trim();
+    if (!t) return '';
+    // 1) Volcado de escobillas (termografía de excitatriz).
+    const nEscob = (t.match(/Escobilla\s+\d+\.\d+/gi) || []).length;
+    if (nEscob >= 4) return 'Termografía';
+    // 2) Volcado genérico de mediciones por componente, p.ej.:
+    //      "• Motor → Temp: 45 °C | Vibr: 2.1 mm/s | ..."
+    //    Cuando el texto está dominado por estas líneas (equipos con muchos
+    //    componentes), es un volcado de mediciones, no una acción redactada.
+    //    El detalle real ya se ve en la sección "Mediciones registradas".
+    const lineas = t.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const medLineas = lineas.filter(l =>
+        /^[•\-\[]/.test(l) && /(Temp:|Vibr:|Corriente:|→)/.test(l)
+    ).length;
+    if (medLineas >= 3 && medLineas >= lineas.length * 0.6) return 'Mediciones registradas';
+    return t;
 }
 
 // Serializa un panel #exc-u5-panel al MISMO texto que produce el cierre normal,
@@ -2824,7 +2849,29 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
         return;
     }
 
-    const { escobillas, header } = _parseExcitatrizAcciones(item.acciones_realizadas);
+    // Releer el registro FRESCO desde Supabase antes de generar. La copia en
+    // memoria (estado.historialTareas) puede estar desincronizada respecto a la
+    // base —p.ej. una escobilla agregada en otra sesión/dispositivo— y dejaría
+    // posiciones en blanco en la planilla. Con la red disponible siempre usamos
+    // lo último guardado; sin red caemos a la copia local.
+    let accionesParaPlanilla = item.acciones_realizadas;
+    if (navigator.onLine && window.supabaseClient) {
+        try {
+            const { data, error } = await window.supabaseClient
+                .from(tablasDb.historial)
+                .select('acciones_realizadas')
+                .eq('id', registroId)
+                .single();
+            if (!error && data && data.acciones_realizadas) {
+                accionesParaPlanilla = data.acciones_realizadas;
+                item.acciones_realizadas = accionesParaPlanilla; // sincronizar memoria
+            }
+        } catch (e) {
+            console.warn('[excitatriz] no se pudo releer el registro, uso copia local:', e?.message);
+        }
+    }
+
+    const { escobillas, header } = _parseExcitatrizAcciones(accionesParaPlanilla);
     if (!escobillas.length) {
         alert('Este registro no tiene mediciones de escobillas para generar la planilla.');
         return;
@@ -2839,7 +2886,7 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
     const tecnicos = getNombresTecnicosFicha(item).join(' / ');
 
     const payload = {
-        unidad, fecha, ot: item.ot_numero || '', tecnicos,
+        registroId, unidad, fecha, ot: item.ot_numero || '', tecnicos,
         hum: header.hum, temp: header.temp, gen: header.gen, vcampo: header.vcampo, icampo: header.icampo,
         escobillas
     };
@@ -2853,8 +2900,9 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
     document.body.appendChild(loading);
 
     try {
-        const resp = await fetch(`${server}/generar-planilla-excitatriz`, {
+        const resp = await fetch(`${server}/generar-planilla-excitatriz?_=${Date.now()}`, {
             method: 'POST',
+            cache: 'no-store',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
@@ -2960,18 +3008,41 @@ const TRAFO_FORM_CFG = {
     },
 };
 
+// Transformadores que pertenecen a cada unidad. Un trabajo de trafo de la
+// unidad debe permitir capturar TODOS sus transformadores, no solo uno.
+const TRAFOS_POR_UNIDAD = {
+    1: ['PPAL', 'AUX', 'EST'],
+    2: ['PPAL', 'AUX'],
+    3: ['PPAL', 'AUX', 'EST', 'EXC'],
+    4: ['PPAL', 'AUX', 'EXC'],
+    5: ['PPAL', 'AUX', 'EXC'],
+};
+function trafosDeUnidad(uNum) {
+    const lista = TRAFOS_POR_UNIDAD[Number(uNum)];
+    return Array.isArray(lista) ? lista.slice() : [];
+}
+
 // Construye el panel de captura del transformador DENTRO de un contenedor
-// (se inyecta en el modal "Finalizar trabajo", como la excitatriz). No tiene
-// overlay ni botón de generar: los datos se leen al cerrar el trabajo.
+// (se inyecta en el modal "Finalizar trabajo", como la excitatriz). Muestra una
+// pestaña por cada transformador de la unidad (principal, auxiliar, estación y/o
+// excitación según corresponda). No tiene overlay ni botón de generar: los
+// datos se leen al cerrar el trabajo.
 function _buildPanelTrafo(container, tareaCtx) {
-    const tipo = tipoTrafoDe(tareaCtx);
-    const cfg = TRAFO_FORM_CFG[tipo];
     const uNum = obtenerUnidadTarea({ tipo: tareaCtx.tipo, subtitulo: tareaCtx.subtitulo, ubicacion: tareaCtx.ubicacion });
     const unidad = uNum ? `U${uNum}` : '';
-    if (!cfg) {
-        container.innerHTML = `<div style="background:#fef9c3; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:0.8rem;">La planilla del transformador ${escapeHtml(tipo || '')} aún no está disponible.</div>`;
+    // Tipos de trafo de la unidad; si no se reconoce la unidad, caer al tipo
+    // detectado por el nombre del trabajo (comportamiento antiguo).
+    let tipos = trafosDeUnidad(uNum);
+    if (!tipos.length) {
+        const t = tipoTrafoDe(tareaCtx);
+        tipos = t ? [t] : [];
+    }
+    tipos = tipos.filter(t => TRAFO_FORM_CFG[t]);
+    if (!tipos.length) {
+        container.innerHTML = `<div style="background:#fef9c3; border:1px solid #fde68a; color:#92400e; border-radius:10px; padding:0.8rem;">La planilla de transformador de esta unidad aún no está disponible.</div>`;
         return;
     }
+
     const ot = tareaCtx.otNumero || tareaCtx.ot_numero || '';
     const tecnicos = (typeof getNombresTecnicosFicha === 'function' ? getNombresTecnicosFicha(tareaCtx).join(' / ') : '')
         || tareaCtx.liderNombre || tareaCtx.lider_nombre || '';
@@ -2979,76 +3050,96 @@ function _buildPanelTrafo(container, tareaCtx) {
     const fechaDef = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
 
     const inp = (id, ph = '', val = '') => `<input id="${id}" class="form-control" placeholder="${ph}" value="${escapeHtml(val)}" style="font-size:0.88rem; padding:0.45rem 0.55rem;">`;
-    const radHtml = Array.from({ length: cfg.radiadores }, (_, i) => `
-        <div style="display:grid; grid-template-columns:90px 1fr 1fr; gap:0.4rem; align-items:center; margin-bottom:0.35rem;">
-            <span style="font-size:0.8rem; color:#475569; font-weight:600;">Radiador N°${i + 1}</span>
-            ${inp(`trafo-rad-ent-${i}`, 'Entrada °C')}
-            ${inp(`trafo-rad-sal-${i}`, 'Salida °C')}
-        </div>`).join('');
-    const camposHtml = cfg.campos.map(c => `
-        <div>
-            <label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">${c.label}</label>
-            ${inp(`trafo-campo-${c.k}`, c.ph)}
-        </div>`).join('');
-    const fasesHtml = cfg.fases ? `
-        <div style="margin-top:0.85rem;">
-            <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.4rem;">Fases salida lado secundario [°C]</div>
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem;">
-                <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase R</label>${inp('trafo-fase-R', '°C')}</div>
-                <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase S</label>${inp('trafo-fase-S', '°C')}</div>
-                <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase T</label>${inp('trafo-fase-T', '°C')}</div>
-            </div>
-        </div>` : '';
-    const onOff = (id) => `<select id="${id}" class="form-control" style="font-size:0.82rem; padding:0.4rem;"><option value="">—</option><option value="On">On</option><option value="Off">Off</option></select>`;
-    const seccionOnOff = (titulo, prefijo, n) => !n ? '' : `
-        <div style="margin-top:0.85rem;">
-            <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.4rem;">${titulo}</div>
-            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0.45rem;">
-                ${Array.from({ length: n }, (_, i) => `
-                    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:0.4rem 0.5rem;">
-                        <div style="font-size:0.74rem; color:#475569; font-weight:600; margin-bottom:0.25rem;">N°${String(i + 1).padStart(2, '0')}</div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem;">
-                            ${onOff(`${prefijo}-onoff-${i}`)}
-                            ${inp(`${prefijo}-temp-${i}`, '°C')}
-                        </div>
-                    </div>`).join('')}
-            </div>
-        </div>`;
-    const ventHtml = seccionOnOff('Estado de ventiladores', 'trafo-vent', cfg.ventiladores || 0);
-    const bombasHtml = seccionOnOff('Bombas de flujo', 'trafo-bomba', cfg.bombas || 0);
+
+    // HTML de un transformador. Los ids se prefijan por tipo (trafo-PPAL-...)
+    // para que las pestañas no choquen entre sí.
+    const subpanelHtml = (tipo) => {
+        const cfg = TRAFO_FORM_CFG[tipo];
+        const p = `trafo-${tipo}`;
+        const radHtml = Array.from({ length: cfg.radiadores }, (_, i) => `
+            <div style="display:grid; grid-template-columns:90px 1fr 1fr; gap:0.4rem; align-items:center; margin-bottom:0.35rem;">
+                <span style="font-size:0.8rem; color:#475569; font-weight:600;">Radiador N°${i + 1}</span>
+                ${inp(`${p}-rad-ent-${i}`, 'Entrada °C')}
+                ${inp(`${p}-rad-sal-${i}`, 'Salida °C')}
+            </div>`).join('');
+        const camposHtml = cfg.campos.map(c => `
+            <div>
+                <label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">${c.label}</label>
+                ${inp(`${p}-campo-${c.k}`, c.ph)}
+            </div>`).join('');
+        const fasesHtml = cfg.fases ? `
+            <div style="margin-top:0.85rem;">
+                <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.4rem;">Fases salida lado secundario [°C]</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.5rem;">
+                    <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase R</label>${inp(`${p}-fase-R`, '°C')}</div>
+                    <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase S</label>${inp(`${p}-fase-S`, '°C')}</div>
+                    <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase T</label>${inp(`${p}-fase-T`, '°C')}</div>
+                </div>
+            </div>` : '';
+        const onOff = (id) => `<select id="${id}" class="form-control" style="font-size:0.82rem; padding:0.4rem;"><option value="">—</option><option value="On">On</option><option value="Off">Off</option></select>`;
+        const seccionOnOff = (titulo, prefijo, n) => !n ? '' : `
+            <div style="margin-top:0.85rem;">
+                <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.4rem;">${titulo}</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0.45rem;">
+                    ${Array.from({ length: n }, (_, i) => `
+                        <div style="border:1px solid #e5e7eb; border-radius:8px; padding:0.4rem 0.5rem;">
+                            <div style="font-size:0.74rem; color:#475569; font-weight:600; margin-bottom:0.25rem;">N°${String(i + 1).padStart(2, '0')}</div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem;">
+                                ${onOff(`${prefijo}-onoff-${i}`)}
+                                ${inp(`${prefijo}-temp-${i}`, '°C')}
+                            </div>
+                        </div>`).join('')}
+                </div>
+            </div>`;
+        const ventHtml = seccionOnOff('Estado de ventiladores', `${p}-vent`, cfg.ventiladores || 0);
+        const bombasHtml = seccionOnOff('Bombas de flujo', `${p}-bomba`, cfg.bombas || 0);
+        return `
+            <div class="trafo-subpanel" data-tipo="${tipo}" id="trafo-sub-${tipo}" style="display:none;">
+                <div style="margin-bottom:0.6rem;">
+                    <label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Tag</label>${inp(`${p}-tag`, 'Ej: TR-' + tipo)}
+                </div>
+                ${ventHtml}
+                ${bombasHtml}
+                <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin:0.9rem 0 0.5rem;">Radiadores (entrada / salida)</div>
+                ${radHtml}
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.6rem; margin-top:0.9rem;">${camposHtml}</div>
+                ${fasesHtml}
+                <div style="margin-top:0.95rem;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
+                        <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase;">Temperaturas relevantes</div>
+                        <button type="button" class="trafo-rel-add" data-tipo="${tipo}" style="border:1px solid #cbd5e1; background:#fff; color:#1e40af; border-radius:8px; padding:0.25rem 0.6rem; font-size:0.78rem; font-weight:700; cursor:pointer;"><i class="fa-solid fa-plus"></i> Fila</button>
+                    </div>
+                    <div class="trafo-rel-list" id="${p}-rel-list"></div>
+                </div>
+                <div style="margin-top:0.95rem;">
+                    <label style="display:block; font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.3rem;">Observaciones <span style="font-weight:600; color:#64748b; text-transform:none;">(opcional)</span></label>
+                    <textarea id="${p}-obs" class="form-control" rows="3" placeholder="Una observación por línea (hasta 6). Opcional." style="font-size:0.88rem; resize:vertical;"></textarea>
+                </div>
+            </div>`;
+    };
+
+    const labelTipo = (t) => (TRAFO_FORM_CFG[t]?.titulo || t).replace('Transformador ', '');
+    const tabsHtml = tipos.map((t, i) => `
+        <button type="button" class="trafo-tab" data-tipo="${t}" style="border:1px solid #cbd5e1; background:${i === 0 ? '#2563eb' : '#fff'}; color:${i === 0 ? '#fff' : '#1e40af'}; border-radius:8px; padding:0.35rem 0.75rem; font-size:0.8rem; font-weight:700; cursor:pointer;">${escapeHtml(labelTipo(t))}</button>`).join('');
 
     container.innerHTML = `
-        <div id="trafo-panel" data-tipo="${tipo}" data-unidad="${escapeHtml(unidad)}">
+        <div id="trafo-panel" data-unidad="${escapeHtml(unidad)}">
             <div style="font-size:0.85rem; font-weight:600; color:#1e3a8a; margin-bottom:0.9rem; padding-bottom:0.45rem; border-bottom:2px solid #2563eb; display:flex; align-items:center; gap:0.5rem;">
-                <i class="fa-solid fa-bolt" style="color:#2563eb;"></i> ${escapeHtml(cfg.titulo)} ${escapeHtml(unidad)} — Datos para la planilla
+                <i class="fa-solid fa-bolt" style="color:#2563eb;"></i> Transformadores ${escapeHtml(unidad)} — Datos para las planillas
             </div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.6rem; margin-bottom:0.6rem;">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.6rem; margin-bottom:0.8rem;">
                 <div><label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Fecha de inspección</label>${inp('trafo-fecha', '', fechaDef)}</div>
-                <div><label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Tag</label>${inp('trafo-tag', 'Ej: TR-EST')}</div>
                 <div><label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Técnicos</label>${inp('trafo-tecnicos', '', tecnicos)}</div>
                 <div><label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">OT</label>${inp('trafo-ot', '', String(ot))}</div>
             </div>
-            ${ventHtml}
-            ${bombasHtml}
-            <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin:0.9rem 0 0.5rem;">Radiadores (entrada / salida)</div>
-            ${radHtml}
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:0.6rem; margin-top:0.9rem;">${camposHtml}</div>
-            ${fasesHtml}
-            <div style="margin-top:0.95rem;">
-                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.4rem;">
-                    <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase;">Temperaturas relevantes</div>
-                    <button type="button" id="trafo-rel-add" style="border:1px solid #cbd5e1; background:#fff; color:#1e40af; border-radius:8px; padding:0.25rem 0.6rem; font-size:0.78rem; font-weight:700; cursor:pointer;"><i class="fa-solid fa-plus"></i> Fila</button>
-                </div>
-                <div id="trafo-rel-list"></div>
-            </div>
-            <div style="margin-top:0.95rem;">
-                <label style="display:block; font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.3rem;">Observaciones <span style="font-weight:600; color:#64748b; text-transform:none;">(opcional)</span></label>
-                <textarea id="trafo-obs" class="form-control" rows="3" placeholder="Una observación por línea (hasta 6). Opcional." style="font-size:0.88rem; resize:vertical;"></textarea>
-            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom:0.9rem;">${tabsHtml}</div>
+            ${tipos.map(subpanelHtml).join('')}
         </div>`;
 
-    const relList = container.querySelector('#trafo-rel-list');
-    const addRel = () => {
+    const panel = container.querySelector('#trafo-panel');
+
+    // Añade una fila a la tabla de "temperaturas relevantes" del subpanel dado.
+    const addRel = (lista) => {
         const row = document.createElement('div');
         row.className = 'trafo-rel-row';
         row.style.cssText = 'display:grid; grid-template-columns:1.2fr 1.2fr 1fr 0.8fr 0.8fr 30px; gap:0.35rem; margin-bottom:0.35rem;';
@@ -3060,14 +3151,30 @@ function _buildPanelTrafo(container, tareaCtx) {
             <input class="form-control trafo-rel-temp" placeholder="Temp °C" style="font-size:0.82rem; padding:0.4rem;">
             <button type="button" class="trafo-rel-del" style="border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>`;
         row.querySelector('.trafo-rel-del').addEventListener('click', () => row.remove());
-        relList.appendChild(row);
+        lista.appendChild(row);
     };
-    container.querySelector('#trafo-rel-add').addEventListener('click', addRel);
-    addRel();
+    panel.querySelectorAll('.trafo-rel-add').forEach(btn => {
+        const lista = panel.querySelector(`#trafo-${btn.dataset.tipo}-rel-list`);
+        btn.addEventListener('click', () => addRel(lista));
+    });
+    // Una fila inicial en cada subpanel.
+    panel.querySelectorAll('.trafo-rel-list').forEach(lista => addRel(lista));
 
-    // Enter pasa al siguiente campo (entrada → salida → siguiente radiador, etc.).
-    // El textarea de observaciones se deja para salto de línea normal.
-    const panel = container.querySelector('#trafo-panel');
+    // Pestañas: muestra el subpanel activo y resalta su botón.
+    const subpaneles = Array.from(panel.querySelectorAll('.trafo-subpanel'));
+    const tabs = Array.from(panel.querySelectorAll('.trafo-tab'));
+    const activar = (tipo) => {
+        subpaneles.forEach(sp => { sp.style.display = sp.dataset.tipo === tipo ? '' : 'none'; });
+        tabs.forEach(tb => {
+            const on = tb.dataset.tipo === tipo;
+            tb.style.background = on ? '#2563eb' : '#fff';
+            tb.style.color = on ? '#fff' : '#1e40af';
+        });
+    };
+    tabs.forEach(tb => tb.addEventListener('click', () => activar(tb.dataset.tipo)));
+    activar(tipos[0]);
+
+    // Enter pasa al siguiente campo visible (entrada → salida → siguiente, etc.).
     panel.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         const el = e.target;
@@ -3080,42 +3187,66 @@ function _buildPanelTrafo(container, tareaCtx) {
     });
 }
 
-// Lee el panel de trafo (dentro de `scope`) y devuelve el payload para la planilla.
+// Lee el panel de trafo (dentro de `scope`) y devuelve un payload multi-trafo:
+// cabecera compartida (fecha/técnicos/OT) + un objeto por cada transformador.
 function _leerPanelTrafo(scope) {
     const panel = scope.querySelector('#trafo-panel');
     if (!panel) return null;
-    const tipo = panel.dataset.tipo;
     const unidad = panel.dataset.unidad || '';
-    const cfg = TRAFO_FORM_CFG[tipo];
-    if (!cfg) return null;
     const val = id => (panel.querySelector('#' + id)?.value || '').trim();
-    const radiadores = Array.from({ length: cfg.radiadores }, (_, i) => ({
-        entrada: val(`trafo-rad-ent-${i}`), salida: val(`trafo-rad-sal-${i}`)
-    }));
-    const campos = {};
-    cfg.campos.forEach(c => { campos[c.k] = val(`trafo-campo-${c.k}`); });
-    const ventiladores = Array.from({ length: cfg.ventiladores || 0 }, (_, i) => ({
-        onOff: val(`trafo-vent-onoff-${i}`), temp: val(`trafo-vent-temp-${i}`)
-    }));
-    const bombas = Array.from({ length: cfg.bombas || 0 }, (_, i) => ({
-        onOff: val(`trafo-bomba-onoff-${i}`), temp: val(`trafo-bomba-temp-${i}`)
-    }));
-    const relevantes = Array.from(panel.querySelectorAll('.trafo-rel-row')).map(r => ({
-        equipo: r.querySelector('.trafo-rel-equipo').value.trim(),
-        elemento: r.querySelector('.trafo-rel-elemento').value.trim(),
-        identificador: r.querySelector('.trafo-rel-ident').value.trim(),
-        corriente: r.querySelector('.trafo-rel-corr').value.trim(),
-        temperatura: r.querySelector('.trafo-rel-temp').value.trim(),
-    })).filter(x => x.equipo || x.elemento || x.identificador || x.corriente || x.temperatura);
-    const observaciones = val('trafo-obs').split('\n').map(s => s.trim()).filter(Boolean);
-    return {
-        unidad, tipo,
-        fecha: val('trafo-fecha'), tecnicos: val('trafo-tecnicos'),
-        tag: val('trafo-tag'), ot: val('trafo-ot'),
-        radiadores, campos, ventiladores, bombas,
-        fases: cfg.fases ? { R: val('trafo-fase-R'), S: val('trafo-fase-S'), T: val('trafo-fase-T') } : {},
-        relevantes, observaciones,
-    };
+    const fecha = val('trafo-fecha');
+    const tecnicos = val('trafo-tecnicos');
+    const ot = val('trafo-ot');
+
+    const trafos = Array.from(panel.querySelectorAll('.trafo-subpanel')).map(sp => {
+        const tipo = sp.dataset.tipo;
+        const cfg = TRAFO_FORM_CFG[tipo];
+        if (!cfg) return null;
+        const p = `trafo-${tipo}`;
+        const sval = id => (sp.querySelector('#' + id)?.value || '').trim();
+        const radiadores = Array.from({ length: cfg.radiadores }, (_, i) => ({
+            entrada: sval(`${p}-rad-ent-${i}`), salida: sval(`${p}-rad-sal-${i}`)
+        }));
+        const campos = {};
+        cfg.campos.forEach(c => { campos[c.k] = sval(`${p}-campo-${c.k}`); });
+        const ventiladores = Array.from({ length: cfg.ventiladores || 0 }, (_, i) => ({
+            onOff: sval(`${p}-vent-onoff-${i}`), temp: sval(`${p}-vent-temp-${i}`)
+        }));
+        const bombas = Array.from({ length: cfg.bombas || 0 }, (_, i) => ({
+            onOff: sval(`${p}-bomba-onoff-${i}`), temp: sval(`${p}-bomba-temp-${i}`)
+        }));
+        const relevantes = Array.from(sp.querySelectorAll('.trafo-rel-row')).map(r => ({
+            equipo: r.querySelector('.trafo-rel-equipo').value.trim(),
+            elemento: r.querySelector('.trafo-rel-elemento').value.trim(),
+            identificador: r.querySelector('.trafo-rel-ident').value.trim(),
+            corriente: r.querySelector('.trafo-rel-corr').value.trim(),
+            temperatura: r.querySelector('.trafo-rel-temp').value.trim(),
+        })).filter(x => x.equipo || x.elemento || x.identificador || x.corriente || x.temperatura);
+        const observaciones = sval(`${p}-obs`).split('\n').map(s => s.trim()).filter(Boolean);
+        return {
+            tipo, tag: sval(`${p}-tag`),
+            radiadores, campos, ventiladores, bombas,
+            fases: cfg.fases ? { R: sval(`${p}-fase-R`), S: sval(`${p}-fase-S`), T: sval(`${p}-fase-T`) } : {},
+            relevantes, observaciones,
+        };
+    }).filter(Boolean);
+
+    return { unidad, fecha, tecnicos, ot, trafos };
+}
+
+// True si un transformador tiene al menos un dato capturado (para no generar
+// planillas vacías de los trafos que no se inspeccionaron).
+function _trafoTieneDatos(t) {
+    if (!t) return false;
+    if (t.tag) return true;
+    if ((t.relevantes || []).length) return true;
+    if ((t.observaciones || []).length) return true;
+    if (t.fases && (t.fases.R || t.fases.S || t.fases.T)) return true;
+    if ((t.radiadores || []).some(r => r.entrada || r.salida)) return true;
+    if (t.campos && Object.values(t.campos).some(v => v)) return true;
+    if ((t.ventiladores || []).some(v => v.onOff || v.temp)) return true;
+    if ((t.bombas || []).some(b => b.onOff || b.temp)) return true;
+    return false;
 }
 
 // Persistencia local de los datos del trafo, indexada por id del registro.
@@ -3156,12 +3287,35 @@ window.generarPlanillaTrafoHistorial = async function (registroId) {
     const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
     let data = item && item.trafo_data;
     if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
-    if (!data || !data.tipo) data = _trafoLeerLocal(registroId);
-    if (!data || !data.tipo) {
+    if (!data || (!Array.isArray(data.trafos) && !data.tipo)) data = _trafoLeerLocal(registroId);
+    if (!data || (!Array.isArray(data.trafos) && !data.tipo)) {
         alert('No hay datos del transformador guardados para este trabajo.\nAbre el trabajo (Finalizar trabajo) y captura los datos para poder descargar la planilla.');
         return;
     }
-    try { await _descargarPlanillaTrafo(data); }
+
+    // Formato nuevo (multi-trafo): una planilla por cada trafo con datos,
+    // fusionando la cabecera compartida. Formato antiguo: un único objeto.
+    let payloads;
+    if (Array.isArray(data.trafos)) {
+        payloads = data.trafos
+            .filter(_trafoTieneDatos)
+            .map(t => ({ unidad: data.unidad, fecha: data.fecha, tecnicos: data.tecnicos, ot: data.ot, ...t }));
+    } else {
+        payloads = [data];
+    }
+    if (!payloads.length) {
+        alert('No se capturaron datos para ningún transformador de esta unidad.\nAbre el trabajo (Finalizar trabajo) y completa al menos un transformador.');
+        return;
+    }
+
+    try {
+        for (let i = 0; i < payloads.length; i++) {
+            await _descargarPlanillaTrafo(payloads[i]);
+            // Pequeña pausa entre descargas: algunos navegadores bloquean
+            // varias descargas seguidas disparadas en el mismo tick.
+            if (i < payloads.length - 1) await new Promise(r => setTimeout(r, 600));
+        }
+    }
     catch (e) { console.error('[planilla-trafo]', e); alert('Error generando planilla:\n' + e.message); }
 };
 
@@ -6549,7 +6703,7 @@ function renderHistorialView() {
 
         // ── Acciones: tipos automáticos + texto manual ────────────────────────
         const accionesAuto = tipos.length ? tipos.join(', ') : '';
-        const accionesManual = tarea.acciones_realizadas || '';
+        const accionesManual = _accionesResumenHistorial(tarea.acciones_realizadas);
         // Evitar duplicar si el texto manual ya es igual a los tipos
         const mostrarManual = accionesManual && accionesManual !== accionesAuto;
 
@@ -6939,7 +7093,7 @@ function renderHistorialView() {
             aviso: String(item.numero_aviso || '').trim(),
             tipos,
             tipoPrincipal,
-            acciones: String(item.acciones_realizadas || '').trim(),
+            acciones: _accionesResumenHistorial(item.acciones_realizadas),
             observaciones: String(item.observaciones || item.descripcion || '').trim(),
             analisis: String(item.analisis || item.accion_analista || item.recomendacion_analista || '').trim(),
             equipo: equipoFallback,
@@ -18645,7 +18799,7 @@ function renderActividadFicha(task, equipo) {
                 </div>
                 ${task.ot_numero ? `<span class="planify-ficha-chip"><i class="fa-solid fa-hashtag"></i> ${task.ot_numero}</span>` : ''}
             </div>
-            <div class="planify-ficha-reading-note">${task.acciones_realizadas || task.observaciones || 'Sin detalle operativo.'}</div>
+            <div class="planify-ficha-reading-note">${_accionesResumenHistorial(task.acciones_realizadas) || task.observaciones || 'Sin detalle operativo.'}</div>
             <div class="planify-ficha-task-meta">
                 <span><i class="fa-regular fa-bell"></i> ${task.numero_aviso || 'Sin aviso'}</span>
                 <span><i class="fa-solid fa-business-time"></i> ${task.hh_trabajo || '0'} HH</span>
