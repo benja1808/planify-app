@@ -713,11 +713,24 @@ function resolverHojaTrafo(tipo, uNum) {
     }
 }
 
+function trafoTagPorUnidad(tipo, uNum) {
+    const unidad = Number(uNum);
+    if (!unidad || unidad < 1 || unidad > 5) return '';
+    const prefijo = String(unidad).padStart(2, '0');
+    const tags = {
+        PPAL: `${prefijo}BAT01GT101`,
+        AUX: `${prefijo}BBT00GH001`,
+        EST: `G${unidad}-12.4.TRI2`,
+        EXC: `${prefijo}MKC01GT101`,
+    };
+    return tags[String(tipo || '').toUpperCase()] || '';
+}
+
 // Mapa de celdas por tipo de transformador (dónde escribir cada dato).
 const TRAFO_MAPA = {
     EST: {
         cab: { fecha: 'B1', tecnicos: 'B2', tag: 'H1', ot: 'H2' },
-        radiadores: { entradaCol: 2, salidaCol: 4, filaInicio: 6, n: 6 },
+        radiadores: { entradaCol: 2, salidaCol: 4, filaInicio: 6, n: 8 },
         campos: { generacion: 'I4', tempAceite: 'I5', tempBobinado: 'I6', silicaGel: 'I7', nivelCuba: 'I8', nTap: 'I9' },
         fases: { R: 'H12', S: 'H13', T: 'H14' },
         relevantes: { equipoCol: 1, elementoCol: 2, identCol: 6, corrienteCol: 8, tempCol: 9, filaInicio: 20, n: 6 },
@@ -780,7 +793,7 @@ async function generarPlanillaTrafo(body) {
     // Cabecera
     setA(mapa.cab.fecha, fecha);
     setA(mapa.cab.tecnicos, tecnicos);
-    setA(mapa.cab.tag, tag);
+    setA(mapa.cab.tag, tag || trafoTagPorUnidad(tipoUp, uNum));
     setA(mapa.cab.ot, ot);
 
     // Radiadores (entrada/salida)

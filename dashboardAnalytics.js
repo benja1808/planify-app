@@ -1808,7 +1808,14 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 const totalEquipos = Array.isArray(route.equipos) ? route.equipos.length : 0;
                 if (execution?.componentesEstado && typeof execution.componentesEstado === 'object') {
                     const estados = execution.componentesEstado;
-                    Object.values(estados).forEach(st => { if (st === 'listo') done++; });
+                    // Solo contamos estados cuya clave existe en la ruta actual.
+                    // Claves obsoletas (componente removido del seed) inflaban el
+                    // avance por encima del total (p.ej. 9/8 = 113%).
+                    (route.equipos || []).forEach((eq, eqIdx) => {
+                        (eq.componentes || []).forEach((_, ci) => {
+                            if (estados[`${eqIdx}.${ci}`] === 'listo') done++;
+                        });
+                    });
                     // Equipo "hecho" = todos sus componentes están listos (≥1 comp)
                     (route.equipos || []).forEach((eq, eqIdx) => {
                         const comps = eq.componentes || [];

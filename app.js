@@ -98,6 +98,192 @@ function esRolGestion(rol = estado.usuarioActual) {
 }
 window.esRolGestion = esRolGestion;
 
+// Acceso a los modulos predictivos. La fuente principal son las columnas
+// booleanas de `trabajadores`; localStorage queda como respaldo offline.
+const MODULOS_PREDICTIVOS = {
+    termografia: { campo: 'asignado_termografia', label: 'Termografia', color: '#dc2626', icon: 'fa-temperature-half' },
+    vibraciones: { campo: 'asignado_vibraciones', label: 'Vibraciones', color: '#FF6900', icon: 'fa-wave-square' }
+};
+const MODULOS_PREDICTIVOS_LOCAL_KEY = 'planify_modulos_predictivos_v1';
+
+function _leerModulosPredictivosLocales() {
+    try {
+        const data = JSON.parse(localStorage.getItem(MODULOS_PREDICTIVOS_LOCAL_KEY) || '{}');
+        return {
+            termografia: Array.isArray(data.termografia) ? data.termografia : [],
+            vibraciones: Array.isArray(data.vibraciones) ? data.vibraciones : []
+        };
+    } catch (e) {
+        return { termografia: [], vibraciones: [] };
+    }
+}
+
+function _guardarModuloPredictivoLocal(modulo, trabajadorId, asignado) {
+    const data = _leerModulosPredictivosLocales();
+    const ids = new Set(data[modulo] || []);
+    if (asignado) ids.add(trabajadorId);
+    else ids.delete(trabajadorId);
+    data[modulo] = [...ids];
+    try { localStorage.setItem(MODULOS_PREDICTIVOS_LOCAL_KEY, JSON.stringify(data)); }
+    catch (e) { /* almacenamiento privado o lleno */ }
+}
+
+function trabajadorAsignadoModulo(trabajador, modulo) {
+    const meta = MODULOS_PREDICTIVOS[modulo];
+    if (!trabajador || !meta) return false;
+    if (typeof trabajador[meta.campo] === 'boolean') return trabajador[meta.campo];
+    return (_leerModulosPredictivosLocales()[modulo] || []).includes(trabajador.id);
+}
+
+function usuarioTieneModuloPredictivo(modulo) {
+    if (esRolGestion()) return true;
+    if (estado.usuarioActual !== 'trabajador') return false;
+    return trabajadorAsignadoModulo(obtenerTrabajadorActual(), modulo);
+}
+
+async function guardarAsignacionModuloPredictivo(modulo, trabajadorId, asignado) {
+    const meta = MODULOS_PREDICTIVOS[modulo];
+    const trabajador = estado.trabajadores.find(t => String(t.id) === String(trabajadorId));
+    if (!meta || !trabajador) throw new Error('Trabajador o modulo no encontrado.');
+
+    const anterior = trabajador[meta.campo];
+    trabajador[meta.campo] = Boolean(asignado);
+    _guardarModuloPredictivoLocal(modulo, trabajador.id, Boolean(asignado));
+
+    if (estado.trabajadorLogueado?.id === trabajador.id) {
+        estado.trabajadorLogueado = { ...estado.trabajadorLogueado, [meta.campo]: Boolean(asignado) };
+    }
+
+    if (window.supabaseClient && navigator.onLine) {
+        const { error } = await window.supabaseClient
+            .from('trabajadores')
+            .update({ [meta.campo]: Boolean(asignado) })
+            .eq('id', trabajador.id);
+        if (error) {
+            trabajador[meta.campo] = anterior;
+            _guardarModuloPredictivoLocal(modulo, trabajador.id, Boolean(anterior));
+            throw error;
+        }
+    }
+    actualizarVisibilidadModulosPredictivos();
+}
+
+function actualizarVisibilidadModulosPredictivos() {
+    if (estado.usuarioActual !== 'trabajador') return;
+    const vib = usuarioTieneModuloPredictivo('vibraciones');
+    const term = usuarioTieneModuloPredictivo('termografia');
+    const navRutas = document.getElementById('nav-rutas');
+    const navTerm = document.getElementById('nav-termografia');
+    const navMobileRutas = document.getElementById('nav-mobile-rutas');
+    if (navRutas) navRutas.style.display = vib ? 'inline-block' : 'none';
+    if (navTerm) navTerm.style.display = term ? 'inline-block' : 'none';
+    if (navMobileRutas) navMobileRutas.style.display = vib ? 'inline-flex' : 'none';
+}
+
+function renderAccesoModuloRestringido(modulo) {
+    const meta = MODULOS_PREDICTIVOS[modulo];
+    mainContent.innerHTML = `
+        <div class="fade-in" style="padding:1rem; max-width:680px; margin:0 auto;">
+            <section class="panel" style="text-align:center; padding:2rem 1.2rem;">
+                <div style="width:58px; height:58px; margin:0 auto 0.8rem; border-radius:16px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; color:#64748b; font-size:1.45rem;">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h1 style="margin:0; color:#0f172a; font-size:1.2rem;">Modulo no asignado</h1>
+                <p style="margin:0.5rem auto 0; color:#64748b; max-width:440px;">El planificador debe agregarte a <strong>${escapeHtml(meta?.label || modulo)}</strong> para que aparezcan sus accesos y avisos.</p>
+                <button type="button" class="btn btn-outline" style="margin-top:1rem;" onclick="window.mostrarVista('dashboard')">Volver al inicio</button>
+            </section>
+        </div>
+    `;
+}
+
+function htmlSelectorTecnicosModulo(modulo) {
+    if (!esRolGestion()) return '';
+    const meta = MODULOS_PREDICTIVOS[modulo];
+    const inhabilitados = obtenerTrabajadoresInhabilitados();
+    const trabajadores = (estado.trabajadores || [])
+        .filter(t => t.disponible !== false && !inhabilitados.has(t.id))
+        .slice()
+        .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+    const total = trabajadores.filter(t => trabajadorAsignadoModulo(t, modulo)).length;
+    return `
+        <div style="display:flex; justify-content:flex-end; margin:-0.45rem 0 0.8rem;">
+            <button type="button" data-modulo-open="${modulo}" class="btn btn-outline" style="padding:0.42rem 0.7rem; font-size:0.78rem; border-color:${meta.color}55; color:${meta.color};">
+                <i class="fa-solid fa-user-plus"></i> Asignar tecnicos
+                <span data-modulo-button-counter style="margin-left:0.25rem; background:${meta.color}14; border-radius:999px; padding:0.08rem 0.4rem;">${total}</span>
+            </button>
+        </div>
+        <div data-modulo-selector="${modulo}" class="modal-overlay-base" style="display:none; position:fixed; inset:0; z-index:11000; background:rgba(15,23,42,0.55); align-items:center; justify-content:center; padding:1rem;">
+            <section class="panel" style="width:min(720px,100%); max-height:88vh; overflow:auto; margin:0; border-color:${meta.color}55; box-shadow:0 24px 70px rgba(15,23,42,0.3);">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.7rem; margin-bottom:0.75rem;">
+                    <div>
+                        <h2 style="margin:0; font-size:1rem; color:#0f172a;"><i class="fa-solid fa-user-group" style="color:${meta.color};"></i> Tecnicos asignados</h2>
+                        <p style="margin:0.2rem 0 0; color:#64748b; font-size:0.82rem;">Solo estas personas veran el acceso y los avisos de ${meta.label}.</p>
+                    </div>
+                    <button type="button" data-modulo-close class="btn btn-outline btn-icon" aria-label="Cerrar"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div style="display:flex; justify-content:flex-end; margin-bottom:0.65rem;">
+                    <span data-modulo-counter style="background:#f8fafc; color:#475569; border:1px solid #e2e8f0; border-radius:999px; padding:0.25rem 0.65rem; font-size:0.76rem; font-weight:800;">${total} asignado${total === 1 ? '' : 's'}</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.45rem;">
+                    ${trabajadores.length ? trabajadores.map(t => {
+                        const checked = trabajadorAsignadoModulo(t, modulo);
+                        return `
+                            <label data-modulo-tecnico-row style="display:flex; align-items:center; gap:0.55rem; border:1px solid ${checked ? meta.color : '#e2e8f0'}; background:${checked ? `${meta.color}0d` : '#fff'}; border-radius:10px; padding:0.55rem 0.7rem; cursor:pointer;">
+                                <input type="checkbox" data-modulo-tecnico="${escapeHtml(t.id)}" ${checked ? 'checked' : ''} style="width:18px; height:18px; accent-color:${meta.color};">
+                                <span style="min-width:0; flex:1;">
+                                    <strong style="display:block; color:#0f172a; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t.nombre || 'Sin nombre')}</strong>
+                                    <small style="display:block; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t.puesto || 'Sin cargo')}</small>
+                                </span>
+                                <i data-modulo-saving class="fa-solid fa-spinner fa-spin" style="display:none; color:${meta.color};"></i>
+                            </label>
+                        `;
+                    }).join('') : '<p style="color:#94a3b8; margin:0;">No hay trabajadores habilitados.</p>'}
+                </div>
+            </section>
+        </div>
+    `;
+}
+
+function activarSelectorTecnicosModulo(modulo, rerender) {
+    const root = document.querySelector(`[data-modulo-selector="${modulo}"]`);
+    const meta = MODULOS_PREDICTIVOS[modulo];
+    if (!root || !meta) return;
+    const openBtn = document.querySelector(`[data-modulo-open="${modulo}"]`);
+    const cerrar = () => { root.style.display = 'none'; };
+    openBtn?.addEventListener('click', () => { root.style.display = 'flex'; });
+    root.querySelector('[data-modulo-close]')?.addEventListener('click', cerrar);
+    root.addEventListener('click', event => { if (event.target === root) cerrar(); });
+
+    const actualizarConteo = () => {
+        const total = root.querySelectorAll('[data-modulo-tecnico]:checked').length;
+        const counter = root.querySelector('[data-modulo-counter]');
+        const buttonCounter = document.querySelector(`[data-modulo-open="${modulo}"] [data-modulo-button-counter]`);
+        if (counter) counter.textContent = `${total} asignado${total === 1 ? '' : 's'}`;
+        if (buttonCounter) buttonCounter.textContent = String(total);
+    };
+    root.querySelectorAll('[data-modulo-tecnico]').forEach(input => {
+        input.addEventListener('change', async () => {
+            const row = input.closest('[data-modulo-tecnico-row]');
+            const spinner = row?.querySelector('[data-modulo-saving]');
+            input.disabled = true;
+            if (spinner) spinner.style.display = 'inline-block';
+            try {
+                await guardarAsignacionModuloPredictivo(modulo, input.dataset.moduloTecnico, input.checked);
+                row.style.borderColor = input.checked ? meta.color : '#e2e8f0';
+                row.style.background = input.checked ? `${meta.color}0d` : '#fff';
+                input.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+                actualizarConteo();
+            } catch (error) {
+                input.checked = !input.checked;
+                alert(`No se pudo guardar la asignacion de ${meta.label}: ${error?.message || error}`);
+                input.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+            }
+        });
+    });
+}
+
 // ── Guardia de transiciones locales de tareas ─────────────────────────────────
 // Cuando un usuario inicia un trabajo, el cambio se aplica localmente (optimista)
 // y se persiste a Supabase. Pero un refetch de realtime/notificaciones puede
@@ -888,9 +1074,22 @@ function tareaNotificableParaUsuario(tarea) {
     if (esRolGestion()) return true;
     const trabajadorId = obtenerTrabajadorActual()?.id;
     if (!trabajadorId) return false;
-    return String(tarea.liderId) === String(trabajadorId) ||
+    const asignadoATarea = String(tarea.liderId) === String(trabajadorId) ||
         (tarea.ayudantesIds || []).some((id) => String(id) === String(trabajadorId)) ||
         String(tarea.vigiaId || '') === String(trabajadorId);
+    if (!asignadoATarea) return false;
+
+    // Los avisos predictivos superiores solo llegan a quienes tienen habilitado
+    // el modulo correspondiente, aunque hayan quedado en una asignacion antigua.
+    if (typeof esTrabajoTermografia === 'function' && esTrabajoTermografia(tarea)) {
+        return usuarioTieneModuloPredictivo('termografia');
+    }
+    const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    if (texto.includes('VIBRACION') || texto.includes('SEGUIMIENTO VIB')) {
+        return usuarioTieneModuloPredictivo('vibraciones');
+    }
+    return true;
 }
 
 function tareaEstaActivaParaNotificar(tarea) {
@@ -1685,6 +1884,12 @@ function configurarRealtime() {
         pendingHorasExtra = false;
         pendingEquipos = false;
         await Promise.all(fetches);
+        if (estado.usuarioActual === 'trabajador' && estado.trabajadorLogueado?.id) {
+            const actualizado = estado.trabajadores.find(t => String(t.id) === String(estado.trabajadorLogueado.id));
+            if (actualizado) estado.trabajadorLogueado = actualizado;
+            actualizarVisibilidadModulosPredictivos();
+            actualizarBadgeRutasTrabajador();
+        }
         evaluarNotificacionesPlanify();
         solicitarRenderRealtimeNoIntrusivo();
     }
@@ -2154,7 +2359,7 @@ async function guardarTareaFinalizada({
     // ── Guardar mediciones numéricas (vibración / temperatura) ───────────────
     const equipoIdMed = tarea.equipoId || tarea.equipo_id;
     if (equipoIdMed && medicionesData.length > 0) {
-        const fechaHoy = new Date().toISOString().slice(0, 10);
+        const fechaHoy = fechaTermino.slice(0, 10);
         const equipoObj = estado.equipos.find(e => e.id === equipoIdMed);
         const equipoBase = equipoObj?.activo || '';
         const equipoUbic = equipoObj?.ubicacion || '';
@@ -2178,6 +2383,7 @@ async function guardarTareaFinalizada({
                         punto_medicion: m.punto_medicion || m.componente || equipoBase || 'General',
                         componente: m.componente || null,
                         fecha: fechaHoy,
+                        historial_id: histId,
                         tecnico_nombre: ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '').filter(Boolean).join(', ') || tarea.liderNombre || null,
                         tecnicos_nombres: ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '').filter(Boolean)
                     });
@@ -2196,6 +2402,7 @@ async function guardarTareaFinalizada({
                         punto_medicion: m.punto_medicion || m.componente || equipoBase || 'General',
                         componente: m.componente || null,
                         fecha: fechaHoy,
+                        historial_id: histId,
                         tecnico_nombre: ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '').filter(Boolean).join(', ') || tarea.liderNombre || null,
                         tecnicos_nombres: ayudantesIds.map(aid => estado.trabajadores.find(t => t.id === aid)?.nombre || '').filter(Boolean)
                     });
@@ -2209,18 +2416,24 @@ async function guardarTareaFinalizada({
 // La tabla `mediciones` no tiene columnas de técnico ni observaciones, pero sí
 // `notas`. Persistimos ambos ahí (JSON) para que NO se pierdan en el round-trip
 // a Supabase. Al cargar se decodifican de vuelta con _decodificarNotasMedicion.
-function _codificarNotasMedicion(tecnicos, observaciones) {
+function _codificarNotasMedicion(tecnicos, observaciones, historialId = null) {
     const t = Array.isArray(tecnicos) ? tecnicos.filter(Boolean) : [];
     const o = String(observaciones || '').trim();
-    if (!t.length && !o) return null;
-    return JSON.stringify({ t, o });
+    const h = historialId ? String(historialId) : '';
+    if (!t.length && !o && !h) return null;
+    return JSON.stringify({ t, o, h });
 }
 function _decodificarNotasMedicion(row) {
     if (!row || typeof row !== 'object') return row;
-    let tecnicos = [], obs = '';
+    let tecnicos = [], obs = '', historialId = '';
     const notas = row.notas;
     if (typeof notas === 'string' && notas.trim().startsWith('{')) {
-        try { const p = JSON.parse(notas); tecnicos = Array.isArray(p.t) ? p.t : []; obs = p.o || ''; }
+        try {
+            const p = JSON.parse(notas);
+            tecnicos = Array.isArray(p.t) ? p.t : [];
+            obs = p.o || '';
+            historialId = p.h || '';
+        }
         catch (e) { obs = notas; }
     } else if (notas) {
         obs = String(notas);
@@ -2230,18 +2443,19 @@ function _decodificarNotasMedicion(row) {
         ...row,
         tecnicos_nombres: yaTec ? row.tecnicos_nombres : tecnicos,
         tecnico_nombre: row.tecnico_nombre || (tecnicos.length ? tecnicos.join(', ') : null),
-        observaciones: row.observaciones || obs || null
+        observaciones: row.observaciones || obs || null,
+        historial_id: row.historial_id || historialId || null
     };
 }
 
-async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha, observaciones, tecnico_nombre = null, tecnicos_nombres = [] }) {
+async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, componente, fecha, observaciones, historial_id = null, tecnico_nombre = null, tecnicos_nombres = [] }) {
     const unidad = tipo === 'vibracion' ? 'mm/s' : tipo === 'termografia' ? '°C' : '';
     const id = crypto.randomUUID();
     const tecnicosArr = Array.isArray(tecnicos_nombres) ? tecnicos_nombres.filter(Boolean) : [];
     if (!tecnicosArr.length && tecnico_nombre) {
         tecnicosArr.push(...String(tecnico_nombre).split(',').map(s => s.trim()).filter(Boolean));
     }
-    const notas = _codificarNotasMedicion(tecnicosArr, observaciones);
+    const notas = _codificarNotasMedicion(tecnicosArr, observaciones, historial_id);
     const payload = {
         id,
         equipo_id,
@@ -2255,6 +2469,7 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
         tecnico_nombre: tecnicosArr.join(', ') || null,
         tecnicos_nombres: tecnicosArr,
         observaciones: observaciones || null,
+        historial_id: historial_id || null,
         synced: false
     };
     const remotePayload = { id, equipo_id, tipo, valor, unidad, punto_medicion, fecha, notas };
@@ -2463,16 +2678,19 @@ window.abrirDetalleHistorial = function(registroId) {
         ? item.ayudantes_nombres
         : String(item.ayudantes_nombres || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
 
-    // Mediciones del registro. Para vincular se usa la fecha del registro
-    // (fecha_med o created_at) y, si está disponible, el equipo_id. Si nada
-    // de eso está, hacemos match por unidad detectada en el título.
+    // Los cierres nuevos usan historial_id como vínculo exacto. Para registros
+    // antiguos solo se admite fecha + equipo_id; nunca fecha + unidad, porque
+    // eso mezcla trabajos diferentes realizados el mismo día.
     const fechaMed = item.fecha_med
         ? String(item.fecha_med).slice(0, 10)
         : (item.created_at ? String(item.created_at).slice(0, 10) : null);
     let medsRegistro = (estado.historialMediciones || []).filter(m =>
-        fechaMed && String(m.fecha || '').slice(0, 10) === fechaMed
+        String(m.historial_id || '') === String(item.id)
     );
-    if (item.equipo_id) {
+    if (!medsRegistro.length && item.equipo_id) {
+        medsRegistro = (estado.historialMediciones || []).filter(m =>
+            fechaMed && String(m.fecha || '').slice(0, 10) === fechaMed
+        );
         const eq = estado.equipos.find(e => String(e.id) === String(item.equipo_id));
         if (eq) {
             const idsActivo = estado.equipos
@@ -2481,24 +2699,6 @@ window.abrirDetalleHistorial = function(registroId) {
             medsRegistro = medsRegistro.filter(m => idsActivo.includes(m.equipo_id));
         } else {
             medsRegistro = medsRegistro.filter(m => m.equipo_id === item.equipo_id);
-        }
-    } else if (unidad) {
-        // Sin equipo_id: filtrar por equipos cuya ubicación coincida con la
-        // unidad (ej. "U3" matchea "U3", "U 3", "Unidad 3", "UNIDAD 3").
-        const numUnidad = String(unidad).match(/\d+/)?.[0];
-        const matcheaUnidad = (ubic) => {
-            if (!ubic) return false;
-            const u = String(ubic).toUpperCase().replace(/\s+/g, ' ').trim();
-            const target = String(unidad).toUpperCase();
-            if (u === target) return true;
-            if (numUnidad && u.match(new RegExp(`\\bU(NIDAD)?\\s*${numUnidad}\\b`))) return true;
-            return false;
-        };
-        const idsUnidad = (estado.equipos || [])
-            .filter(e => matcheaUnidad(e.ubicacion))
-            .map(e => e.id);
-        if (idsUnidad.length) {
-            medsRegistro = medsRegistro.filter(m => idsUnidad.includes(m.equipo_id));
         }
     }
 
@@ -2883,7 +3083,7 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
         : '';
     // La planilla separa al líder del equipo técnico: usar ayudantes/técnicos
     // registrados y recurrir al líder solo cuando no exista otra información.
-    const tecnicos = getNombresTecnicosFicha(item).join(' / ');
+    const tecnicos = _inicialesTecnicos(getNombresTecnicosFicha(item).join(' / '));
 
     const payload = {
         registroId, unidad, fecha, ot: item.ot_numero || '', tecnicos,
@@ -2947,13 +3147,37 @@ function tipoTrafoDe(tarea) {
     if (/\bAUX/.test(t)) return 'AUX';
     return null;
 }
-function esTareaTrafo(tarea) { return !!tipoTrafoDe(tarea); }
+// Convierte "Ana Baez / Diego Campillay" → "AB / DC" para las planillas (donde
+// la celda de técnicos es angosta). Toma la inicial de cada palabra de cada
+// nombre. Acepta separadores / , ;. Si ya viene en iniciales las respeta.
+function _inicialesTecnicos(str) {
+    return String(str || '')
+        .split(/[\/,;]+/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(nombre => nombre.split(/\s+/).filter(Boolean)
+            .map(w => w.charAt(0).toUpperCase()).join(''))
+        .join(' / ');
+}
+
+function esTareaTrafo(tarea) {
+    // Tipo específico reconocido en el nombre (EXC/EST/AUX/PPAL).
+    if (tipoTrafoDe(tarea)) return true;
+    // Trabajo genérico de transformadores AT por unidad: un solo trabajo
+    // ("TERMOGRAFIA TRANSFORMADOR AT U3") cubre todos los trafos de la unidad
+    // (PPAL/AUX/EST/EXC). Se excluyen rectificadores (precipitadores) y los
+    // transformadores de alumbrado, que no usan esta planilla.
+    const t = `${tarea?.tipo || ''} ${tarea?.subtitulo || ''}`
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    if (/RECTIFICADOR|PRECIPITA|ALUMBRADO/.test(t)) return false;
+    return /\b(TRANSFORMADOR(?:ES)?|TRAFOS?)\s+AT\b/.test(t);
+}
 
 // Config del formulario por tipo de transformador.
 const TRAFO_FORM_CFG = {
     EST: {
         titulo: 'Transformador Estación',
-        radiadores: 6,
+        radiadores: 8,
         fases: true,
         campos: [
             { k: 'generacion',   label: 'Generación [MW]',     ph: 'Ej: 180' },
@@ -3008,6 +3232,29 @@ const TRAFO_FORM_CFG = {
     },
 };
 
+function trafoConfigParaUnidad(tipo, uNum) {
+    const cfg = TRAFO_FORM_CFG[tipo];
+    if (!cfg) return null;
+    // Los transformadores principales de U1 y U2 tienen 12 radiadores.
+    if (tipo === 'PPAL' && [1, 2].includes(Number(uNum))) {
+        return { ...cfg, radiadores: 12 };
+    }
+    return cfg;
+}
+
+function trafoTagPorUnidad(tipo, uNum) {
+    const unidad = Number(uNum);
+    if (!unidad || unidad < 1 || unidad > 5) return '';
+    const prefijo = String(unidad).padStart(2, '0');
+    const tags = {
+        PPAL: `${prefijo}BAT01GT101`,
+        AUX: `${prefijo}BBT00GH001`,
+        EST: `G${unidad}-12.4.TRI2`,
+        EXC: `${prefijo}MKC01GT101`,
+    };
+    return tags[tipo] || '';
+}
+
 // Transformadores que pertenecen a cada unidad. Un trabajo de trafo de la
 // unidad debe permitir capturar TODOS sus transformadores, no solo uno.
 const TRAFOS_POR_UNIDAD = {
@@ -3054,7 +3301,7 @@ function _buildPanelTrafo(container, tareaCtx) {
     // HTML de un transformador. Los ids se prefijan por tipo (trafo-PPAL-...)
     // para que las pestañas no choquen entre sí.
     const subpanelHtml = (tipo) => {
-        const cfg = TRAFO_FORM_CFG[tipo];
+        const cfg = trafoConfigParaUnidad(tipo, uNum);
         const p = `trafo-${tipo}`;
         const radHtml = Array.from({ length: cfg.radiadores }, (_, i) => `
             <div style="display:grid; grid-template-columns:90px 1fr 1fr; gap:0.4rem; align-items:center; margin-bottom:0.35rem;">
@@ -3076,8 +3323,8 @@ function _buildPanelTrafo(container, tareaCtx) {
                     <div><label style="font-size:0.74rem; color:#475569; font-weight:600;">Fase T</label>${inp(`${p}-fase-T`, '°C')}</div>
                 </div>
             </div>` : '';
-        const onOff = (id) => `<select id="${id}" class="form-control" style="font-size:0.82rem; padding:0.4rem;"><option value="">—</option><option value="On">On</option><option value="Off">Off</option></select>`;
-        const seccionOnOff = (titulo, prefijo, n) => !n ? '' : `
+        const onOff = (id, valorDefecto = '') => `<select id="${id}" class="form-control" style="font-size:0.82rem; padding:0.4rem;"><option value=""${valorDefecto === '' ? ' selected' : ''}>—</option><option value="On"${valorDefecto === 'On' ? ' selected' : ''}>On</option><option value="Off"${valorDefecto === 'Off' ? ' selected' : ''}>Off</option></select>`;
+        const seccionOnOff = (titulo, prefijo, n, valorDefecto = '') => !n ? '' : `
             <div style="margin-top:0.85rem;">
                 <div style="font-size:0.76rem; font-weight:800; color:#1e40af; text-transform:uppercase; margin-bottom:0.4rem;">${titulo}</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0.45rem;">
@@ -3085,18 +3332,18 @@ function _buildPanelTrafo(container, tareaCtx) {
                         <div style="border:1px solid #e5e7eb; border-radius:8px; padding:0.4rem 0.5rem;">
                             <div style="font-size:0.74rem; color:#475569; font-weight:600; margin-bottom:0.25rem;">N°${String(i + 1).padStart(2, '0')}</div>
                             <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.3rem;">
-                                ${onOff(`${prefijo}-onoff-${i}`)}
+                                ${onOff(`${prefijo}-onoff-${i}`, valorDefecto)}
                                 ${inp(`${prefijo}-temp-${i}`, '°C')}
                             </div>
                         </div>`).join('')}
                 </div>
             </div>`;
-        const ventHtml = seccionOnOff('Estado de ventiladores', `${p}-vent`, cfg.ventiladores || 0);
+        const ventHtml = seccionOnOff('Estado de ventiladores', `${p}-vent`, cfg.ventiladores || 0, 'Off');
         const bombasHtml = seccionOnOff('Bombas de flujo', `${p}-bomba`, cfg.bombas || 0);
         return `
             <div class="trafo-subpanel" data-tipo="${tipo}" id="trafo-sub-${tipo}" style="display:none;">
                 <div style="margin-bottom:0.6rem;">
-                    <label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Tag</label>${inp(`${p}-tag`, 'Ej: TR-' + tipo)}
+                    <label style="display:block; font-size:0.74rem; color:#475569; font-weight:700; margin-bottom:0.2rem;">Tag</label>${inp(`${p}-tag`, 'Identificación del transformador', trafoTagPorUnidad(tipo, uNum))}
                 </div>
                 ${ventHtml}
                 ${bombasHtml}
@@ -3193,6 +3440,7 @@ function _leerPanelTrafo(scope) {
     const panel = scope.querySelector('#trafo-panel');
     if (!panel) return null;
     const unidad = panel.dataset.unidad || '';
+    const uNum = Number(String(unidad).replace(/\D/g, '')) || null;
     const val = id => (panel.querySelector('#' + id)?.value || '').trim();
     const fecha = val('trafo-fecha');
     const tecnicos = val('trafo-tecnicos');
@@ -3200,7 +3448,7 @@ function _leerPanelTrafo(scope) {
 
     const trafos = Array.from(panel.querySelectorAll('.trafo-subpanel')).map(sp => {
         const tipo = sp.dataset.tipo;
-        const cfg = TRAFO_FORM_CFG[tipo];
+        const cfg = trafoConfigParaUnidad(tipo, uNum);
         if (!cfg) return null;
         const p = `trafo-${tipo}`;
         const sval = id => (sp.querySelector('#' + id)?.value || '').trim();
@@ -3299,9 +3547,9 @@ window.generarPlanillaTrafoHistorial = async function (registroId) {
     if (Array.isArray(data.trafos)) {
         payloads = data.trafos
             .filter(_trafoTieneDatos)
-            .map(t => ({ unidad: data.unidad, fecha: data.fecha, tecnicos: data.tecnicos, ot: data.ot, ...t }));
+            .map(t => ({ unidad: data.unidad, fecha: data.fecha, tecnicos: _inicialesTecnicos(data.tecnicos), ot: data.ot, ...t }));
     } else {
-        payloads = [data];
+        payloads = [{ ...data, tecnicos: _inicialesTecnicos(data.tecnicos) }];
     }
     if (!payloads.length) {
         alert('No se capturaron datos para ningún transformador de esta unidad.\nAbre el trabajo (Finalizar trabajo) y completa al menos un transformador.');
@@ -3317,6 +3565,204 @@ window.generarPlanillaTrafoHistorial = async function (registroId) {
         }
     }
     catch (e) { console.error('[planilla-trafo]', e); alert('Error generando planilla:\n' + e.message); }
+};
+
+// Rellena el panel de trafo (recién construido por _buildPanelTrafo) con datos
+// ya capturados (operación inversa a _leerPanelTrafo).
+function _prefillPanelTrafo(scope, data) {
+    const panel = scope.querySelector('#trafo-panel');
+    if (!panel || !data) return;
+    const setv = (id, v) => { const el = panel.querySelector('#' + id); if (el && v != null && v !== '') el.value = v; };
+    setv('trafo-fecha', data.fecha);
+    setv('trafo-tecnicos', data.tecnicos);
+    setv('trafo-ot', data.ot);
+    const lista = Array.isArray(data.trafos) ? data.trafos : (data.tipo ? [data] : []);
+    lista.forEach(t => {
+        const sp = panel.querySelector(`.trafo-subpanel[data-tipo="${t.tipo}"]`);
+        if (!sp) return;
+        const p = `trafo-${t.tipo}`;
+        const sset = (id, v) => { const el = sp.querySelector('#' + id); if (el && v != null && v !== '') el.value = v; };
+        sset(`${p}-tag`, t.tag);
+        (t.radiadores || []).forEach((r, i) => { sset(`${p}-rad-ent-${i}`, r.entrada); sset(`${p}-rad-sal-${i}`, r.salida); });
+        if (t.campos) Object.keys(t.campos).forEach(k => sset(`${p}-campo-${k}`, t.campos[k]));
+        (t.ventiladores || []).forEach((v, i) => { sset(`${p}-vent-onoff-${i}`, v.onOff); sset(`${p}-vent-temp-${i}`, v.temp); });
+        (t.bombas || []).forEach((b, i) => { sset(`${p}-bomba-onoff-${i}`, b.onOff); sset(`${p}-bomba-temp-${i}`, b.temp); });
+        if (t.fases) { sset(`${p}-fase-R`, t.fases.R); sset(`${p}-fase-S`, t.fases.S); sset(`${p}-fase-T`, t.fases.T); }
+        if ((t.observaciones || []).length) sset(`${p}-obs`, t.observaciones.join('\n'));
+        // Puntos relevantes: reconstruir una fila por cada uno guardado.
+        const relList = sp.querySelector('.trafo-rel-list');
+        const rel = t.relevantes || [];
+        if (relList && rel.length) {
+            relList.innerHTML = '';
+            const addBtn = panel.querySelector(`.trafo-rel-add[data-tipo="${t.tipo}"]`);
+            rel.forEach(r => {
+                addBtn?.click();
+                const row = relList.lastElementChild;
+                if (!row) return;
+                const rset = (sel, v) => { const el = row.querySelector(sel); if (el && v != null) el.value = v; };
+                rset('.trafo-rel-equipo', r.equipo);
+                rset('.trafo-rel-elemento', r.elemento);
+                rset('.trafo-rel-ident', r.identificador);
+                rset('.trafo-rel-corr', r.corriente);
+                rset('.trafo-rel-temp', r.temperatura);
+            });
+        }
+    });
+}
+
+// Abre un modal con el panel de captura del transformador para rellenar/editar
+// los datos de un registro de historial ya finalizado (como la excitatriz).
+window.editarDatosTrafo = function(registroId) {
+    const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
+    if (!item) { alert('Registro no encontrado'); return; }
+
+    document.getElementById('modal-editar-trafo')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-editar-trafo';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:12000; display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem; overflow:auto;';
+    overlay.innerHTML = `
+        <div style="background:#fff; border-radius:16px; max-width:920px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem 1.2rem; border-bottom:1px solid #eef2f7; position:sticky; top:0; background:#fff; border-radius:16px 16px 0 0; z-index:1;">
+                <strong style="font-size:1rem; color:#0f172a;"><i class="fa-solid fa-pen-to-square" style="color:#dc2626;"></i> Rellenar datos del transformador</strong>
+                <button onclick="document.getElementById('modal-editar-trafo').remove()" style="background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; color:#94a3b8;">&times;</button>
+            </div>
+            <div id="editar-trafo-form" style="padding:1rem 1.2rem;"></div>
+            <div style="display:flex; gap:0.6rem; justify-content:flex-end; padding:1rem 1.2rem; border-top:1px solid #eef2f7; position:sticky; bottom:0; background:#fff; border-radius:0 0 16px 16px;">
+                <button onclick="document.getElementById('modal-editar-trafo').remove()" style="background:#fff; border:1px solid #e5e7eb; border-radius:9px; padding:0.6rem 1.1rem; font-weight:700; cursor:pointer; color:#475569;">Cancelar</button>
+                <button onclick="window.guardarDatosTrafo('${String(registroId).replace(/'/g, "\\'")}')" style="background:linear-gradient(135deg,#dc2626,#f97316); color:#fff; border:none; border-radius:9px; padding:0.6rem 1.3rem; font-weight:800; cursor:pointer;"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    const formCont = overlay.querySelector('#editar-trafo-form');
+    _buildPanelTrafo(formCont, {
+        tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion,
+        ot_numero: item.ot_numero, lider_nombre: item.lider_nombre
+    });
+    const existing = _tgTrafoData(item);
+    if (existing) _prefillPanelTrafo(formCont, existing);
+};
+
+// Guarda los datos del transformador editados en el registro de historial
+// (memoria + localStorage + Supabase) y refresca el detalle.
+window.guardarDatosTrafo = async function(registroId) {
+    const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
+    if (!item) { alert('Registro no encontrado'); return; }
+    const formCont = document.querySelector('#modal-editar-trafo #editar-trafo-form');
+    if (!formCont) return;
+    const data = _leerPanelTrafo(formCont);
+    if (!data) { alert('No se pudo leer el panel del transformador.'); return; }
+
+    item.trafo_data = data;
+    _trafoGuardarLocal(registroId, data);
+    try {
+        await _db.update(tablasDb.historial, registroId, { trafo_data: data });
+    } catch (e) {
+        console.warn('[trafo] no se pudo guardar trafo_data en Supabase:', e?.message);
+    }
+
+    document.getElementById('modal-editar-trafo')?.remove();
+    if (typeof renderTermografiaDetalle === 'function' && vistaTermografiaEstado?.registroId === registroId) {
+        renderTermografiaDetalle(registroId);
+    }
+    if (typeof mostrarToastNotificacion === 'function') {
+        mostrarToastNotificacion('Datos guardados', 'Ya puedes descargar la planilla.', { type: 'success', duration: 2500 });
+    }
+};
+
+// ── TRAFOS RECTIFICADORES: rellenar datos desde el historial ──────────────
+// Abre un modal con el checklist de trafos rectificadores de la unidad para
+// capturar/editar sus lecturas (carcasa, aceite, nivel, voltaje, corriente).
+window.editarDatosRectificador = function(registroId) {
+    const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
+    if (!item) { alert('Registro no encontrado'); return; }
+    const unidad = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+    if (!trafosRectificadoresPorUnidad(unidad).length) {
+        alert('No hay listado de trafos rectificadores para esta unidad (solo U3 y U5).');
+        return;
+    }
+
+    document.getElementById('modal-editar-rectif')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-editar-rectif';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:12000; display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem; overflow:auto;';
+    overlay.innerHTML = `
+        <div style="background:#fff; border-radius:16px; max-width:820px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:1rem 1.2rem; border-bottom:1px solid #eef2f7; position:sticky; top:0; background:#fff; border-radius:16px 16px 0 0; z-index:1;">
+                <strong style="font-size:1rem; color:#0f172a;"><i class="fa-solid fa-pen-to-square" style="color:#7c3aed;"></i> Rellenar datos — Trafos rectificadores U${unidad}</strong>
+                <button onclick="document.getElementById('modal-editar-rectif').remove()" style="background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; color:#94a3b8;">&times;</button>
+            </div>
+            <div id="editar-rectif-form" style="padding:1rem 1.2rem;"></div>
+            <div style="display:flex; gap:0.6rem; justify-content:flex-end; padding:1rem 1.2rem; border-top:1px solid #eef2f7; position:sticky; bottom:0; background:#fff; border-radius:0 0 16px 16px;">
+                <button onclick="document.getElementById('modal-editar-rectif').remove()" style="background:#fff; border:1px solid #e5e7eb; border-radius:9px; padding:0.6rem 1.1rem; font-weight:700; cursor:pointer; color:#475569;">Cancelar</button>
+                <button onclick="window.guardarDatosRectificador('${String(registroId).replace(/'/g, "\\'")}')" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; border:none; border-radius:9px; padding:0.6rem 1.3rem; font-weight:800; cursor:pointer;"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+
+    const formCont = overlay.querySelector('#editar-rectif-form');
+    _buildPanelTrafosRectificador(formCont, { tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+
+    // Precargar lecturas ya guardadas: marcar el checkbox y rellenar campos.
+    const data = _tgRectifData(item);
+    (data?.trafos || []).filter(_rectifTieneDatos).forEach(t => {
+        const el = Array.from(formCont.querySelectorAll('.tr-item')).find(it => it.dataset.codigo === t.codigo);
+        if (!el) return;
+        const cb = el.querySelector('.tr-check');
+        if (cb && !cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change')); }
+        const set = (sel, v) => { const x = el.querySelector(sel); if (x && v != null && v !== '') x.value = v; };
+        set('.tr-tcarcasa', t.tCarcasa);
+        set('.tr-taceite', t.tAceite);
+        set('.tr-nivel', t.nivel);
+        set('.tr-voltaje', t.voltaje);
+        set('.tr-corriente', t.corriente);
+    });
+};
+
+// Guarda las lecturas del rectificador en el registro (memoria + localStorage +
+// Supabase, en trafo_data con tipo 'rectificador') y refresca el detalle.
+window.guardarDatosRectificador = async function(registroId) {
+    const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
+    if (!item) { alert('Registro no encontrado'); return; }
+    const formCont = document.querySelector('#modal-editar-rectif #editar-rectif-form');
+    if (!formCont) return;
+    const unidad = obtenerUnidadTarea({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
+
+    const trafos = [];
+    formCont.querySelectorAll('.tr-item').forEach(el => {
+        const cb = el.querySelector('.tr-check');
+        if (!cb || !cb.checked) return;
+        trafos.push({
+            codigo: el.dataset.codigo || '',
+            tCarcasa: el.querySelector('.tr-tcarcasa')?.value.trim() || '',
+            tAceite: el.querySelector('.tr-taceite')?.value.trim() || '',
+            nivel: el.querySelector('.tr-nivel')?.value.trim() || '',
+            voltaje: el.querySelector('.tr-voltaje')?.value.trim() || '',
+            corriente: el.querySelector('.tr-corriente')?.value.trim() || '',
+        });
+    });
+
+    const data = {
+        tipo: 'rectificador',
+        unidad: unidad ? `U${unidad}` : '',
+        fecha: '', tecnicos: '', ot: item.ot_numero || '',
+        trafos
+    };
+    item.trafo_data = data;
+    _rectifGuardarLocal(registroId, data);
+    try {
+        await _db.update(tablasDb.historial, registroId, { trafo_data: data });
+    } catch (e) {
+        console.warn('[rectif] no se pudo guardar en Supabase:', e?.message);
+    }
+
+    document.getElementById('modal-editar-rectif')?.remove();
+    if (typeof renderTermografiaDetalle === 'function' && vistaTermografiaEstado?.registroId === registroId) {
+        renderTermografiaDetalle(registroId);
+    }
+    if (typeof mostrarToastNotificacion === 'function') {
+        mostrarToastNotificacion('Datos guardados', 'Lecturas del rectificador registradas.', { type: 'success', duration: 2500 });
+    }
 };
 
 // Editar fecha de inicio del permiso o de término (vencimiento) de una tarea
@@ -5778,7 +6224,7 @@ async function actualizarBadgeInsumos() {
 async function actualizarBadgeRutasTrabajador() {
     const badge = document.getElementById('badge-mobile-rutas');
     if (!badge) return;
-    if (estado.usuarioActual !== 'trabajador') {
+    if (estado.usuarioActual !== 'trabajador' || !usuarioTieneModuloPredictivo('vibraciones')) {
         badge.style.display = 'none';
         return;
     }
@@ -13614,6 +14060,10 @@ window.volverAMisRutas = function() {
 function renderTrabajadorRutasView() {
     const host = mainContent || document.getElementById('main-content');
     if (!host) return;
+    if (!usuarioTieneModuloPredictivo('vibraciones')) {
+        renderAccesoModuloRestringido('vibraciones');
+        return;
+    }
 
     const trabajador = estado.trabajadorLogueado;
     const trabajadorId = trabajador?.id;
@@ -14630,14 +15080,10 @@ function renderItoView() {
     todasRutas.forEach((r, idx) => {
         const ej = ejecuciones[idx];
         if (!ej) return;  // solo rutas con ejecución activa
-        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
-        totalCompTodas += comps;
-        if (ej.componentesEstado) {
-            Object.values(ej.componentesEstado).forEach(st => {
-                if (st === 'listo') totalCompListos++;
-                else if (st === 'no-ejecutado') totalCompNoEjec++;
-            });
-        }
+        const cnt = rutasContarComponentes(idx, ej);
+        totalCompTodas += cnt.total;
+        totalCompListos += cnt.listos;
+        totalCompNoEjec += cnt.noEjec;
     });
     const pctGlobal = totalCompTodas ? Math.round((totalCompListos / totalCompTodas) * 100) : 0;
     const rutasActivas = Object.keys(ejecuciones).length;
@@ -14652,14 +15098,10 @@ function renderItoView() {
         const u = r.unidad || 'Otros';
         if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
         const slot = unidadesMap.get(u);
-        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
-        slot.total += comps;
-        if (ej.componentesEstado) {
-            Object.values(ej.componentesEstado).forEach(st => {
-                if (st === 'listo') slot.listos++;
-                else if (st === 'no-ejecutado') slot.noEjec++;
-            });
-        }
+        const cnt = rutasContarComponentes(idx, ej);
+        slot.total += cnt.total;
+        slot.listos += cnt.listos;
+        slot.noEjec += cnt.noEjec;
     });
     const porUnidad = [...unidadesMap.entries()]
         .map(([u, x]) => ({
@@ -14675,13 +15117,9 @@ function renderItoView() {
     const rutasAvance = [];
     todasRutas.forEach((r, idx) => {
         const ej = ejecuciones[idx];
-        const comps = (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0);
-        let listos = 0, noEjec = 0;
-        if (ej?.componentesEstado) {
-            Object.values(ej.componentesEstado).forEach(st => {
-                if (st === 'listo') listos++; else if (st === 'no-ejecutado') noEjec++;
-            });
-        }
+        const cnt = rutasContarComponentes(idx, ej);
+        const comps = cnt.total;
+        const listos = cnt.listos, noEjec = cnt.noEjec;
         if (ej) {
             rutasAvance.push({
                 nombre: r.nombre, unidad: r.unidad, plan: r.plan, ot: ej.ot,
@@ -14836,6 +15274,14 @@ function renderItoView() {
 
 let _rutasRefrescoEnVuelo = false;
 function renderRutasView() {
+    if (estado.usuarioActual === 'trabajador') {
+        if (!usuarioTieneModuloPredictivo('vibraciones')) {
+            renderAccesoModuloRestringido('vibraciones');
+            return;
+        }
+        renderTrabajadorRutasView();
+        return;
+    }
     // Refrescar ejecuciones desde Supabase en segundo plano (cache local
     // se usa para el primer paint, luego re-renderizamos si hubo cambios).
     // Guardamos un flag para que el re-render no dispare otro refresh.
@@ -14891,6 +15337,8 @@ function renderVibracionesHub() {
                 </div>
             </section>
 
+            ${htmlSelectorTecnicosModulo('vibraciones')}
+
             <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.9rem;">
                 <button type="button" onclick="window.vibracionesAbrir('rutas')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(249,115,22,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#fff7ed; color:#FF6900; margin-bottom:0.75rem;"><i class="fa-solid fa-route"></i></span>
@@ -14906,6 +15354,7 @@ function renderVibracionesHub() {
             </section>
         </div>
     `;
+    activarSelectorTecnicosModulo('vibraciones', renderVibracionesHub);
 }
 
 // Detecta si un registro del historial corresponde a un trabajo de termografía
@@ -14968,6 +15417,53 @@ function _tgAyudantes(item) {
         ? raw
         : String(raw || '').split(/[,;]/).map(s => s.trim()).filter(Boolean);
 }
+// True si el registro es un trabajo de transformador AT (EXC/EST/AUX/PPAL).
+function _tgEsTrafo(item) {
+    return typeof esTareaTrafo === 'function'
+        && esTareaTrafo({ tipo: item.tipo, subtitulo: item.subtitulo });
+}
+// Lee los datos capturados del transformador: primero del registro
+// (Supabase/memoria) y, si no, de la caché local.
+function _tgTrafoData(item) {
+    let data = item && item.trafo_data;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
+    if (!data || (!Array.isArray(data.trafos) && !data.tipo)) {
+        data = (typeof _trafoLeerLocal === 'function') ? _trafoLeerLocal(item.id) : null;
+    }
+    return data;
+}
+// True si el registro es un trabajo de trafo rectificador (precipitador).
+function _tgEsRectif(item) {
+    return typeof esTareaTrafoRectificador === 'function'
+        && esTareaTrafoRectificador({ tipo: item.tipo, subtitulo: item.subtitulo });
+}
+// Persistencia local de los datos del rectificador (caché), por id de registro.
+function _rectifGuardarLocal(registroId, payload) {
+    if (!registroId || !payload) return;
+    try {
+        const map = JSON.parse(localStorage.getItem('planify_rectificador_data') || '{}');
+        map[registroId] = payload;
+        localStorage.setItem('planify_rectificador_data', JSON.stringify(map));
+    } catch (e) { console.warn('[rectif] no se pudo guardar local:', e?.message); }
+}
+function _rectifLeerLocal(registroId) {
+    try { return (JSON.parse(localStorage.getItem('planify_rectificador_data') || '{}'))[registroId] || null; }
+    catch (e) { return null; }
+}
+// Lee los datos capturados del rectificador (trafo_data con tipo 'rectificador'
+// o caché local). Devuelve { unidad, fecha, tecnicos, ot, trafos:[...] } o null.
+function _tgRectifData(item) {
+    let data = item && item.trafo_data;
+    if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = null; } }
+    if (!data || data.tipo !== 'rectificador' || !Array.isArray(data.trafos)) {
+        data = _rectifLeerLocal(item.id);
+    }
+    return (data && data.tipo === 'rectificador' && Array.isArray(data.trafos)) ? data : null;
+}
+// True si un trafo rectificador tiene al menos una lectura capturada.
+function _rectifTieneDatos(t) {
+    return !!(t && (t.tCarcasa || t.tAceite || t.nivel || t.voltaje || t.corriente));
+}
 // Equipo (grupo) al que pertenece el registro.
 function _tgGrupo(item) {
     const unidad = _tgUnidadDe(item);
@@ -15012,6 +15508,10 @@ window.termografiaVolver = function () {
 };
 
 function renderTermografiaView() {
+    if (!usuarioTieneModuloPredictivo('termografia')) {
+        renderAccesoModuloRestringido('termografia');
+        return;
+    }
     if (vistaTermografiaEstado.registroId) { renderTermografiaDetalle(vistaTermografiaEstado.registroId); return; }
     if (vistaTermografiaEstado.seccion === 'actuales') { renderTermografiaActuales(); return; }
     if (vistaTermografiaEstado.seccion === 'historial') {
@@ -15043,6 +15543,8 @@ function renderTermografiaHub() {
                 </div>
             </section>
 
+            ${htmlSelectorTecnicosModulo('termografia')}
+
             <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.9rem;">
                 <button type="button" onclick="window.termografiaAbrirSeccion('actuales')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(16,185,129,0.28); background:#fff; transition:transform 160ms, box-shadow 160ms;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#ecfdf5; color:#10b981; margin-bottom:0.75rem;"><i class="fa-solid fa-person-digging"></i></span>
@@ -15058,6 +15560,7 @@ function renderTermografiaHub() {
             </section>
         </div>
     `;
+    activarSelectorTecnicosModulo('termografia', renderTermografiaHub);
 }
 
 // Sección "Trabajos actuales": tareas de termografía en curso (sin finalizar).
@@ -15277,6 +15780,8 @@ function renderTermografiaDetalle(registroId) {
 
     const g = _tgGrupo(item);
     const esExc = g.esExc;
+    const esTrafo = !esExc && _tgEsTrafo(item);
+    const esRectif = !esExc && !esTrafo && _tgEsRectif(item);
     const color = colorUnidad(g.unidad || '');
     const ayudantes = _tgAyudantes(item);
     const fechaLarga = _tgFmtFechaLarga(item.fecha_termino || item.created_at);
@@ -15340,6 +15845,102 @@ function renderTermografiaDetalle(registroId) {
                     </table>
                 </div>` : `<div style="padding:1rem; color:#64748b; font-size:0.9rem;">No se pudieron reconstruir las escobillas de este registro.</div>`}
             </div>`;
+    } else if (esTrafo) {
+        const data = _tgTrafoData(item);
+        const trafos = data && Array.isArray(data.trafos)
+            ? data.trafos.filter(_trafoTieneDatos)
+            : (data && data.tipo && _trafoTieneDatos(data) ? [data] : []);
+
+        if (!trafos.length) {
+            cuerpo = `<div class="empty-state" style="margin-top:0.85rem;"><div><strong>Sin datos del transformador</strong><p>Este trabajo se cerró sin capturar los datos del transformador. Abre el trabajo (Finalizar trabajo) y captura los datos para ver el detalle y descargar la planilla.</p></div></div>`;
+        } else {
+            const campoT = (label, val) => `
+                <div style="display:flex; justify-content:space-between; gap:0.5rem; padding:0.3rem 0; border-bottom:1px dashed #f1f5f9;">
+                    <span style="color:#64748b; font-size:0.84rem;">${escapeHtml(label)}</span>
+                    <strong style="color:#0f172a; font-size:0.88rem;">${val ? escapeHtml(String(val)) : '—'}</strong>
+                </div>`;
+            // Subtítulo de sección dentro de la tarjeta de un trafo.
+            const subT = txt => `<div style="font-size:0.74rem; font-weight:800; color:#1e40af; text-transform:uppercase; letter-spacing:0.04em; margin:0 0 0.4rem;">${escapeHtml(txt)}</div>`;
+            // Tabla genérica: encabezados + filas (cada fila = array de celdas).
+            const tabla = (headers, filas) => `<div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.84rem; min-width:${headers.length * 110}px;">
+                    <thead><tr style="background:#f8fafc; color:#475569; text-align:left;">${headers.map((h, i) => `<th style="padding:0.5rem 0.6rem; ${i ? 'text-align:center;' : ''}">${escapeHtml(h)}</th>`).join('')}</tr></thead>
+                    <tbody>${filas.map(cels => `<tr style="border-top:1px solid #e5e7eb;">${cels.map((c, i) => `<td style="padding:0.4rem 0.6rem; ${i ? 'text-align:center;' : ''} color:#0f172a;">${escapeHtml(c == null || c === '' ? '—' : String(c))}</td>`).join('')}</tr>`).join('')}</tbody>
+                </table>
+            </div>`;
+
+            cuerpo = trafos.map(t => {
+                const cfg = (typeof TRAFO_FORM_CFG === 'object' && TRAFO_FORM_CFG[t.tipo]) || {};
+                const titulo = (cfg.titulo || `Transformador ${t.tipo || ''}`).trim() + (t.tag ? ` · ${t.tag}` : '');
+
+                const camposHtml = (cfg.campos || [])
+                    .filter(c => t.campos && t.campos[c.k])
+                    .map(c => campoT(c.label, t.campos[c.k])).join('');
+                const fasesHtml = (cfg.fases && t.fases && (t.fases.R || t.fases.S || t.fases.T))
+                    ? campoT('Fases (R / S / T)', `${t.fases.R || '—'} / ${t.fases.S || '—'} / ${t.fases.T || '—'}`)
+                    : '';
+
+                const rad = (t.radiadores || []).map((r, i) => ({ n: i + 1, ...r })).filter(r => r.entrada || r.salida);
+                const vent = (t.ventiladores || []).map((v, i) => ({ n: i + 1, ...v })).filter(v => v.onOff || v.temp);
+                const bomb = (t.bombas || []).map((b, i) => ({ n: i + 1, ...b })).filter(b => b.onOff || b.temp);
+                const rel = t.relevantes || [];
+                const obs = t.observaciones || [];
+
+                // Cada bloque con datos se agrega a la lista de secciones.
+                const secciones = [];
+                if (camposHtml || fasesHtml) secciones.push(`<div style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; padding:0.6rem 0.9rem;">${camposHtml}${fasesHtml}</div>`);
+                if (rad.length) secciones.push(`${subT('Radiadores (entrada / salida) [°C]')}${tabla(['Radiador', 'Entrada', 'Salida'], rad.map(r => [`N°${r.n}`, r.entrada, r.salida]))}`);
+                if (vent.length) secciones.push(`${subT('Ventiladores')}${tabla(['Ventilador', 'On/Off', 'Temp [°C]'], vent.map(v => [`N°${v.n}`, v.onOff, v.temp]))}`);
+                if (bomb.length) secciones.push(`${subT('Bombas')}${tabla(['Bomba', 'On/Off', 'Temp [°C]'], bomb.map(b => [`N°${b.n}`, b.onOff, b.temp]))}`);
+                if (rel.length) secciones.push(`${subT('Puntos relevantes')}${tabla(['Equipo', 'Elemento', 'Identificador', 'Corr [A]', 'Temp [°C]'], rel.map(r => [r.equipo, r.elemento, r.identificador, r.corriente, r.temperatura]))}`);
+                if (obs.length) secciones.push(`${subT('Observaciones')}<ul style="margin:0 0 0 1.1rem; padding:0; font-size:0.88rem; color:#1f2937;">${obs.map(o => `<li>${escapeHtml(o)}</li>`).join('')}</ul>`);
+
+                const cuerpoTrafo = secciones.length
+                    ? secciones.map(s => `<div style="margin-bottom:0.85rem;">${s}</div>`).join('')
+                    : `<div style="color:#94a3b8; font-size:0.88rem;">Sin datos capturados para este transformador.</div>`;
+
+                return `
+                <div style="margin-top:0.85rem; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+                    <div style="background:#eff6ff; color:#1e40af; padding:0.6rem 0.9rem; font-size:0.86rem; font-weight:800;">
+                        <i class="fa-solid fa-bolt"></i> ${escapeHtml(titulo)}
+                    </div>
+                    <div style="padding:0.9rem;">${cuerpoTrafo}</div>
+                </div>`;
+            }).join('');
+        }
+    } else if (esRectif) {
+        const data = _tgRectifData(item);
+        const trafos = data ? (data.trafos || []).filter(_rectifTieneDatos) : [];
+        if (!trafos.length) {
+            cuerpo = `<div class="empty-state" style="margin-top:0.85rem;"><div><strong>Sin datos del rectificador</strong><p>Este trabajo aún no tiene lecturas capturadas. Usa "Rellenar datos" para registrar las mediciones de cada trafo rectificador.</p></div></div>`;
+        } else {
+            const cel = v => `<td style="padding:0.4rem 0.6rem; text-align:center; color:#0f172a;">${escapeHtml(v == null || v === '' ? '—' : String(v))}</td>`;
+            const filas = trafos.map(t => `<tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:0.4rem 0.6rem; font-family:ui-monospace,monospace; color:#0f172a;">${escapeHtml(t.codigo || '—')}</td>
+                ${cel(t.tCarcasa)}${cel(t.tAceite)}${cel(t.nivel)}${cel(t.voltaje)}${cel(t.corriente)}
+            </tr>`).join('');
+            cuerpo = `
+                <div style="margin-top:0.85rem; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
+                    <div style="background:#f5f3ff; color:#6d28d9; padding:0.6rem 0.9rem; font-size:0.86rem; font-weight:800;">
+                        <i class="fa-solid fa-bolt-lightning"></i> Trafos rectificadores (${trafos.length})
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table style="width:100%; border-collapse:collapse; font-size:0.84rem; min-width:620px;">
+                            <thead>
+                                <tr style="background:#f8fafc; color:#475569; text-align:left;">
+                                    <th style="padding:0.5rem 0.6rem;">Código</th>
+                                    <th style="padding:0.5rem 0.6rem; text-align:center;">T. carcasa [°C]</th>
+                                    <th style="padding:0.5rem 0.6rem; text-align:center;">T. aceite [°C]</th>
+                                    <th style="padding:0.5rem 0.6rem; text-align:center;">Nivel</th>
+                                    <th style="padding:0.5rem 0.6rem; text-align:center;">Voltaje [V]</th>
+                                    <th style="padding:0.5rem 0.6rem; text-align:center;">Corriente [mA]</th>
+                                </tr>
+                            </thead>
+                            <tbody>${filas}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+        }
     } else {
         const seccion = (titulo, contenido, icon) => contenido
             ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
@@ -15374,6 +15975,22 @@ function renderTermografiaDetalle(registroId) {
                         <button onclick="window.generarPlanillaExcitatrizHistorial('${String(item.id).replace(/'/g, "\\'")}')"
                             style="background:linear-gradient(135deg, #dc2626 0%, #f97316 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(220,38,38,0.25);">
                             <i class="fa-solid fa-file-excel"></i> Descargar planilla
+                        </button>
+                    </div>` : ''}
+                    ${esTrafo ? `<div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="window.editarDatosTrafo('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:#fff; color:#dc2626; border:1px solid #fca5a5; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem;">
+                            <i class="fa-solid fa-pen-to-square"></i> Rellenar datos
+                        </button>
+                        <button onclick="window.generarPlanillaTrafoHistorial('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:linear-gradient(135deg, #dc2626 0%, #f97316 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(220,38,38,0.25);">
+                            <i class="fa-solid fa-file-excel"></i> Descargar planilla
+                        </button>
+                    </div>` : ''}
+                    ${esRectif ? `<div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="window.editarDatosRectificador('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(124,58,237,0.25);">
+                            <i class="fa-solid fa-pen-to-square"></i> Rellenar datos
                         </button>
                     </div>` : ''}
                 </div>
@@ -15618,13 +16235,11 @@ function renderRutasLista() {
     const renderCard = (r) => {
         const ej = ejecuciones[r.idx];
         const totalEquipos = r.equipos.length;
-        // Total de COMPONENTES en la ruta
-        const totalComponentes = (r.equipos || []).reduce((acc, eq) => acc + (eq.componentes?.length || 0), 0);
-        // Componentes con estado en la ejecución activa
-        const estados = ej?.componentesEstado || {};
-        let completados = 0;
-        Object.values(estados).forEach(st => { if (st === 'listo') completados++; });
-        const total = totalComponentes;
+        // Conteo de componentes válido (solo cuenta estados cuya clave existe en
+        // la ruta actual). Evita que claves obsoletas inflen el avance >100%.
+        const cnt = rutasContarComponentes(r.idx, ej);
+        const total = cnt.total;
+        const completados = cnt.listos;
         const pct = total ? Math.round((completados / total) * 100) : 0;
         const color = colorUnidad(r.unidad);
         const tieneEjecucion = !!ej;
@@ -18326,7 +18941,9 @@ window.abrirFichaTecnica = async function(equipoId) {
                 .in('equipo_id', idsDelGrupo)
                 .order('fecha', { ascending: false })
                 .limit(100);
-            if (!error && data) { mediciones = data; break; }
+            // Decodificar `notas` (técnicos/observaciones viven ahí) para que la
+            // ficha muestre el técnico; sin esto salía siempre "Sin técnico".
+            if (!error && data) { mediciones = data.map(_decodificarNotasMedicion); break; }
             console.warn('[Ficha] Error fetching', tabla, error?.message);
         }
     }
@@ -18685,6 +19302,33 @@ function getNombresTecnicosFicha(source) {
     return lider ? [String(lider).trim()].filter(Boolean) : [];
 }
 
+const TECNICOS_BOMBAS_EMERGENCIA_FICHA = ['Diego Campillay', 'Ana Baez'];
+
+function esBombaEmergenciaFicha(equipo) {
+    const texto = [
+        equipo?.activo,
+        equipo?.componente,
+        equipo?.denominacion_ut,
+        equipo?.ubicacion_tecnica,
+        equipo?.kks,
+        equipo?.ruta
+    ].filter(Boolean).join(' ').toLowerCase();
+    return /(bomba|bba|bbas)/i.test(texto) && /emerg/i.test(texto);
+}
+
+function completarTecnicosBombasEmergenciaFicha(mediciones, equipo) {
+    if (!Array.isArray(mediciones) || !mediciones.length || !esBombaEmergenciaFicha(equipo)) return mediciones;
+    return mediciones.map(medicion => {
+        const tipo = String(medicion?.tipo || '').toLowerCase();
+        if (!['vibracion', 'termografia'].includes(tipo) || getNombresTecnicosFicha(medicion).length) return medicion;
+        return {
+            ...medicion,
+            tecnico_nombre: TECNICOS_BOMBAS_EMERGENCIA_FICHA.join(', '),
+            tecnicos_nombres: TECNICOS_BOMBAS_EMERGENCIA_FICHA
+        };
+    });
+}
+
 function fechaClaveFicha(valor) {
     if (!valor) return '';
     const texto = String(valor);
@@ -18830,6 +19474,7 @@ function renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds) {
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
     // 1º técnico desde la ejecución de ruta (las mediciones de ruta no guardan
     // técnico en la tabla, lo heredan de la ruta asignada); 2º desde tareas.
+    medicionesEquipo = completarTecnicosBombasEmergenciaFicha(medicionesEquipo, equipo);
     medicionesEquipo = enriquecerMedicionesConRutaFicha(medicionesEquipo, equipo);
     medicionesGrupo = enriquecerMedicionesConRutaFicha(medicionesGrupo, equipo);
     medicionesEquipo = enriquecerMedicionesConTecnicosFicha(medicionesEquipo, tareasRelacionadas);
@@ -19005,6 +19650,7 @@ async function cargarAvisosSapDeFicha(equipo) {
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
     // 1º técnico desde la ejecución de ruta (las mediciones de ruta no guardan
     // técnico en la tabla, lo heredan de la ruta asignada); 2º desde tareas.
+    medicionesEquipo = completarTecnicosBombasEmergenciaFicha(medicionesEquipo, equipo);
     medicionesEquipo = enriquecerMedicionesConRutaFicha(medicionesEquipo, equipo);
     medicionesGrupo = enriquecerMedicionesConRutaFicha(medicionesGrupo, equipo);
     medicionesEquipo = enriquecerMedicionesConTecnicosFicha(medicionesEquipo, tareasRelacionadas);
@@ -20548,6 +21194,7 @@ function accederApp(rol, trabajadorObj = null) {
         const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
         el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
+    actualizarVisibilidadModulosPredictivos();
     const mobileDock = document.getElementById('mobile-dock');
     if (mobileDock && rol === 'administrador') mobileDock.style.display = 'none';
     else if (mobileDock) mobileDock.style.display = '';
@@ -20565,6 +21212,7 @@ function accederApp(rol, trabajadorObj = null) {
         setMobileDockItem('nav-mobile-hours', 'fa-clock', 'Horas');
         setMobileDockItem('nav-mobile-perfil', 'fa-id-badge', 'Perfil');
         setMobileDockItem('nav-mobile-insumos', 'fa-box-open', 'Insumos');
+        setMobileDockItem('nav-mobile-rutas', 'fa-wave-square', 'VIB');
     } else {
         setMobileDockItem('nav-mobile-dashboard', 'fa-house', 'Inicio');
         setMobileDockItem('nav-mobile-semanal', 'fa-calendar-week', 'Semana');
@@ -20596,7 +21244,7 @@ function accederApp(rol, trabajadorObj = null) {
             if (vistaGuardada) {
                 const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
-                const permitidoTrabajador = ['dashboard','semanal','rutas','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
+                const permitidoTrabajador = ['dashboard','semanal','rutas','termografia','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
                 const permitidoVisita = ['dashboard','semanal','historial','equipos'];
                 const permitidoIto = ['ito'];
                 const lista = rol === 'admin' ? permitidoAdmin
