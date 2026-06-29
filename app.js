@@ -10449,6 +10449,82 @@ function _clasificarTareasPorEspecialidad(tareas) {
     return { vibraciones, lubricacion, otros };
 }
 
+function _normalizarOtVibraciones(valor) {
+    return String(valor || '').replace(/\D+/g, '');
+}
+
+function _esTareaVibraciones(tarea) {
+    return _clasificarTareasPorEspecialidad([tarea]).vibraciones.length > 0;
+}
+
+function _leerHistorialRutasCerradasLocal() {
+    try {
+        const hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]');
+        return Array.isArray(hist) ? hist : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function _fechaCierreRutaInput(fecha) {
+    const s = String(fecha || '');
+    return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : '';
+}
+
+let _autoCierreVibRutasRunning = false;
+let _autoCierreVibRutasLastRefresh = 0;
+async function autoCerrarTareasVibracionConRutasCerradas({ refrescar = false, soloOt = '' } = {}) {
+    if (_autoCierreVibRutasRunning) return 0;
+    _autoCierreVibRutasRunning = true;
+    try {
+        const now = Date.now();
+        if (refrescar && typeof refrescarHistorialDesdeSupabase === 'function' && (now - _autoCierreVibRutasLastRefresh) > 15000) {
+            _autoCierreVibRutasLastRefresh = now;
+            await refrescarHistorialDesdeSupabase();
+        }
+        const soloOtNorm = _normalizarOtVibraciones(soloOt);
+        const rutasPorOt = new Map();
+        _leerHistorialRutasCerradasLocal().forEach(ruta => {
+            if (ruta?.estado === 'cancelada') return;
+            const ot = _normalizarOtVibraciones(ruta?.ot || ruta?.otNumero || ruta?.ot_numero);
+            if (!ot || (soloOtNorm && ot !== soloOtNorm)) return;
+            if (!rutasPorOt.has(ot)) rutasPorOt.set(ot, ruta);
+        });
+        if (!rutasPorOt.size) return 0;
+
+        const tareasParaCerrar = (estado.tareas || []).filter(tarea => {
+            const ot = _normalizarOtVibraciones(tarea.otNumero || tarea.ot_numero);
+            return ot && rutasPorOt.has(ot) && _esTareaVibraciones(tarea);
+        });
+        for (const tarea of tareasParaCerrar) {
+            const ot = _normalizarOtVibraciones(tarea.otNumero || tarea.ot_numero);
+            const ruta = rutasPorOt.get(ot);
+            await guardarTareaFinalizada({
+                id: tarea.id,
+                liderId: tarea.liderId || '',
+                ayudantesIdsStr: Array.isArray(tarea.ayudantesIds) ? tarea.ayudantesIds.filter(Boolean).join(',') : '',
+                accionesRealizadas: 'Vibraciones',
+                observaciones: '',
+                numeroAviso: '',
+                hhTrabajo: '2',
+                horaInicio: '',
+                horaTermino: '',
+                analisisTecnico: '',
+                recomendacionAnalista: '',
+                fechaTerminoManual: _fechaCierreRutaInput(ruta?.fechaCierre),
+                medicionesData: []
+            });
+        }
+        return tareasParaCerrar.length;
+    } catch (e) {
+        console.warn('[rutas] autocierre OT vibraciones:', e?.message || e);
+        return 0;
+    } finally {
+        _autoCierreVibRutasRunning = false;
+    }
+}
+window.autoCerrarTareasVibracionConRutasCerradas = autoCerrarTareasVibracionConRutasCerradas;
+
 // Numera la cola "por iniciar" de UNA columna desde 1 (colas independientes
 // entre columnas) y devuelve solo las tareas en cola de esa columna, en orden.
 // Muta `_pos` sobre las tareas recibidas (cada tarea pertenece a una sola columna).
@@ -10758,6 +10834,7 @@ function _htmlTareaCardPremium(tarea, isAdmin, colaTareas) {
 }
 
 function renderControlView() {
+    setTimeout(() => autoCerrarTareasVibracionConRutasCerradas({ refrescar: true }), 0);
     const tareasDiarias = _tareasDiariasOrdenadas();
 
     let colaPosCounter = 0;
@@ -10876,6 +10953,7 @@ function renderControlView() {
 
 // COMPONENTE: Vista Dashboard
 function renderDashboardView() {
+    setTimeout(() => autoCerrarTareasVibracionConRutasCerradas({ refrescar: true }), 0);
     // Todos los trabajadores son asignables — los ocupados/sin check-in van automáticamente a cola
     const trabajadoresValidados = estado.trabajadores;
     // Incluye activas + en cola (programada_semana con personal ya asignado)
@@ -13745,7 +13823,8 @@ async function refrescarHistorialDesdeSupabase() {
                 componentesEstado: row.componentes_estado || {},
                 componentesAt: row.componentes_at || {},
                 mediciones: row.mediciones || {},
-                observaciones: row.observaciones || {}
+                observaciones: row.observaciones || {},
+                estado: row.estado || 'cerrada'
             };
         });
         localStorage.setItem('planify_rutas_historial', JSON.stringify(historial));
@@ -13831,10 +13910,10 @@ window.verDetalleHistorial = function(origIdx) {
     }));
     const vibProm = vibCount ? (vibTotal / vibCount).toFixed(2).replace('.', ',') : null;
 
-    const renderChip = (icon, label, value, bg, fg) => `
-        <div style="background:${bg};color:${fg};border-radius:10px;padding:0.55rem 0.7rem;display:flex;flex-direction:column;gap:0.15rem;min-width:0;flex:1;">
+    const renderChip = (icon, label, value, bg, fg, id, hidden) => `
+        <div ${id ? `id="${id}"` : ''} style="background:${bg};color:${fg};border-radius:10px;padding:0.55rem 0.7rem;${hidden ? 'display:none;' : 'display:flex;'}flex-direction:column;gap:0.15rem;min-width:0;flex:1;">
             <div style="font-size:0.65rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;opacity:0.85;display:flex;align-items:center;gap:0.3rem;"><i class="fa-solid ${icon}"></i> ${label}</div>
-            <div style="font-size:1.05rem;font-weight:800;">${value}</div>
+            <div data-stat-val style="font-size:1.05rem;font-weight:800;">${value}</div>
         </div>`;
 
     const equiposHtml = equipos.map((eq, eqIdx) => {
@@ -13873,14 +13952,17 @@ window.verDetalleHistorial = function(origIdx) {
                     </div>`);
                 });
             }
-            if (med && med.kizeo && med.kizeo.notificado) {
-                chips.push(`<div style="background:#dcfce7;color:#15803d;border-radius:8px;padding:0.4rem 0.6rem;display:flex;align-items:center;gap:0.45rem;font-size:0.8rem;font-weight:700;">
-                    <i class="fa-solid fa-mobile-screen-button"></i> Kizeo
-                </div>`);
-            }
+            // El chip estático de Kizeo se reemplaza por un botón interactivo
+            // (ver footer de la tarjeta) para poder marcar/desmarcar en sitio.
 
             const sinDatos = !med || !chips.length;
             const accent = est === 'listo' ? '#16a34a' : est === 'no-ejecutado' ? '#dc2626' : '#cbd5e1';
+            const kizeoNotif = !!(med && med.kizeo && med.kizeo.notificado);
+            const kizeoBtn = `<button type="button" class="hist-kizeo-btn" data-eq="${eqIdx}" data-comp="${compIdx}" data-notif="${kizeoNotif}"
+                style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.32rem 0.7rem;border-radius:999px;font-size:0.74rem;font-weight:800;cursor:pointer;border:1px solid ${kizeoNotif ? '#7c3aed' : '#cbd5e1'};background:${kizeoNotif ? '#7c3aed' : '#fff'};color:${kizeoNotif ? '#fff' : '#475569'};transition:all 120ms;"
+                title="${kizeoNotif ? 'Marcar como NO notificado en Kizeo' : 'Marcar como notificado en Kizeo'}">
+                <i class="fa-solid fa-mobile-screen-button"></i> ${kizeoNotif ? 'Notificado en Kizeo' : 'Notificar Kizeo'}
+            </button>`;
 
             return `<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid ${accent};border-radius:10px;padding:0.75rem 0.85rem;margin-top:0.5rem;">
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:${chips.length || obs || at ? '0.55rem' : '0'};">
@@ -13895,7 +13977,10 @@ window.verDetalleHistorial = function(origIdx) {
                     <i class="fa-regular fa-comment" style="margin-top:0.15rem;"></i>
                     <span>${escapeHtml(obs)}</span>
                 </div>` : ''}
-                ${at ? `<div style="margin-top:0.4rem;font-size:0.7rem;color:#94a3b8;"><i class="fa-regular fa-clock"></i> Capturado ${fmtFecha(at)}</div>` : ''}
+                <div style="margin-top:0.6rem;display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+                    ${at ? `<div style="font-size:0.7rem;color:#94a3b8;"><i class="fa-regular fa-clock"></i> Capturado ${fmtFecha(at)}</div>` : '<span></span>'}
+                    ${kizeoBtn}
+                </div>
             </div>`;
         }).join('');
 
@@ -13921,11 +14006,11 @@ window.verDetalleHistorial = function(origIdx) {
         </section>`;
     }).join('');
 
-    const statsHtml = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;margin-bottom:1rem;">
+    const statsHtml = `<div id="hist-stats-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:0.5rem;margin-bottom:1rem;">
         ${renderChip('fa-check', 'Listos', nListos, '#dcfce7', '#15803d')}
         ${nNoEjec ? renderChip('fa-xmark', 'No ejec.', nNoEjec, '#fee2e2', '#b91c1c') : ''}
         ${nPend ? renderChip('fa-circle', 'Sin marcar', nPend, '#f1f5f9', '#475569') : ''}
-        ${nKizeo ? renderChip('fa-mobile-screen-button', 'Kizeo', nKizeo, '#dbeafe', '#1e40af') : ''}
+        ${renderChip('fa-mobile-screen-button', 'Kizeo', nKizeo, '#dbeafe', '#1e40af', 'hist-stat-kizeo', nKizeo === 0)}
         ${vibProm != null ? renderChip('fa-wave-square', 'Vib prom.', `${vibProm} mm/s`, '#ede9fe', '#5b21b6') : ''}
         ${maxVib != null ? renderChip('fa-arrow-up', 'Vib máx.', `${maxVib.toFixed(2).replace('.', ',')} mm/s`, vibColor(maxVib).bg, vibColor(maxVib).fg) : ''}
         ${maxTemp != null ? renderChip('fa-temperature-high', 'Temp máx.', `${maxTemp.toFixed(1).replace('.', ',')} °C`, tempColor(maxTemp).bg, tempColor(maxTemp).fg) : ''}
@@ -13968,6 +14053,68 @@ window.verDetalleHistorial = function(origIdx) {
     `;
     ov.addEventListener('click', (e) => { if (e.target === ov) ov.remove(); });
     document.body.appendChild(ov);
+
+    // Actualiza el contador "Kizeo" del encabezado a partir de los botones
+    // marcados, sin re-renderizar nada (toggle limpio en sitio).
+    const actualizarStatKizeo = () => {
+        const n = ov.querySelectorAll('.hist-kizeo-btn[data-notif="true"]').length;
+        const chip = ov.querySelector('#hist-stat-kizeo');
+        if (!chip) return;
+        chip.style.display = n > 0 ? 'flex' : 'none';
+        const valEl = chip.querySelector('[data-stat-val]');
+        if (valEl) valEl.textContent = n;
+    };
+
+    // Botón Kizeo por componente: marca/desmarca "notificado en Kizeo" en el
+    // historial. Persiste en localStorage + Supabase y refresca solo el botón
+    // (sin recargar la página ni el modal).
+    ov.querySelectorAll('.hist-kizeo-btn').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const eqIdx = Number(btn.dataset.eq);
+            const compIdx = Number(btn.dataset.comp);
+            const nuevo = btn.dataset.notif !== 'true';
+            window.historialSetKizeoComponente(origIdx, eqIdx, compIdx, nuevo);
+            btn.dataset.notif = String(nuevo);
+            btn.style.border = `1px solid ${nuevo ? '#7c3aed' : '#cbd5e1'}`;
+            btn.style.background = nuevo ? '#7c3aed' : '#fff';
+            btn.style.color = nuevo ? '#fff' : '#475569';
+            btn.title = nuevo ? 'Marcar como NO notificado en Kizeo' : 'Marcar como notificado en Kizeo';
+            btn.innerHTML = `<i class="fa-solid fa-mobile-screen-button"></i> ${nuevo ? 'Notificado en Kizeo' : 'Notificar Kizeo'}`;
+            actualizarStatKizeo();
+        });
+    });
+};
+
+// Marca/desmarca "notificado en Kizeo" en un componente de una ruta YA cerrada
+// (historial). Actualiza localStorage y, si la entrada está sincronizada,
+// la refleja en Supabase en segundo plano. Devuelve el nuevo estado.
+window.historialSetKizeoComponente = function(origIdx, eqIdx, compIdx, notificado) {
+    let hist = [];
+    try { hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch (e) {}
+    const h = hist[origIdx];
+    if (!h) return null;
+    const k = `${eqIdx}.${compIdx}`;
+    h.mediciones = h.mediciones || {};
+    const previo = (h.mediciones[k] && typeof h.mediciones[k] === 'object' && !Array.isArray(h.mediciones[k]))
+        ? h.mediciones[k] : {};
+    const detallePrevio = previo.kizeo && previo.kizeo.detalle ? previo.kizeo.detalle : '';
+    const now = new Date().toISOString();
+    h.mediciones[k] = {
+        ...previo,
+        kizeo: { notificado: !!notificado, detalle: notificado ? detallePrevio : '', ts: now }
+    };
+    try { localStorage.setItem('planify_rutas_historial', JSON.stringify(hist)); } catch (e) {}
+    // Sincroniza con Supabase sin bloquear la UI (fire-and-forget).
+    if (h.supabaseId && window.supabaseClient) {
+        window.supabaseClient
+            .from('rutas_ejecuciones')
+            .update({ mediciones: h.mediciones })
+            .eq('id', h.supabaseId)
+            .then(({ error }) => { if (error) console.warn('[rutas] no se pudo sincronizar Kizeo del historial:', error.message); })
+            .catch(e => console.warn('[rutas] excepción sync Kizeo historial:', e?.message || e));
+    }
+    return !!notificado;
 };
 
 // ── Color helper ──────────────────────────────────────────────────────────
@@ -14743,6 +14890,7 @@ function renderTrabajadorRutaDetalle() {
                     const tieneTemps = med && (Array.isArray(med.temperaturas) ? med.temperaturas.length > 0 : med.temperatura != null);
                     const tienePresiones = med && med.presiones && (med.presiones.int || med.presiones.balance || med.presiones.salida || med.presiones.succion);
                     const tieneMed = med && (med.vibracion != null || tieneTemps || med.kizeo || med.apertura || tienePresiones);
+                    const kizeoNotificado = !!(med && med.kizeo && med.kizeo.notificado);
                     return `
                     <div class="trab-comp-item" data-comp-idx="${ci}" style="
                         padding:0.7rem 0.95rem; border-top:1px solid #f8fafc;
@@ -14769,6 +14917,15 @@ function renderTrabajadorRutaDetalle() {
                                 color:${isNoEjec ? '#fff' : '#475569'};
                                 font-weight:700; font-size:0.85rem; cursor:pointer; min-height:44px;">
                                 <i class="fa-solid fa-xmark"></i> No ejec.
+                            </button>
+                            <button type="button" class="trab-comp-kizeo-btn" data-notificado="${kizeoNotificado ? 'true' : 'false'}" style="
+                                flex:0 0 auto; min-width:72px; padding:0.65rem 0.55rem; border-radius:10px;
+                                border:2px solid ${kizeoNotificado ? '#7c3aed' : '#e2e8f0'};
+                                background:${kizeoNotificado ? '#7c3aed' : '#fff'};
+                                color:${kizeoNotificado ? '#fff' : '#475569'};
+                                font-weight:700; font-size:0.85rem; cursor:pointer; min-height:44px;"
+                                title="${kizeoNotificado ? 'Marcar como no notificado en Kizeo' : 'Marcar como notificado en Kizeo'}">
+                                <i class="fa-solid fa-mobile-screen-button"></i> Kizeo
                             </button>
                         </div>
 
@@ -14975,6 +15132,13 @@ function renderTrabajadorRutaDetalle() {
                     refrescarEquipo(eqIdx);
                     refrescarProgreso();
                 });
+            });
+
+            item.querySelector('.trab-comp-kizeo-btn')?.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const activo = ev.currentTarget.dataset.notificado === 'true';
+                rutasSetKizeoComponente(idx, eqIdx, compIdx, !activo);
+                refrescarEquipo(eqIdx);
             });
 
             // Editar mediciones
@@ -16441,6 +16605,18 @@ function renderRutasDetalle(idx) {
                 title="Marcar componente como no ejecutado">
                 <i class="fa-solid fa-xmark"></i> No ejecutado
             </button>`;
+        const kizeoNotificado = !!(medObj && medObj.kizeo && medObj.kizeo.notificado);
+        const pillKizeo = `
+            <button type="button" ${disabledAttr}
+                onclick="event.stopPropagation(); window.rutasMarcarKizeoComponente(${idx}, ${eqIdx}, ${compIdx}, ${kizeoNotificado ? 'false' : 'true'})"
+                style="display:inline-flex; align-items:center; gap:0.3rem; padding:0.3rem 0.65rem; border-radius:999px;
+                    font-size:0.74rem; font-weight:800; cursor:${ej ? 'pointer' : 'not-allowed'};
+                    border:1px solid ${kizeoNotificado ? '#7c3aed' : '#cbd5e1'};
+                    background:${kizeoNotificado ? '#7c3aed' : '#fff'}; color:${kizeoNotificado ? '#fff' : '#475569'};
+                    transition:all 120ms;"
+                title="${kizeoNotificado ? 'Marcar como no notificado en Kizeo' : 'Marcar como notificado en Kizeo'}">
+                <i class="fa-solid fa-mobile-screen-button"></i> Kizeo
+            </button>`;
         return `<div style="border:1px solid ${borderColor}; background:${bgColor}; border-radius:8px; padding:0.55rem 0.75rem; margin-bottom:0.4rem; transition:all 150ms;">
             <div style="display:flex; align-items:flex-start; gap:0.5rem;">
                 <div style="flex:1; min-width:0; ${tieneFicha ? 'cursor:pointer;' : ''}"
@@ -16496,6 +16672,7 @@ function renderRutasDetalle(idx) {
                 <div style="display:flex; gap:0.35rem; margin-top:0.45rem; flex-wrap:wrap;">
                     ${pillListo}
                     ${pillNoEjec}
+                    ${pillKizeo}
                 </div>
                 <input type="text" class="form-control" placeholder="Observación (opcional)"
                     value="${escapeHtml(obs)}"
@@ -17060,6 +17237,29 @@ window.rutasIniciarEjecucion = function(idx) {
 // Clave única para identificar un componente dentro de una ruta
 function rutasCompKey(eqIdx, compIdx) { return `${eqIdx}.${compIdx}`; }
 
+function rutasSetKizeoComponente(rutaIdx, eqIdx, compIdx, notificado) {
+    const ej = getEjecucionActiva(rutaIdx);
+    if (!ej) return false;
+    const k = rutasCompKey(eqIdx, compIdx);
+    ej.mediciones = ej.mediciones || {};
+    const previo = ej.mediciones[k] && typeof ej.mediciones[k] === 'object' && !Array.isArray(ej.mediciones[k])
+        ? ej.mediciones[k]
+        : {};
+    const detallePrevio = previo.kizeo && previo.kizeo.detalle ? previo.kizeo.detalle : '';
+    const now = new Date().toISOString();
+    ej.mediciones[k] = {
+        ...previo,
+        kizeo: {
+            notificado: !!notificado,
+            detalle: notificado ? detallePrevio : '',
+            ts: now
+        },
+        ts: now
+    };
+    setEjecucionActiva(rutaIdx, ej);
+    return true;
+}
+
 // Marca un COMPONENTE con un estado: 'listo' | 'no-ejecutado' | 'pendiente'.
 window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
     const ej = getEjecucionActiva(rutaIdx);
@@ -17093,6 +17293,11 @@ window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
             }
         }, 50);
     }
+};
+
+window.rutasMarcarKizeoComponente = function(rutaIdx, eqIdx, compIdx, notificado) {
+    rutasSetKizeoComponente(rutaIdx, eqIdx, compIdx, !!notificado);
+    renderRutasView();
 };
 
 // Marca TODOS los componentes de un equipo con el mismo estado (atajo).
@@ -17331,7 +17536,8 @@ window.rutasCerrarEjecucion = async function(idx) {
                 componentesEstado: ej.componentesEstado || {},
                 componentesAt: ej.componentesAt || {},
                 mediciones: ej.mediciones || {},
-                observaciones: ej.observaciones || {}
+                observaciones: ej.observaciones || {},
+                estado: 'cerrada'
             });
             localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
         } catch (e) { /* noop */ }
@@ -17339,6 +17545,7 @@ window.rutasCerrarEjecucion = async function(idx) {
         if (msgEl) msgEl.textContent = 'Sincronizando…';
         await _marcarEjecucionFinalizada(idx, 'cerrada');
         setEjecucionActiva(idx, null, { skipPush: true });
+        await autoCerrarTareasVibracionConRutasCerradas({ soloOt: ej.ot });
     } finally {
         overlay.style.display = 'none';
     }

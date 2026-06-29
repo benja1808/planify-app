@@ -14,6 +14,7 @@ supabase/.temp/
 # Claude worktrees and local temp
 .claude/
 temp/
+tmp/
 importar_insumos_excel.mjs
 setup_insumos.sql
 
