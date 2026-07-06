@@ -379,6 +379,7 @@ const ubicacionesDisponibles = [
 const tablasDb = {
     historial: 'historial_tareas',
     mediciones: 'mediciones',
+    tiristores: 'tiristores_mediciones',
     insumos: 'insumos',
     solicitudesInsumos: 'solicitudes_insumos',
     movimientosInventario: 'movimientos_inventario'
@@ -17777,6 +17778,8 @@ const navConfig = {
     'nav-avisos': 'avisos-sap',
     'nav-historial': 'historial',
     'nav-equipos': 'equipos',
+    'nav-tiristores': 'tiristores',
+    'nav-tiristor-u5': 'tiristor-u5',
     'nav-trabajadores': 'trabajadores',
     'nav-horas-extra-admin': 'horas_extra_admin',
     'nav-insumos': 'insumos',
@@ -17834,6 +17837,12 @@ function renderizarVistaActual() {
             break;
         case 'equipos':
             renderEquiposView();
+            break;
+        case 'tiristores':
+            renderTiristoresView();
+            break;
+        case 'tiristor-u5':
+            renderTiristorU5View();
             break;
         case 'semanal':
             renderSemanalView();
@@ -19940,6 +19949,18 @@ const TIRISTORES_BASE_PDF = {
         _tiristoresMedicionBase('pdf-u5-005', '23:10', 30, 'Prueba 30MW', ['19', '20', '19'], ['20', '20', '19', '20', '19', '19'], 'U5', {
             parametros: { vcampo: '65.6', icampo: '560' },
             frente: { x2: '19', y2: '19', z2: '20' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-006', '23:45', 40, 'Prueba 40MW', ['20', '20', '20'], ['17', '19', '19', '19', '20', '20'], 'U5', {
+            parametros: { vcampo: '66', icampo: '570' },
+            frente: { x2: '20', y2: '20', z2: '20' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-007', '00:04', 50, 'Prueba 50MW', ['19', '20', '19'], ['19', '20', '19', '20', '19', '20'], 'U5', {
+            parametros: { vcampo: '70.9', icampo: '611' },
+            frente: { x2: '20', y2: '20', z2: '20' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-008', '00:18', 60, 'Prueba 60MW', ['19', '19', '19'], ['19', '20', '19', '19', '19', '19'], 'U5', {
+            parametros: { vcampo: '74.7', icampo: '644' },
+            frente: { x2: '20', y2: '20', z2: '19' }
         })
     ]
 };
@@ -19994,6 +20015,144 @@ function _tiristoresGuardarUnidad(unidad, mediciones) {
     const store = _tiristoresStoreLeer();
     store[unidad] = (mediciones || []).filter(_tiristoresTieneDatos);
     localStorage.setItem('planify_tiristores_excitatriz', JSON.stringify(store));
+}
+
+// ── Sincronizacion de tiristores con Supabase ────────────────────────────────
+// localStorage sigue siendo la cache local (offline-first) y Supabase la
+// fuente compartida entre navegadores. Al sincronizar: se procesan las
+// eliminaciones pendientes, se baja todo, se sube lo creado sin conexion
+// (items con _pending) y se migra el seed cuando una unidad esta vacia en
+// la tabla. Si la tabla aun no existe, todo sigue funcionando en local.
+const TIRISTORES_DELETE_PENDIENTES_KEY = 'planify_tiristores_delete_pendientes';
+
+function _tiristoresDeletesPendientes() {
+    try { return JSON.parse(localStorage.getItem(TIRISTORES_DELETE_PENDIENTES_KEY) || '[]'); }
+    catch (e) { return []; }
+}
+
+function _tiristoresSetDeletesPendientes(ids) {
+    localStorage.setItem(TIRISTORES_DELETE_PENDIENTES_KEY, JSON.stringify(ids || []));
+}
+
+function _tiristoresFilaDb(item, unidad) {
+    return {
+        id: String(item.id),
+        unidad: item.unidad || unidad,
+        hora: item.hora || '',
+        mw: String(item.mw || ''),
+        nota: item.nota || '',
+        entrada: item.entrada || {},
+        salida: item.salida || {},
+        frente: item.frente || {},
+        parametros: item.parametros || {},
+        created_at: item.created_at || new Date().toISOString()
+    };
+}
+
+// Marca un item como pendiente de subir (fallo el push o no habia conexion).
+function _tiristoresMarcarPendiente(unidad, id) {
+    const lista = _tiristoresLeerUnidad(unidad).map(item =>
+        String(item.id) === String(id) ? { ...item, _pending: true } : item);
+    _tiristoresGuardarUnidad(unidad, lista);
+}
+
+// Sube una medicion recien guardada; si falla queda _pending para el proximo sync.
+function _tiristoresPushMedicion(item) {
+    if (!supabaseClient) { _tiristoresMarcarPendiente(item.unidad, item.id); return; }
+    supabaseClient.from(tablasDb.tiristores).upsert(_tiristoresFilaDb(item))
+        .then(({ error }) => { if (error) _tiristoresMarcarPendiente(item.unidad, item.id); })
+        .catch(() => _tiristoresMarcarPendiente(item.unidad, item.id));
+}
+
+async function sincronizarTiristoresSupabase() {
+    if (!supabaseClient || !navigator.onLine) return false;
+    try {
+        // 1. Eliminaciones hechas sin conexion
+        const deletesPend = _tiristoresDeletesPendientes();
+        if (deletesPend.length) {
+            const { error } = await supabaseClient.from(tablasDb.tiristores).delete().in('id', deletesPend);
+            if (!error) _tiristoresSetDeletesPendientes([]);
+        }
+        // 2. Bajar todo lo remoto
+        const { data, error } = await supabaseClient.from(tablasDb.tiristores).select('*');
+        if (error) throw error;
+        const remotas = data || [];
+        const remotoIds = new Set(remotas.map(r => String(r.id)));
+        const remotoPorUnidad = {};
+        remotas.forEach(r => {
+            const u = r.unidad || '';
+            if (!remotoPorUnidad[u]) remotoPorUnidad[u] = [];
+            remotoPorUnidad[u].push(r);
+        });
+        // 3. Subir lo local que corresponda: items _pending siempre; el resto
+        //    solo cuando la unidad esta vacia en Supabase (migracion inicial
+        //    del seed + datos del navegador del admin).
+        const store = _tiristoresStoreLeer();
+        const unidades = new Set([
+            ...Object.keys(TIRISTORES_BASE_PDF || {}),
+            ...Object.keys(store),
+            ...Object.keys(remotoPorUnidad)
+        ]);
+        const porSubir = [];
+        unidades.forEach(u => {
+            const remotasUnidad = remotoPorUnidad[u] || [];
+            _tiristoresLeerUnidad(u).forEach(item => {
+                if (remotoIds.has(String(item.id))) return;
+                if (item._pending || !remotasUnidad.length) porSubir.push(_tiristoresFilaDb(item, u));
+            });
+        });
+        if (porSubir.length) {
+            const { error: upErr } = await supabaseClient.from(tablasDb.tiristores).upsert(porSubir);
+            if (upErr) throw upErr;
+        }
+        // 4. Reconstruir la cache local: remoto + lo recien subido
+        porSubir.forEach(fila => {
+            const u = fila.unidad || '';
+            if (!remotoPorUnidad[u]) remotoPorUnidad[u] = [];
+            remotoPorUnidad[u].push(fila);
+        });
+        unidades.forEach(u => {
+            _tiristoresGuardarUnidad(u, (remotoPorUnidad[u] || []).map(r => ({
+                id: r.id,
+                unidad: r.unidad,
+                hora: r.hora || '',
+                mw: r.mw || '',
+                nota: r.nota || '',
+                entrada: r.entrada || {},
+                salida: r.salida || {},
+                frente: r.frente || {},
+                parametros: r.parametros || {},
+                created_at: r.created_at || ''
+            })));
+        });
+        return true;
+    } catch (e) {
+        // Tabla inexistente o sin conexion: seguimos en modo local.
+        if (!window._tiristoresSyncAvisado) {
+            window._tiristoresSyncAvisado = true;
+            console.warn('Tiristores: sync con Supabase no disponible.', e?.message || e);
+        }
+        return false;
+    }
+}
+
+// Sincroniza en segundo plano y redibuja la vista de tiristores si cambio algo.
+let _tiristoresSyncEnCurso = false;
+async function refrescarTiristoresYRedibujar() {
+    if (_tiristoresSyncEnCurso) return;
+    _tiristoresSyncEnCurso = true;
+    const antes = localStorage.getItem('planify_tiristores_excitatriz') || '';
+    const ok = await sincronizarTiristoresSupabase();
+    _tiristoresSyncEnCurso = false;
+    if (!ok) return;
+    const despues = localStorage.getItem('planify_tiristores_excitatriz') || '';
+    if (antes === despues) return;
+    if (vistaActual === 'tiristor-u5' || vistaActual === 'tiristores') {
+        renderizarVistaActual();
+    } else if (document.getElementById('ficha-tiristores') && window._planifyFichaTiristoresEquipo) {
+        renderFichaTiristoresPanel(window._planifyFichaTiristoresEquipo);
+        setTimeout(() => initFichaTiristoresCharts(), 30);
+    }
 }
 
 function _tiristoresHoraMin(hora) {
@@ -20197,10 +20356,10 @@ function _tiristoresSepararCargasRepetidas(lista = [], offsetUnidad = 0) {
     });
 }
 
-function _tiristoresPrepararSecuencia(lista = [], offsetUnidad = 0) {
+function _tiristoresPrepararSecuencia(lista = [], offsetUnidad = 0, paso = 1) {
     return lista.map((item, index) => ({
         ...item,
-        _chartX: index + 1 + offsetUnidad,
+        _chartX: index * paso + 1 + offsetUnidad,
         _chartIndex: index
     }));
 }
@@ -20239,6 +20398,63 @@ function _tiristoresPrepararComparacionEnSlots(listaComparacion = [], listaActua
         .filter(Boolean);
 }
 
+function _tiristoresPrepararComparacionTendencia(listaComparacion = [], listaActualPreparada = []) {
+    const slotsPorMw = new Map();
+    const anclasPorMw = new Map();
+    let siguienteX = 1;
+
+    listaActualPreparada.forEach(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        const x = _tiristoresNumero(item?._chartX);
+        if (!Number.isFinite(mw) || !Number.isFinite(x)) return;
+        const key = mw.toFixed(3);
+        siguienteX = Math.max(siguienteX, Math.ceil(x) + 1);
+        if (!slotsPorMw.has(key)) slotsPorMw.set(key, []);
+        slotsPorMw.get(key).push(x);
+        const ancla = anclasPorMw.get(key) || { mw, firstX: x, lastX: x };
+        ancla.firstX = Math.min(ancla.firstX, x);
+        ancla.lastX = Math.max(ancla.lastX, x);
+        anclasPorMw.set(key, ancla);
+    });
+
+    slotsPorMw.forEach(slots => slots.sort((a, b) => a - b));
+    const anclas = [...anclasPorMw.values()].sort((a, b) => a.mw - b.mw);
+    const usadosSlots = new Map();
+    const vistosIntermedios = new Set();
+
+    return listaComparacion
+        .map((item, index) => {
+            const mw = _tiristoresNumero(item?.mw);
+            if (!Number.isFinite(mw)) return null;
+            const key = mw.toFixed(3);
+            const slots = slotsPorMw.get(key) || [];
+            if (slots.length) {
+                const usado = usadosSlots.get(key) || 0;
+                if (usado >= slots.length) return null;
+                usadosSlots.set(key, usado + 1);
+                return { ...item, _chartX: slots[usado], _chartIndex: index, _chartLabel: false };
+            }
+
+            const anterior = [...anclas].reverse().find(ancla => ancla.mw < mw - 0.001);
+            const siguiente = anclas.find(ancla => ancla.mw > mw + 0.001);
+            if (anterior && siguiente) {
+                if (vistosIntermedios.has(key)) return null;
+                vistosIntermedios.add(key);
+                const rangoMw = siguiente.mw - anterior.mw || 1;
+                const proporcion = Math.max(0.12, Math.min(0.88, (mw - anterior.mw) / rangoMw));
+                const inicioX = anterior.lastX;
+                const finX = siguiente.firstX;
+                const x = inicioX + (finX - inicioX) * proporcion;
+                return { ...item, _chartX: Number(x.toFixed(4)), _chartIndex: index, _chartLabel: false };
+            }
+            if (anterior && !siguiente) {
+                return { ...item, _chartX: siguienteX++, _chartIndex: index, _chartLabel: true };
+            }
+            return null;
+        })
+        .filter(Boolean);
+}
+
 function _tiristoresJs(value) {
     return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
@@ -20271,7 +20487,49 @@ function renderFichaTiristoresPanel(equipo) {
         cont.innerHTML = `<div class="planify-ficha-card-head"><div><h3>Tiristores</h3><span>Modulo disponible para Excitatriz U3 y U5.</span></div></div>${emptyFichaState('Sin modulo de tiristores', 'Abre la ficha de la excitatriz U3 o U5 para registrar entrada, salida, hora y MW.')}`;
         return;
     }
+    renderPanelTiristoresEn(cont, unidad);
+    refrescarTiristoresYRedibujar();
+}
 
+// Tabla de mediciones de tiristores. La comparten el panel completo (ficha y
+// vista visita) y la vista "Tiristor U5" del trabajador (solo tabla + rellenador).
+function _tiristoresTablaHtml(mediciones, unidad, soloLectura) {
+    if (!mediciones.length) return '';
+    return `<div style="overflow-x:auto; margin-top:0.9rem;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem; min-width:980px;">
+            <thead><tr style="background:#f8fafc; color:#475569;">
+                <th style="text-align:left; padding:0.5rem;">Hora</th>
+                <th style="text-align:center; padding:0.5rem;">MW</th>
+                <th style="text-align:center; padding:0.5rem;">V campo</th>
+                <th style="text-align:center; padding:0.5rem;">I campo</th>
+                <th style="text-align:center; padding:0.5rem;">Max entrada</th>
+                <th style="text-align:center; padding:0.5rem;">Max salida</th>
+                <th style="text-align:left; padding:0.5rem;">Frente</th>
+                <th style="text-align:left; padding:0.5rem;">Nota</th>
+                ${soloLectura ? '' : '<th style="text-align:right; padding:0.5rem;">Acciones</th>'}
+            </tr></thead>
+            <tbody>${mediciones.map(m => `<tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:0.45rem 0.5rem; font-weight:800; color:#0f172a;">${escapeHtml(m.hora || '-')}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(m.mw || '-')}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'vcampo', 'V'))}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'icampo', 'A'))}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'entrada') !== null ? `${numeroFicha(_tiristoresMax(m, 'entrada'), 1)} C` : '-'}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'salida') !== null ? `${numeroFicha(_tiristoresMax(m, 'salida'), 1)} C` : '-'}</td>
+                <td style="padding:0.45rem 0.5rem;">${escapeHtml(_tiristoresFrenteResumen(m))}</td>
+                <td style="padding:0.45rem 0.5rem;">${escapeHtml(m.nota || '')}</td>
+                ${soloLectura ? '' : `<td style="padding:0.45rem 0.5rem; text-align:right; white-space:nowrap;">
+                    <button onclick="window.abrirModalTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Editar" style="background:none; border:none; color:#7c3aed; cursor:pointer; padding:0.25rem;"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="window.eliminarMedicionTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Eliminar" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:0.25rem;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button>
+                </td>`}
+            </tr>`).join('')}</tbody>
+        </table>
+    </div>`;
+}
+
+// Panel de tiristores reutilizable: lo usa la ficha tecnica y la vista
+// "Tiristores" del rol visita (esta ultima queda en solo lectura).
+function renderPanelTiristoresEn(cont, unidad) {
+    const soloLectura = (estado.usuarioActual || '') === 'visita';
     const mediciones = _tiristoresLeerUnidad(unidad);
     window._planifyFichaTiristores = { unidad, mediciones };
     const latest = mediciones[mediciones.length - 1] || null;
@@ -20356,35 +20614,7 @@ function renderFichaTiristoresPanel(equipo) {
             <div style="height:clamp(520px, 68vh, 680px); min-height:520px;"><canvas id="tir-chart-principal"></canvas></div>
             <div id="tir-comparador-estado" style="font-size:0.78rem; color:#64748b; margin-top:0.55rem;"></div>
         </section>` : emptyFichaState('Sin mediciones de tiristores', 'Agrega la hora de medicion, MW y temperaturas de entrada/salida para graficar cada punto.');
-    const filas = mediciones.length ? `<div style="overflow-x:auto; margin-top:0.9rem;">
-        <table style="width:100%; border-collapse:collapse; font-size:0.82rem; min-width:980px;">
-            <thead><tr style="background:#f8fafc; color:#475569;">
-                <th style="text-align:left; padding:0.5rem;">Hora</th>
-                <th style="text-align:center; padding:0.5rem;">MW</th>
-                <th style="text-align:center; padding:0.5rem;">V campo</th>
-                <th style="text-align:center; padding:0.5rem;">I campo</th>
-                <th style="text-align:center; padding:0.5rem;">Max entrada</th>
-                <th style="text-align:center; padding:0.5rem;">Max salida</th>
-                <th style="text-align:left; padding:0.5rem;">Frente</th>
-                <th style="text-align:left; padding:0.5rem;">Nota</th>
-                <th style="text-align:right; padding:0.5rem;">Acciones</th>
-            </tr></thead>
-            <tbody>${mediciones.map(m => `<tr style="border-top:1px solid #e5e7eb;">
-                <td style="padding:0.45rem 0.5rem; font-weight:800; color:#0f172a;">${escapeHtml(m.hora || '-')}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(m.mw || '-')}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'vcampo', 'V'))}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'icampo', 'A'))}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'entrada') !== null ? `${numeroFicha(_tiristoresMax(m, 'entrada'), 1)} C` : '-'}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'salida') !== null ? `${numeroFicha(_tiristoresMax(m, 'salida'), 1)} C` : '-'}</td>
-                <td style="padding:0.45rem 0.5rem;">${escapeHtml(_tiristoresFrenteResumen(m))}</td>
-                <td style="padding:0.45rem 0.5rem;">${escapeHtml(m.nota || '')}</td>
-                <td style="padding:0.45rem 0.5rem; text-align:right; white-space:nowrap;">
-                    <button onclick="window.abrirModalTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Editar" style="background:none; border:none; color:#7c3aed; cursor:pointer; padding:0.25rem;"><i class="fa-solid fa-pen"></i></button>
-                    <button onclick="window.eliminarMedicionTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Eliminar" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:0.25rem;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button>
-                </td>
-            </tr>`).join('')}</tbody>
-        </table>
-    </div>` : '';
+    const filas = _tiristoresTablaHtml(mediciones, unidad, soloLectura);
 
     cont.innerHTML = `
         <div class="planify-ficha-card-head">
@@ -20392,19 +20622,76 @@ function renderFichaTiristoresPanel(equipo) {
                 <h3><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores ${unidad}</h3>
                 <span>Tendencias por punto con hora de medicion, sin fecha visible.</span>
             </div>
-            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                <button onclick="window.compartirVistaTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#0f766e; border-color:#99f6e4;" title="Copiar link publico de solo lectura con la vista actual">
+            ${soloLectura ? '' : `<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button onclick="window.compartirVistaTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#0f766e; border-color:#99f6e4;" title="Copiar link para visitas (solo lectura)">
                     <i class="fa-solid fa-share-nodes"></i> Compartir
                 </button>
                 <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#7c3aed; border-color:#ddd6fe;">
                     <i class="fa-solid fa-plus"></i> Agregar medicion
                 </button>
-            </div>
+            </div>`}
         </div>
         ${resumen}
         ${charts}
         ${filas}
     `;
+}
+
+// Vista "Tiristores" (rol visita): el mismo panel de la ficha tecnica pero a
+// pantalla completa y en solo lectura, con selector de unidad U3/U5.
+function renderTiristoresView() {
+    const unidades = ['U5', 'U3'];
+    const unidad = unidades.includes(window._planifyTiristorVistaUnidad) ? window._planifyTiristorVistaUnidad : 'U5';
+    window._planifyTiristorVistaUnidad = unidad;
+    mainContent.innerHTML = `
+        <div style="max-width:1560px; margin:0 auto; padding:1.2rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
+                <div>
+                    <h2 style="margin:0; font-size:1.35rem;"><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores Excitatriz</h2>
+                    <p style="margin:0.25rem 0 0; color:#64748b; font-size:0.88rem;">Vista de solo lectura. Elige unidad, modulo, modo o comparacion.</p>
+                </div>
+                <div style="display:flex; gap:0.4rem;">
+                    ${unidades.map(u => `<button type="button" onclick="window.seleccionarUnidadVistaTiristores('${u}')"
+                        style="border:1px solid ${u === unidad ? '#7c3aed' : '#e5e7eb'}; background:${u === unidad ? '#f5f3ff' : '#fff'}; color:${u === unidad ? '#6d28d9' : '#475569'}; border-radius:999px; padding:0.45rem 1rem; font-weight:900; cursor:pointer;">${u}</button>`).join('')}
+                </div>
+            </div>
+            <div id="vista-tiristores-panel" style="background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:1.1rem;"></div>
+        </div>`;
+    const cont = document.getElementById('vista-tiristores-panel');
+    renderPanelTiristoresEn(cont, unidad);
+    initFichaTiristoresCharts();
+    refrescarTiristoresYRedibujar();
+}
+
+window.seleccionarUnidadVistaTiristores = function(unidad) {
+    window._planifyTiristorVistaUnidad = unidad;
+    // Si la comparacion apuntaba a la unidad elegida, limpiarla.
+    if (window._planifyTiristorCompararUnidad === unidad) window._planifyTiristorCompararUnidad = '';
+    renderizarVistaActual();
+};
+
+// Vista "Tiristor U5" (trabajador Brandon Mancilla): solo la tabla de valores
+// y el rellenador de mediciones, sin grafico ni resumen.
+function renderTiristorU5View() {
+    const unidad = 'U5';
+    const mediciones = _tiristoresLeerUnidad(unidad);
+    window._planifyFichaTiristores = { unidad, mediciones };
+    mainContent.innerHTML = `
+        <div style="max-width:1200px; margin:0 auto; padding:1.2rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
+                <div>
+                    <h2 style="margin:0; font-size:1.35rem;"><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristor U5</h2>
+                    <p style="margin:0.25rem 0 0; color:#64748b; font-size:0.88rem;">Valores registrados de la excitatriz U5. Usa el rellenador para agregar nuevas mediciones.</p>
+                </div>
+                <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline" style="color:#7c3aed; border-color:#ddd6fe;">
+                    <i class="fa-solid fa-plus"></i> Agregar medicion
+                </button>
+            </div>
+            <div style="background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:0.4rem 1.1rem 1.1rem;">
+                ${_tiristoresTablaHtml(mediciones, unidad, false) || emptyFichaState('Sin mediciones de tiristores', 'Usa "Agregar medicion" para registrar hora, MW y temperaturas.')}
+            </div>
+        </div>`;
+    refrescarTiristoresYRedibujar();
 }
 
 window.abrirModalTiristores = function(unidad, id = '') {
@@ -20485,22 +20772,32 @@ window.guardarMedicionTiristores = function() {
     const lista = _tiristoresLeerUnidad(unidad).filter(m => String(m.id) !== String(id));
     lista.push(item);
     _tiristoresGuardarUnidad(unidad, lista);
+    _tiristoresPushMedicion(item);
     modal.remove();
     const equipo = window._planifyFichaTiristoresEquipo;
     if (equipo) {
         renderFichaTiristoresPanel(equipo);
         setTimeout(() => initFichaTiristoresCharts(), 30);
     }
+    if (vistaActual === 'tiristor-u5') renderizarVistaActual();
 };
 
 window.eliminarMedicionTiristores = function(unidad, id) {
     if (!confirm('Eliminar esta medicion de tiristores?')) return;
     _tiristoresGuardarUnidad(unidad, _tiristoresLeerUnidad(unidad).filter(item => String(item.id) !== String(id)));
+    if (supabaseClient) {
+        supabaseClient.from(tablasDb.tiristores).delete().eq('id', String(id))
+            .then(({ error }) => { if (error) _tiristoresSetDeletesPendientes([..._tiristoresDeletesPendientes(), String(id)]); })
+            .catch(() => _tiristoresSetDeletesPendientes([..._tiristoresDeletesPendientes(), String(id)]));
+    } else {
+        _tiristoresSetDeletesPendientes([..._tiristoresDeletesPendientes(), String(id)]);
+    }
     const equipo = window._planifyFichaTiristoresEquipo;
     if (equipo) {
         renderFichaTiristoresPanel(equipo);
         setTimeout(() => initFichaTiristoresCharts(), 30);
     }
+    if (vistaActual === 'tiristor-u5') renderizarVistaActual();
 };
 
 window.seleccionarModuloTiristores = function(modulo) {
@@ -20543,38 +20840,13 @@ window.seleccionarModoTiristores = function(modo) {
     initFichaTiristoresCharts();
 };
 
-// Link publico de solo lectura (GitHub Pages). Los datos van embebidos en el
-// hash del link, asi funciona aunque la app corra solo en este equipo.
-const TIRISTORES_PUBLIC_URL = 'https://benja1808.github.io/planify-app/tiristores.html';
-
-window.compartirVistaTiristores = async function(unidad) {
-    const unidades = {};
-    const disponibles = new Set([unidad, ..._tiristoresUnidadesDisponibles('')]);
-    disponibles.forEach(u => {
-        if (!u) return;
-        const lista = _tiristoresLeerUnidad(u);
-        if (lista.length) unidades[u] = lista;
-    });
-    const payload = {
-        v: 1,
-        generado: new Date().toISOString(),
-        vista: {
-            unidad,
-            modulo: TIRISTOR_MODULOS_FICHA.includes(window._planifyTiristorModuloActivo) ? window._planifyTiristorModuloActivo : 'x',
-            modo: window._planifyTiristorModo === 'mw-real' ? 'mw-real' : 'secuencia',
-            comparar: window._planifyTiristorCompararUnidad || ''
-        },
-        unidades
-    };
-    const json = JSON.stringify(payload);
-    // LZ-String deja el link en ~25% del tamano; sin la lib cae a base64 plano.
-    const hash = window.LZString
-        ? `d=${window.LZString.compressToEncodedURIComponent(json)}`
-        : `j=${encodeURIComponent(btoa(unescape(encodeURIComponent(json))))}`;
-    const url = `${TIRISTORES_PUBLIC_URL}#${hash}`;
+// Compartir tiristores: link a la propia app. El destinatario entra con el
+// boton "Visita" y cae directo en la vista Tiristores (solo lectura).
+window.compartirVistaTiristores = async function() {
+    const url = window.location.origin + window.location.pathname;
     try {
         await navigator.clipboard.writeText(url);
-        mostrarToastNotificacion('Link copiado', 'Vista de tiristores de solo lectura, incluye tus mediciones actuales.', { type: 'success' });
+        mostrarToastNotificacion('Link copiado', 'El visitante entra con el boton Visita y ve los tiristores en solo lectura.', { type: 'success' });
     } catch (e) {
         window.prompt('Copia el link para compartir:', url);
     }
@@ -21346,7 +21618,9 @@ function initFichaTiristoresCharts() {
     const baseOrdenMw = [...mediciones].sort(_tiristoresOrdenMw);
     const medicionesComparacionRaw = compararUnidad ? _tiristoresLeerUnidad(compararUnidad) : [];
     const medicionesComparacion = hayComparacion
-        ? _tiristoresLimitarComparacionPorConteoMw(medicionesComparacionRaw, mediciones)
+        ? (modoGrafico === 'mw-real'
+            ? medicionesComparacionRaw
+            : _tiristoresLimitarComparacionPorConteoMw(medicionesComparacionRaw, mediciones))
         : [];
     const compOrdenMw = [...medicionesComparacion].sort(_tiristoresOrdenMw);
     const medicionesBaseOrdenadas = modoGrafico === 'mw-real'
@@ -21356,10 +21630,10 @@ function initFichaTiristoresCharts() {
         ? compOrdenMw
         : [...medicionesComparacion];
     const medicionesGrafico = modoGrafico === 'mw-real'
-        ? _tiristoresPrepararSecuencia(medicionesBaseOrdenadas, 0)
+        ? _tiristoresPrepararSecuencia(medicionesBaseOrdenadas, 0, 2)
         : _tiristoresPrepararSecuencia(medicionesBaseOrdenadas, hayComparacion ? -0.08 : 0);
     const medicionesComparacionGrafico = modoGrafico === 'mw-real'
-        ? _tiristoresPrepararComparacionEnSlots(medicionesComparacionOrdenadas, medicionesGrafico)
+        ? _tiristoresPrepararComparacionTendencia(medicionesComparacionOrdenadas, medicionesGrafico)
         : _tiristoresPrepararSecuencia(medicionesComparacionOrdenadas, 0.08);
     window._planifyTiristorChartMediciones = medicionesGrafico;
     const hayDatosComparacion = !!compararUnidad && medicionesComparacionGrafico.length > 0;
@@ -21374,11 +21648,17 @@ function initFichaTiristoresCharts() {
     const salida2Comp = serie(medicionesComparacionGrafico, item => item.salida?.[moduloPuntos.salida2]);
     const temps = [...entrada, ...salida1, ...salida2, ...entradaComp, ...salida1Comp, ...salida2Comp].map(p => p.y).filter(v => Number.isFinite(v));
     const etiquetasPorX = new Map();
-    [...medicionesGrafico, ...medicionesComparacionGrafico].forEach((item, index) => {
+    const medicionesEtiquetadas = modoGrafico === 'mw-real'
+        ? [...medicionesGrafico, ...medicionesComparacionGrafico.filter(item => item?._chartLabel)]
+        : [...medicionesGrafico, ...medicionesComparacionGrafico];
+    medicionesEtiquetadas.forEach((item, index) => {
         const x = Math.round(Number(item?._chartX));
         if (Number.isFinite(x) && !etiquetasPorX.has(x)) etiquetasPorX.set(x, { item, index });
     });
-    const totalSecuencia = Math.max(1, ...[...etiquetasPorX.keys()]);
+    const xGraficos = [...medicionesGrafico, ...medicionesComparacionGrafico]
+        .map(item => _tiristoresNumero(item?._chartX))
+        .filter(Number.isFinite);
+    const totalSecuencia = Math.max(1, ...xGraficos, ...[...etiquetasPorX.keys()]);
     const etiquetaSecuencia = value => {
         const x = Math.round(Number(value));
         const entry = etiquetasPorX.get(x);
@@ -21393,7 +21673,7 @@ function initFichaTiristoresCharts() {
     if (estadoComp) {
         estadoComp.innerHTML = compararUnidad
             ? (hayDatosComparacion
-                ? `<i class="fa-solid fa-code-compare" style="color:#7c3aed;"></i> Comparando ${escapeHtml(unidadActual)} con ${escapeHtml(compararUnidad)}. Coincide por MW y mantiene la tendencia posterior de ${escapeHtml(compararUnidad)}.`
+                ? `<i class="fa-solid fa-code-compare" style="color:#7c3aed;"></i> Comparando ${escapeHtml(unidadActual)} con ${escapeHtml(compararUnidad)}. Usa MW coincidentes, intermedios y la tendencia posterior de ${escapeHtml(compararUnidad)}.`
                 : `<i class="fa-solid fa-circle-info" style="color:#b45309;"></i> ${escapeHtml(compararUnidad)} no tiene mediciones con MW coincidente con ${escapeHtml(unidadActual)}.`)
             : 'Selecciona otra unidad para superponer sus temperaturas en el mismo punto.';
     }
@@ -22567,7 +22847,9 @@ function accederApp(rol, trabajadorObj = null) {
     const navRoles = {
         'nav-mis-horas':          ['trabajador'],
         'nav-control':            ['admin', 'administrador'],
-        'nav-dashboard':          ['admin', 'trabajador', 'visita'],
+        'nav-dashboard':          ['admin', 'trabajador'],
+        'nav-equipos':            ['admin', 'administrador', 'trabajador', 'ito'],
+        'nav-tiristores':         ['visita'],
         'nav-semanal':            ['admin'],
         'nav-rutas':              ['admin', 'administrador', 'trabajador'],
         'nav-termografia':        ['admin', 'administrador', 'trabajador'],
@@ -22577,7 +22859,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-horas-extra-admin':  ['admin', 'administrador'],
         'nav-insumos':            ['admin', 'trabajador'],
         'nav-ito':                ['ito'],
-        'nav-mobile-dashboard':   ['admin', 'trabajador', 'visita'],
+        'nav-mobile-dashboard':   ['admin', 'trabajador'],
         'nav-mobile-semanal':     ['admin', 'trabajador'],
         'nav-mobile-hours':       ['trabajador'],
         'nav-mobile-perfil':      ['trabajador'],
@@ -22594,6 +22876,12 @@ function accederApp(rol, trabajadorObj = null) {
         const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
         el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
+    // "Tiristor U5" es por persona, no por rol: solo Brandon Mancilla lo ve.
+    const navTirU5 = document.getElementById('nav-tiristor-u5');
+    if (navTirU5) {
+        const nombreTrab = String(estado.trabajadorLogueado?.nombre || '');
+        navTirU5.style.display = (rol === 'trabajador' && /brandon/i.test(nombreTrab) && /mancilla/i.test(nombreTrab)) ? 'inline-block' : 'none';
+    }
     actualizarVisibilidadModulosPredictivos();
     const mobileDock = document.getElementById('mobile-dock');
     if (mobileDock && rol === 'administrador') mobileDock.style.display = 'none';
@@ -22636,7 +22924,9 @@ function accederApp(rol, trabajadorObj = null) {
         ? 'control'
         : rol === 'ito'
             ? 'ito'
-            : (rol === 'admin' ? (esPantallaMovil ? 'dashboard' : 'control') : 'dashboard');
+            : rol === 'visita'
+                ? 'tiristores'
+                : (rol === 'admin' ? (esPantallaMovil ? 'dashboard' : 'control') : 'dashboard');
     // Si hay una vista guardada de la sesión anterior, restaurarla
     // siempre que esté permitida para el rol actual.
     try {
@@ -22644,8 +22934,8 @@ function accederApp(rol, trabajadorObj = null) {
             if (vistaGuardada) {
                 const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
-                const permitidoTrabajador = ['dashboard','semanal','rutas','termografia','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
-                const permitidoVisita = ['dashboard','semanal','historial','equipos'];
+                const permitidoTrabajador = ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
+                const permitidoVisita = ['tiristores'];
                 const permitidoIto = ['ito'];
                 const lista = rol === 'admin' ? permitidoAdmin
                     : rol === 'administrador' ? permitidoAdministrador
@@ -22680,6 +22970,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
     // Restaurar sesión si existe (sobrevive F5)
     await restaurarSesionPersistida();
+    // Bajar/subir mediciones de tiristores (redibuja si la vista activa cambio)
+    refrescarTiristoresYRedibujar();
 });
 
 // Registrar Service Worker para PWA

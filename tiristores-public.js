@@ -93,8 +93,8 @@
         return va - vb || horaMin(a?.hora) - horaMin(b?.hora) || String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
     }
 
-    function prepararSecuencia(lista, offset = 0) {
-        return lista.map((item, index) => ({ ...item, _chartX: index + 1 + offset }));
+    function prepararSecuencia(lista, offset = 0, paso = 1) {
+        return lista.map((item, index) => ({ ...item, _chartX: index * paso + 1 + offset }));
     }
 
     function limitarComparacionPorMw(comp, actual) {
@@ -152,6 +152,59 @@
         }).filter(Boolean);
     }
 
+    function prepararComparacionTendencia(comp, actualPreparada) {
+        const slots = new Map();
+        const anclasMap = new Map();
+        let siguienteX = 1;
+
+        actualPreparada.forEach(item => {
+            const mw = num(item.mw);
+            const x = num(item._chartX);
+            if (!Number.isFinite(mw) || !Number.isFinite(x)) return;
+            const key = mw.toFixed(3);
+            siguienteX = Math.max(siguienteX, Math.ceil(x) + 1);
+            if (!slots.has(key)) slots.set(key, []);
+            slots.get(key).push(x);
+            const ancla = anclasMap.get(key) || { mw, firstX: x, lastX: x };
+            ancla.firstX = Math.min(ancla.firstX, x);
+            ancla.lastX = Math.max(ancla.lastX, x);
+            anclasMap.set(key, ancla);
+        });
+
+        slots.forEach(list => list.sort((a, b) => a - b));
+        const anclas = [...anclasMap.values()].sort((a, b) => a.mw - b.mw);
+        const usadosSlots = new Map();
+        const vistosIntermedios = new Set();
+
+        return comp.map((item, index) => {
+            const mw = num(item.mw);
+            if (!Number.isFinite(mw)) return null;
+            const key = mw.toFixed(3);
+            const list = slots.get(key) || [];
+            if (list.length) {
+                const usado = usadosSlots.get(key) || 0;
+                if (usado >= list.length) return null;
+                usadosSlots.set(key, usado + 1);
+                return { ...item, _chartX: list[usado], _chartIndex: index, _chartLabel: false };
+            }
+
+            const anterior = [...anclas].reverse().find(ancla => ancla.mw < mw - 0.001);
+            const siguiente = anclas.find(ancla => ancla.mw > mw + 0.001);
+            if (anterior && siguiente) {
+                if (vistosIntermedios.has(key)) return null;
+                vistosIntermedios.add(key);
+                const rangoMw = siguiente.mw - anterior.mw || 1;
+                const proporcion = Math.max(0.12, Math.min(0.88, (mw - anterior.mw) / rangoMw));
+                const inicioX = anterior.lastX;
+                const finX = siguiente.firstX;
+                const x = inicioX + (finX - inicioX) * proporcion;
+                return { ...item, _chartX: Number(x.toFixed(4)), _chartIndex: index, _chartLabel: false };
+            }
+            if (anterior && !siguiente) return { ...item, _chartX: siguienteX++, _chartIndex: index, _chartLabel: true };
+            return null;
+        }).filter(Boolean);
+    }
+
     function punto(item, value) {
         const x = num(item._chartX);
         const y = num(value);
@@ -177,11 +230,13 @@
 
         const base = leerUnidad(unidad);
         const compRaw = comparar ? leerUnidad(comparar) : [];
-        const compFiltrada = comparar ? limitarComparacionPorMw(compRaw, base) : [];
+        const compFiltrada = comparar
+            ? (modo === 'mw-real' ? compRaw : limitarComparacionPorMw(compRaw, base))
+            : [];
         const baseOrdenada = modo === 'mw-real' ? [...base].sort(ordenMw) : [...base];
         const compOrdenada = modo === 'mw-real' ? [...compFiltrada].sort(ordenMw) : [...compFiltrada];
-        const baseGraf = modo === 'mw-real' ? prepararSecuencia(baseOrdenada, 0) : prepararSecuencia(baseOrdenada, comparar ? -0.08 : 0);
-        const compGraf = modo === 'mw-real' ? prepararComparacionEnSlots(compOrdenada, baseGraf) : prepararSecuencia(compOrdenada, 0.08);
+        const baseGraf = modo === 'mw-real' ? prepararSecuencia(baseOrdenada, 0, 2) : prepararSecuencia(baseOrdenada, comparar ? -0.08 : 0);
+        const compGraf = modo === 'mw-real' ? prepararComparacionTendencia(compOrdenada, baseGraf) : prepararSecuencia(compOrdenada, 0.08);
         const hayComp = !!comparar && compGraf.length > 0;
 
         const serie = (lista, getter) => lista.map(item => punto(item, getter(item))).filter(Boolean);
@@ -194,11 +249,13 @@
 
         const temps = [...entrada, ...salida1, ...salida2, ...entradaComp, ...salida1Comp, ...salida2Comp].map(p => p.y);
         const etiquetas = new Map();
-        [...baseGraf, ...compGraf].forEach((item, index) => {
+        const etiquetasFuente = modo === 'mw-real' ? [...baseGraf, ...compGraf.filter(item => item?._chartLabel)] : [...baseGraf, ...compGraf];
+        etiquetasFuente.forEach((item, index) => {
             const x = Math.round(Number(item._chartX));
             if (Number.isFinite(x) && !etiquetas.has(x)) etiquetas.set(x, { item, index });
         });
-        const total = Math.max(1, ...[...etiquetas.keys()]);
+        const xGraficos = [...baseGraf, ...compGraf].map(item => num(item._chartX)).filter(Number.isFinite);
+        const total = Math.max(1, ...xGraficos, ...[...etiquetas.keys()]);
         const etiqueta = value => {
             const x = Math.round(Number(value));
             if (Math.abs(Number(value) - x) > 0.05 || !etiquetas.has(x)) return '';
