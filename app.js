@@ -20392,9 +20392,14 @@ function renderFichaTiristoresPanel(equipo) {
                 <h3><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores ${unidad}</h3>
                 <span>Tendencias por punto con hora de medicion, sin fecha visible.</span>
             </div>
-            <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#7c3aed; border-color:#ddd6fe;">
-                <i class="fa-solid fa-plus"></i> Agregar medicion
-            </button>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button onclick="window.compartirVistaTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#0f766e; border-color:#99f6e4;" title="Copiar link publico de solo lectura con la vista actual">
+                    <i class="fa-solid fa-share-nodes"></i> Compartir
+                </button>
+                <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#7c3aed; border-color:#ddd6fe;">
+                    <i class="fa-solid fa-plus"></i> Agregar medicion
+                </button>
+            </div>
         </div>
         ${resumen}
         ${charts}
@@ -20536,6 +20541,43 @@ window.seleccionarModoTiristores = function(modo) {
     const select = document.getElementById('tir-modo-select');
     if (select) select.value = window._planifyTiristorModo;
     initFichaTiristoresCharts();
+};
+
+// Link publico de solo lectura (GitHub Pages). Los datos van embebidos en el
+// hash del link, asi funciona aunque la app corra solo en este equipo.
+const TIRISTORES_PUBLIC_URL = 'https://benja1808.github.io/planify-app/tiristores.html';
+
+window.compartirVistaTiristores = async function(unidad) {
+    const unidades = {};
+    const disponibles = new Set([unidad, ..._tiristoresUnidadesDisponibles('')]);
+    disponibles.forEach(u => {
+        if (!u) return;
+        const lista = _tiristoresLeerUnidad(u);
+        if (lista.length) unidades[u] = lista;
+    });
+    const payload = {
+        v: 1,
+        generado: new Date().toISOString(),
+        vista: {
+            unidad,
+            modulo: TIRISTOR_MODULOS_FICHA.includes(window._planifyTiristorModuloActivo) ? window._planifyTiristorModuloActivo : 'x',
+            modo: window._planifyTiristorModo === 'mw-real' ? 'mw-real' : 'secuencia',
+            comparar: window._planifyTiristorCompararUnidad || ''
+        },
+        unidades
+    };
+    const json = JSON.stringify(payload);
+    // LZ-String deja el link en ~25% del tamano; sin la lib cae a base64 plano.
+    const hash = window.LZString
+        ? `d=${window.LZString.compressToEncodedURIComponent(json)}`
+        : `j=${encodeURIComponent(btoa(unescape(encodeURIComponent(json))))}`;
+    const url = `${TIRISTORES_PUBLIC_URL}#${hash}`;
+    try {
+        await navigator.clipboard.writeText(url);
+        mostrarToastNotificacion('Link copiado', 'Vista de tiristores de solo lectura, incluye tus mediciones actuales.', { type: 'success' });
+    } catch (e) {
+        window.prompt('Copia el link para compartir:', url);
+    }
 };
 
 window.irMaximaTempTiristores = function() {

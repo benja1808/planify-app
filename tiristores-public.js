@@ -42,7 +42,29 @@
         };
     }
 
+    // Payload compartido desde la app: viaja en el hash del link (#d= comprimido
+    // con LZ-String, #j= base64 de respaldo) e incluye mediciones + vista inicial.
+    function leerPayloadCompartido() {
+        const m = location.hash.replace(/^#/, '').match(/(?:^|&)(d|j)=([^&]+)/);
+        if (!m) return null;
+        try {
+            const raw = m[1] === 'd'
+                ? window.LZString.decompressFromEncodedURIComponent(m[2])
+                : decodeURIComponent(escape(atob(decodeURIComponent(m[2]))));
+            const data = JSON.parse(raw);
+            return data && typeof data === 'object' && data.unidades ? data : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    const compartido = leerPayloadCompartido();
+
     async function cargarDatos() {
+        if (compartido) {
+            baseData = compartido.unidades;
+            return;
+        }
         const res = await fetch(`app.js?tir=${Date.now()}`, { cache: 'no-store' });
         const text = await res.text();
         const match = text.match(/const TIRISTORES_BASE_PDF = ([\s\S]*?\n};)/);
@@ -298,6 +320,21 @@
         });
     });
 
+    if (compartido) {
+        const vista = compartido.vista || {};
+        if (vista.unidad && [...$('unidad-select').options].some(o => o.value === vista.unidad)) $('unidad-select').value = vista.unidad;
+        if (vista.comparar && [...$('comparar-select').options].some(o => o.value === vista.comparar)) $('comparar-select').value = vista.comparar;
+        if (vista.modo && [...$('modo-select').options].some(o => o.value === vista.modo)) $('modo-select').value = vista.modo;
+        if (vista.modulo && MOD_PUNTOS[vista.modulo]) {
+            moduloActivo = vista.modulo;
+            document.querySelectorAll('[data-modulo]').forEach(btn => btn.classList.toggle('active', btn.dataset.modulo === vista.modulo));
+        }
+        // Snapshot: no hay nada que refrescar contra el servidor.
+        $('refresh-btn').style.display = 'none';
+        const sub = document.querySelector('.sub');
+        if (sub) sub.textContent = `Vista compartida solo lectura${compartido.generado ? ` · ${new Date(compartido.generado).toLocaleString('es-CL')}` : ''}.`;
+    }
+
     refresh();
-    setInterval(refresh, 30000);
+    if (!compartido) setInterval(refresh, 30000);
 })();
