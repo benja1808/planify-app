@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiristores Excitatriz</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        :root { color-scheme: light; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --violet:#7c3aed; }
+        * { box-sizing: border-box; }
+        body { margin:0; font-family: Inter, Segoe UI, Arial, sans-serif; background:#f8fafc; color:var(--ink); }
+        .page { min-height:100vh; padding:18px; }
+        .shell { max-width:1560px; margin:0 auto; display:grid; gap:14px; }
+        .head { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; padding:16px 18px; border:1px solid var(--line); border-radius:16px; background:#fff; }
+        h1 { margin:0; font-size:1.28rem; letter-spacing:0; }
+        .sub { margin-top:5px; color:var(--muted); font-size:.9rem; }
+        .controls { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
+        label { display:flex; gap:6px; align-items:center; color:#475569; font-size:.82rem; font-weight:800; }
+        select, button { border:1px solid #cbd5e1; background:#fff; border-radius:11px; padding:.55rem .72rem; font:inherit; color:#0f172a; }
+        button { cursor:pointer; font-weight:900; min-width:42px; }
+        button.active { border-color:var(--violet); color:#6d28d9; background:#f5f3ff; }
+        .chart-card { border:1px solid var(--line); border-radius:16px; background:#fff; padding:14px 16px 12px; }
+        .chart-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+        .chart-title { font-weight:900; font-size:1rem; }
+        .chart-sub { color:var(--muted); font-size:.84rem; margin-top:3px; }
+        .chart-wrap { height:clamp(520px, 68vh, 680px); min-height:520px; }
+        .status { color:var(--muted); font-size:.82rem; margin-top:8px; min-height:18px; }
+        .error { color:#b91c1c; background:#fef2f2; border:1px solid #fecaca; border-radius:12px; padding:12px 14px; }
+        @media (max-width: 720px) {
+            .page { padding:10px; }
+            .head, .chart-card { border-radius:12px; padding:12px; }
+            .chart-wrap { min-height:420px; height:60vh; }
+            .controls { justify-content:flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <section class="shell">
+            <header class="head">
+                <div>
+                    <h1><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores Excitatriz</h1>
+                    <div class="sub">Vista pública solo lectura para seguimiento de U3 y U5.</div>
+                </div>
+                <div class="controls">
+                    <label>Unidad
+                        <select id="unidad-select">
+                            <option value="U5">U5</option>
+                            <option value="U3">U3</option>
+                        </select>
+                    </label>
+                    <label>Comparar
+                        <select id="comparar-select">
+                            <option value="">Sin comparación</option>
+                            <option value="U3">con U3</option>
+                            <option value="U5">con U5</option>
+                        </select>
+                    </label>
+                    <label>Modo
+                        <select id="modo-select">
+                            <option value="secuencia">Orden Medición</option>
+                            <option value="mw-real">Tendencia MW</option>
+                        </select>
+                    </label>
+                    <button type="button" data-modulo="x" class="active">X</button>
+                    <button type="button" data-modulo="y">Y</button>
+                    <button type="button" data-modulo="z">Z</button>
+                </div>
+            </header>
+            <section class="chart-card">
+                <div class="chart-head">
+                    <div>
+                        <div class="chart-title">Módulo <span id="modulo-title">X</span></div>
+                        <div id="chart-sub" class="chart-sub">Cargando datos...</div>
+                    </div>
+                    <button type="button" id="refresh-btn" title="Actualizar"><i class="fa-solid fa-rotate"></i></button>
+                </div>
+                <div class="chart-wrap"><canvas id="tir-chart"></canvas></div>
+                <div id="status" class="status"></div>
+            </section>
+            <div id="error" style="display:none;" class="error"></div>
+        </section>
+    </main>
+    <script src="tiristores-public.js?v=2"></script>
+</body>
+</html>

@@ -178,14 +178,47 @@ function normStr(s) {
     return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
-function encontrarFilaEnHoja(ws, nombreEquipo) {
-    const target = normStr(nombreEquipo);
+// Clave de sufijo: último token reducido a alfanumérico (A/B/1/2/8…). Sirve
+// para desempatar equipos que solo se distinguen por su sufijo (VDLL -A vs -B,
+// GRÚA -1 vs -2) cuando el resto del nombre es idéntico y el matcher difuso
+// empataría, quedándose con la primera fila (colapsando A y B en una sola).
+function sufijoAlnum(nombre) {
+    const toks = normStr(nombre).split(/\s+/);
+    if (!toks.length) return '';
+    return toks[toks.length - 1].replace(/[^A-Z0-9]/g, '');
+}
+
+// Algunos equipos vienen del seed con nomenclatura SAP que no calza con el
+// nombre "humano" de la plantilla. Mapeo explícito nombre_seed → nombre_hoja
+// para que el matcher los ubique en la fila correcta.
+// ⚠ El pareo U1 (QEH05→1A, QEH08→1B) se asume por orden; validar en terreno.
+const ALIAS_FILA_PLANILLA = {
+    'VENTILADOR DILUCION -1 QEH05AN001 U1': 'VENTILADOR DILUCION AMONIACO 1A',
+    'VENTILADOR DILUCION -2 QEH08AN001 U1': 'VENTILADOR DILUCION AMONIACO 1B',
+    'VENTILADOR DILUCION AMON -4A HSA02AN101': 'VENTILADOR DILUCION AMONIACO 4A',
+    'VENTILADOR DILUCION AMON -4B HSA02AN102': 'VENTILADOR DILUCION AMONIACO 4B',
+};
+
+function encontrarFilaEnHoja(ws, nombreEquipo, filasUsadas = null) {
+    const nombreBusqueda = ALIAS_FILA_PLANILLA[normStr(nombreEquipo)] || nombreEquipo;
+    const target = normStr(nombreBusqueda);
     if (!target) return null;
     const targetWords = target.split(/\s+/).filter(w => w.length > 1);
+    const targetSufijo = sufijoAlnum(nombreBusqueda);
     const colA = ws.getColumn(1);
     let found = null;
     let bestScore = 0;
+    let foundSufijoOk = false;
     colA.eachCell({ includeEmpty: false }, (cell, rowNum) => {
+        // La col A combina verticalmente el nombre del equipo sobre sus filas de
+        // componente (Motor+Vent). Las celdas hijas de la combinación reportan el
+        // MISMO valor que la maestra, así que un nombre más largo ("VAS -3A FGD")
+        // agarraría la fila hija de uno más corto ("VAS -3A") vía includes.
+        // Solo consideramos la celda maestra de cada combinación.
+        if (cell.isMerged && cell.master && cell.master.row !== rowNum) return;
+        // Saltar filas ya asignadas a otro equipo (evita doble asignación y
+        // separa -A/-B, 3A/3B, etc.).
+        if (filasUsadas && filasUsadas.has(rowNum)) return;
         if (rowNum <= 3 || bestScore >= 100) return;
         const v = normStr(cell.value);
         if (!v) return;
@@ -199,9 +232,15 @@ function encontrarFilaEnHoja(ws, nombreEquipo) {
         const longer = cellWords.length < targetWords.length ? targetWords : cellWords;
         const matches = shorter.filter(w => longer.includes(w)).length;
         const score = matches / shorter.length;
-        if (score >= 0.6 && matches >= 2 && score > bestScore) {
+        if (score < 0.6 || matches < 2) return;
+        const cellSufijo = sufijoAlnum(cell.value);
+        const sufijoOk = !!(targetSufijo && cellSufijo && targetSufijo === cellSufijo);
+        // Mejor score gana; ante empate, prefiere la fila cuyo sufijo también
+        // calce (desambigua -A/-B, -1/-2, etc.).
+        if (score > bestScore || (score === bestScore && sufijoOk && !foundSufijoOk)) {
             found = rowNum;
             bestScore = score;
+            foundSufijoOk = sufijoOk;
         }
     });
     return found;
@@ -309,10 +348,12 @@ async function generarPlanillaMoncon(body) {
     const equipos = ruta.equipos || [];
     const noEncontrados = [];
     const cols = detectarColumnasHoja(ws);
+    const filasUsadas = new Set();
 
     equipos.forEach((eq, eqIdx) => {
-        const filaBase = encontrarFilaEnHoja(ws, eq.nombre);
+        const filaBase = encontrarFilaEnHoja(ws, eq.nombre, filasUsadas);
         if (!filaBase) { noEncontrados.push(eq.nombre); return; }
+        filasUsadas.add(filaBase);
 
         // La plantilla tenía nombres con "UNIDAD" prefijo por error. Sobrescribimos
         // la columna A con el nombre limpio del seed para que la planilla quede

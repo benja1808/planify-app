@@ -2491,10 +2491,180 @@ async function guardarMedicion({ equipo_id, tipo, valor, punto_medicion, compone
     }
 }
 
+// ── "No ejecutado": marcar un trabajo que no se pudo realizar ────────────────
+// Marcador de texto que sobrevive el round-trip a Supabase aunque la columna
+// `no_ejecutado` no exista en el esquema remoto (el fallback de inserción la
+// descarta). Con este prefijo el historial reconoce el registro igual.
+const MARCA_NO_EJECUTADO = 'NO EJECUTADO';
+function esRegistroNoEjecutado(item) {
+    if (!item) return false;
+    if (item.no_ejecutado === true) return true;
+    const acciones = String(item.acciones_realizadas || '').trim();
+    return new RegExp('^\\s*(?:⛔\\s*)?' + MARCA_NO_EJECUTADO, 'i').test(acciones);
+}
+
+// Abre el modal para indicar el motivo de la no ejecución.
+function marcarTareaNoEjecutada(id, liderId, ayudantesIdsStr) {
+    const tarea = estado.tareas.find(t => t.id === id);
+    if (!tarea) return;
+
+    document.getElementById('modal-no-ejecutado')?.remove();
+
+    const tituloTrabajo = String(tarea.tipo || 'Trabajo')
+        .replace(/^\s*\[[^\]]+\]\s*/, '')
+        .replace(/\s*\([^)]+\)\s*$/, '')
+        .trim();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-no-ejecutado';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10500; align-items:center; justify-content:center; padding:1rem;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; box-shadow:0 30px 70px rgba(15,23,42,0.35); width:100%; max-width:480px; max-height:90vh; overflow:auto;">
+        <div style="padding:1.1rem 1.3rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:flex-start; gap:0.7rem;">
+          <div>
+            <div style="font-size:0.72rem; font-weight:800; color:#b45309; text-transform:uppercase; letter-spacing:0.06em;"><i class="fa-solid fa-ban"></i> No ejecutado</div>
+            <h2 style="margin:0.25rem 0 0; font-size:1.05rem; color:#0f172a;">${escapeHtml(tituloTrabajo)}</h2>
+            <p style="margin:0.25rem 0 0; font-size:0.78rem; color:#64748b;">Registra por qué no se pudo realizar este trabajo.</p>
+          </div>
+          <button type="button" id="noejec-cerrar" class="btn btn-outline btn-icon" title="Cerrar" style="border-color:#e5e7eb; color:#64748b;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div style="padding:1rem 1.3rem; display:flex; flex-direction:column; gap:0.9rem;">
+          <div>
+            <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;">
+              <i class="fa-solid fa-comment-dots" style="color:#f59e0b;"></i> Motivo (obligatorio)
+            </label>
+            <textarea id="noejec-motivo" class="form-control" rows="4" placeholder="Ej: Unidad fuera de servicio, sin permiso de trabajo, equipo inaccesible…" style="width:100%; resize:vertical;"></textarea>
+          </div>
+          <p id="noejec-error" style="display:none; color:#dc2626; font-size:0.85rem; margin:0;"></p>
+        </div>
+
+        <div style="padding:0.85rem 1.3rem; border-top:1px solid #e5e7eb; display:flex; justify-content:flex-end; gap:0.5rem;">
+          <button type="button" id="noejec-cancelar" class="btn btn-outline">Cancelar</button>
+          <button type="button" id="noejec-confirmar" class="btn" style="background:#f59e0b; border-color:#f59e0b; color:#fff;"><i class="fa-solid fa-ban"></i> Marcar no ejecutado</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const motivoInput = overlay.querySelector('#noejec-motivo');
+    const errEl = overlay.querySelector('#noejec-error');
+    setTimeout(() => motivoInput?.focus(), 50);
+
+    const cerrar = () => overlay.remove();
+    overlay.querySelector('#noejec-cerrar').addEventListener('click', cerrar);
+    overlay.querySelector('#noejec-cancelar').addEventListener('click', cerrar);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(); });
+
+    overlay.querySelector('#noejec-confirmar').addEventListener('click', async () => {
+        const motivo = String(motivoInput.value || '').trim();
+        if (!motivo) {
+            errEl.textContent = 'Debes indicar el motivo por el cual no se ejecutó.';
+            errEl.style.display = 'block';
+            motivoInput.focus();
+            return;
+        }
+        const btn = overlay.querySelector('#noejec-confirmar');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+        try {
+            await guardarTareaNoEjecutada({ id, liderId, ayudantesIdsStr, motivo });
+            cerrar();
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-ban"></i> Marcar no ejecutado';
+            errEl.textContent = 'No se pudo guardar: ' + (e?.message || e);
+            errEl.style.display = 'block';
+        }
+    });
+}
+
+// Cierra la tarea como NO EJECUTADA: libera al personal, la saca de la cola y
+// deja un registro en el historial con el motivo. Comparte el flujo de
+// persistencia offline-safe de guardarTareaFinalizada.
+async function guardarTareaNoEjecutada({ id, liderId, ayudantesIdsStr, motivo }) {
+    const tarea = estado.tareas.find(t => t.id === id);
+    if (!tarea) return;
+
+    const ayudantesIds = ayudantesIdsStr ? ayudantesIdsStr.split(',').filter(Boolean) : [];
+    const histId = crypto.randomUUID();
+    const ahora = new Date();
+    const fechaTermino = ahora.toISOString();
+    const textoAcciones = `${MARCA_NO_EJECUTADO} — Motivo: ${motivo}`;
+
+    const registroHistorial = {
+        id: histId,
+        tipo: tarea.tipo,
+        lider_nombre: tarea.liderNombre,
+        ayudantes_nombres: tarea.ayudantesNombres,
+        hora_asignacion: tarea.horaAsignacion,
+        fecha_inicio: tarea.fechaAsignacion || null,
+        fecha_termino: fechaTermino,
+        hora_termino: ahora.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        acciones_realizadas: textoAcciones,
+        observaciones: motivo,
+        numero_aviso: '',
+        hh_trabajo: '0',
+        ot_numero: tarea.otNumero,
+        analisis: '',
+        recomendacion_analista: '',
+        equipo_id: tarea.equipoId || tarea.equipo_id || null,
+        fecha_med: fechaTermino.slice(0, 10),
+        created_at: fechaTermino,
+        no_ejecutado: true,
+        trafo_data: null
+    };
+
+    // Optimistic update: liberar personal, sacar de la cola y mostrar en historial.
+    const idsALiberar = [liderId, ...ayudantesIds].filter(Boolean);
+    _olvidarTransicionLocalTarea(id);
+    estado.tareas = estado.tareas.filter(t => t.id !== id);
+    estado.trabajadores = estado.trabajadores.map(w =>
+        idsALiberar.includes(w.id) ? { ...w, ocupado: false, disponible: true } : w
+    );
+    estado.historialTareas = [registroHistorial, ...estado.historialTareas];
+    renderizarVistaActual();
+
+    await Promise.all([
+        _db.delete('tareas', id),
+        ...idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false, disponible: true }))
+    ]);
+
+    if (window.localDB) await window.localDB.historial.upsert(registroHistorial).catch(() => {});
+    if (navigator.onLine) {
+        let { error: errH } = await supabaseClient.from(tablasDb.historial).insert([registroHistorial]);
+        if (errH) {
+            // Reintentar sin las columnas opcionales que podrían no existir en el
+            // esquema remoto (no_ejecutado, trafo_data, equipo_id, fecha_med…),
+            // conservando el marcador de texto en acciones_realizadas.
+            const base = {
+                id: histId,
+                tipo: registroHistorial.tipo,
+                lider_nombre: registroHistorial.lider_nombre,
+                ayudantes_nombres: registroHistorial.ayudantes_nombres,
+                hora_asignacion: registroHistorial.hora_asignacion,
+                hora_termino: registroHistorial.hora_termino,
+                ot_numero: registroHistorial.ot_numero,
+                numero_aviso: registroHistorial.numero_aviso,
+                hh_trabajo: registroHistorial.hh_trabajo,
+                acciones_realizadas: registroHistorial.acciones_realizadas,
+                observaciones: registroHistorial.observaciones,
+                created_at: registroHistorial.created_at
+            };
+            ({ error: errH } = await supabaseClient.from(tablasDb.historial).insert([base]));
+        }
+        if (errH) await window.syncQueue?.add(tablasDb.historial, 'INSERT', registroHistorial);
+    } else {
+        await window.syncQueue?.add(tablasDb.historial, 'INSERT', registroHistorial);
+    }
+}
+
 // Exponer a global para los onclick de los botones
 window.completarTareaExposed = completarTarea;
 window.eliminarTareaExposed = eliminarTarea;
 window.eliminarTodasLasTareasExposed = eliminarTodasLasTareas;
+window.marcarTareaNoEjecutadaExposed = marcarTareaNoEjecutada;
 
 // Abrir el modal de detalle del Historial. Muestra toda la información del
 // trabajo finalizado: cabecera, datos OT/aviso/HH, líder y técnicos, acciones,
@@ -7525,6 +7695,7 @@ function renderHistorialView() {
         return {
             original: item,
             id: item.id,
+            noEjecutado: esRegistroNoEjecutado(item),
             fecha,
             fechaClave: fecha && !Number.isNaN(fecha.getTime()) ? inputDate(fecha) : 'sin-fecha',
             fechaLabel: formatearFechaLarga(fecha),
@@ -7800,7 +7971,7 @@ function renderHistorialView() {
                     <div class="history-record-main">
                         <div class="history-record-title-row">
                             <div class="history-record-title">${escapeHtml(registro.nombre)}</div>
-                            ${renderBadgeTipo(registro.tipoPrincipal, registro.id)}
+                            ${registro.noEjecutado ? `<span style="display:inline-flex; align-items:center; gap:0.3rem; background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; border-radius:999px; font-size:0.68rem; font-weight:800; padding:2px 9px; text-transform:uppercase; letter-spacing:0.03em;"><i class="fa-solid fa-ban"></i> No ejecutado</span>` : renderBadgeTipo(registro.tipoPrincipal, registro.id)}
                         </div>
                         <div class="history-record-meta">
                             <span><i class="fa-regular fa-calendar"></i> ${formatearFechaCorta(registro.fecha)}, ${registro.horaLabel}</span>
@@ -9880,7 +10051,7 @@ function injectPlanifyEnhancementStyles() {
     style.id = 'planify-enhancement-styles';
     style.textContent = `
 .planify-ficha-overlay{backdrop-filter:blur(3px)}
-.planify-ficha-panel{max-width:1280px;width:min(1280px,97vw);display:flex;flex-direction:column;padding:0;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 30px 70px rgba(15,23,42,.22)}
+.planify-ficha-panel{max-width:1560px;width:min(1560px,98.5vw);display:flex;flex-direction:column;padding:0;border-radius:24px;overflow:hidden;background:#fff;box-shadow:0 30px 70px rgba(15,23,42,.22)}
 .planify-ficha-header{padding:1.35rem 1.5rem 1.2rem;background:linear-gradient(135deg,#fffaf5 0%,#ffffff 45%,#eff6ff 100%);border-bottom:1px solid #e5e7eb}
 .planify-ficha-breadcrumb{display:flex;align-items:center;flex-wrap:wrap;gap:.45rem;font-size:.78rem;color:#64748b;margin-bottom:.8rem}
 .planify-ficha-breadcrumb strong{color:#0f172a}
@@ -10690,6 +10861,9 @@ function _htmlTareaCard(tarea, isAdmin, colaTareas) {
             <button class="btn btn-success daily-task-main-btn" style="flex:1;" onclick="window.completarTareaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')">
                 <i class="fa-solid fa-flag-checkered"></i> Terminar
             </button>` : ''}
+            <button class="btn btn-outline daily-task-noejec-btn" title="Marcar como no ejecutado" onclick="window.marcarTareaNoEjecutadaExposed('${tarea.id}', '${tarea.liderId || ''}', '${(tarea.ayudantesIds || []).join(',')}')" style="border-color:#f59e0b; color:#b45309; background:#fffbeb; white-space:nowrap;">
+                <i class="fa-solid fa-ban"></i> No ejecutado
+            </button>
             ` : ''}
             ${tarea._enCola && !puedeGestionar ? `
             <span style="font-size:0.8rem; color:var(--text-muted);">Orden #${tarea._pos}</span>` : ''}
@@ -19286,6 +19460,7 @@ function renderFichaTecnicaModal() {
                 <div class="planify-ficha-tabs">
                     <button class="tab-btn planify-ficha-tab-btn active" data-target="tab-vibraciones">Vibraciones</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-termografia">Termografía</button>
+                    <button class="tab-btn planify-ficha-tab-btn" data-target="tab-tiristores">Tiristores</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-lubricacion">Lubricación / Aceite</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-actividad">Actividad</button>
                     <button class="tab-btn planify-ficha-tab-btn" data-target="tab-avisos-sap">Avisos SAP <span id="ficha-avisos-badge" style="display:none; background:#0ea5e9; color:#fff; border-radius:999px; font-size:0.7rem; font-weight:800; padding:0.05rem 0.45rem; margin-left:0.3rem; vertical-align:middle;"></span></button>
@@ -19340,6 +19515,16 @@ function renderFichaTecnicaModal() {
                                 </div>
                                 <div id="lista-mediciones-termografia" class="planify-ficha-reading-list"></div>
                             </aside>
+                        </div>
+                    </div>
+                    <div id="tab-tiristores" class="tab-pane" style="display:none;">
+                        <div id="ficha-tiristores" class="planify-ficha-card">
+                            <div class="planify-ficha-card-head">
+                                <div>
+                                    <h3>Tiristores</h3>
+                                    <span>Módulo de tiristores de la excitatriz.</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div id="tab-lubricacion" class="tab-pane" style="display:none;">
@@ -19678,6 +19863,709 @@ function renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds) {
     `;
 }
 
+const TIRISTOR_PUNTOS_FICHA = ['x1', 'x2', 'y1', 'y2', 'z1', 'z2'];
+const TIRISTOR_LABELS_FICHA = { x1: 'X1', x2: 'X2', y1: 'Y1', y2: 'Y2', z1: 'Z1', z2: 'Z2' };
+const TIRISTOR_MODULOS_FICHA = ['x', 'y', 'z'];
+const TIRISTOR_MODULO_LABELS_FICHA = { x: 'X', y: 'Y', z: 'Z' };
+const TIRISTOR_MODULO_PUNTOS_FICHA = {
+    x: { entrada: 'x1', salida1: 'x1', salida2: 'x2' },
+    y: { entrada: 'y1', salida1: 'y1', salida2: 'y2' },
+    z: { entrada: 'z1', salida1: 'z1', salida2: 'z2' }
+};
+
+function _tiristoresMedicionBase(id, hora, mw, nota, entradaXYZ, salidaPuntos, unidad = 'U3', extras = {}) {
+    const [ex, ey, ez] = entradaXYZ;
+    const [x1, x2, y1, y2, z1, z2] = salidaPuntos;
+    return {
+        id,
+        unidad,
+        hora,
+        mw: String(mw),
+        nota,
+        entrada: { x1: ex, x2: ex, y1: ey, y2: ey, z1: ez, z2: ez },
+        salida: { x1, x2, y1, y2, z1, z2 },
+        ...extras,
+        created_at: `2026-07-05T${hora || '00:00'}:00`
+    };
+}
+
+const TIRISTORES_BASE_PDF = {
+    U3: [
+        _tiristoresMedicionBase('pdf-u3-001', '10:42', 67, 'Pre 1', ['39.9', '57.6', '56.3'], ['46.4', '34.6', '42.4', '34.1', '37.5', '34.5']),
+        _tiristoresMedicionBase('pdf-u3-002', '10:42', 67, 'Pre 2', ['41.2', '39.8', '42.4'], ['42.5', '36.8', '38.6', '35.5', '36.4', '35']),
+        _tiristoresMedicionBase('pdf-u3-003', '10:42', 50, 'Pre 1', ['37.7', '54.6', '52.9'], ['41.4', '33.1', '44.6', '33.2', '36', '33.9']),
+        _tiristoresMedicionBase('pdf-u3-004', '10:42', 50, 'Pre 2', ['38.6', '38.2', '37.3'], ['40.8', '32.6', '37.4', '34.9', '35.6', '34.2']),
+        _tiristoresMedicionBase('pdf-u3-005', '10:42', 38, 'Pre 1', ['40.7', '48.4', '52.7'], ['42.1', '32.3', '40.7', '32.9', '35.5', '34.5']),
+        _tiristoresMedicionBase('pdf-u3-006', '10:42', 38, 'Pre 2', ['39.1', '37.8', '36.1'], ['39.5', '36.1', '36.2', '33.8', '34.6', '33.3']),
+        _tiristoresMedicionBase('pdf-u3-007', '10:42', 20, 'Pre 1', ['35', '48', '45'], ['36', '31', '34', '32', '32', '32']),
+        _tiristoresMedicionBase('pdf-u3-008', '10:42', 20, 'Pre 2', ['36', '36', '37'], ['36', '35', '35', '33', '34', '32']),
+        _tiristoresMedicionBase('pdf-u3-009', '10:42', 20, 'Pre 3', ['39', '33', '32'], ['33', '37', '37', '32', '41', '37']),
+        _tiristoresMedicionBase('pdf-u3-010', '10:42', 10, 'Pre 1', ['36', '48', '39'], ['39', '32', '42', '31', '33', '31']),
+        _tiristoresMedicionBase('pdf-u3-011', '10:42', 10, 'Pre 2', ['35', '36', '37'], ['36', '34', '34', '33', '33', '31']),
+        _tiristoresMedicionBase('pdf-u3-012', '14:05', 15, 'Post 2', ['41', '47', '52'], ['52', '34', '40', '38', '38', '30']),
+        _tiristoresMedicionBase('pdf-u3-013', '14:05', 15, 'Post 3', ['50', '53', '60'], ['53', '34', '32', '31', '45', '33']),
+        _tiristoresMedicionBase('pdf-u3-014', '14:32', 38, 'Post 2', ['48', '48', '55'], ['60', '36', '46', '39', '40', '31']),
+        _tiristoresMedicionBase('pdf-u3-015', '14:32', 38, 'Post 3', ['55', '59', '71'], ['37', '31', '33', '30', '48', '34']),
+        _tiristoresMedicionBase('pdf-u3-016', '15:15', 50, 'Post 2', ['50', '50', '64'], ['61', '37', '49', '40', '40', '30']),
+        _tiristoresMedicionBase('pdf-u3-017', '15:15', 50, 'Post 3', ['62', '63', '74'], ['36', '31', '34', '31', '49', '34']),
+        _tiristoresMedicionBase('pdf-u3-018', '15:34', 75, 'Post 2', ['54', '56', '71'], ['67', '38', '46', '42', '44', '32']),
+        _tiristoresMedicionBase('pdf-u3-019', '15:34', 75, 'Post 3', ['70', '70', '85'], ['36', '32', '41', '31', '54', '35']),
+        _tiristoresMedicionBase('pdf-u3-020', '15:48', 100, 'Post 2', ['55', '57', '78'], ['74', '41', '53', '49', '46', '34']),
+        _tiristoresMedicionBase('pdf-u3-021', '15:48', 100, 'Post 3', ['68', '74', '85'], ['37', '33', '37', '33', '55', '36']),
+        _tiristoresMedicionBase('pdf-u3-022', '16:30', 154, 'Post 2', ['80', '72', '102'], ['96', '50', '58', '64', '55', '39']),
+        _tiristoresMedicionBase('pdf-u3-023', '16:30', 154, 'Post 3', ['85', '101', '109'], ['43', '38', '47', '37', '68', '45']),
+        _tiristoresMedicionBase('pdf-u3-024', '17:45', 154, 'Post 2', ['116', '74', '102'], ['85', '46', '54', '67', '56', '41']),
+        _tiristoresMedicionBase('pdf-u3-025', '17:45', 154, 'Post 3', ['92', '78', '107'], ['48', '42', '47', '42', '74', '45']),
+        _tiristoresMedicionBase('pdf-u3-026', '18:07', 154, 'Post 2', ['91', '74', '103'], ['95', '49', '54', '68', '58', '42']),
+        _tiristoresMedicionBase('pdf-u3-027', '18:07', 154, 'Post 3', ['91', '105', '120'], ['47', '41', '49', '43', '77', '46']),
+        _tiristoresMedicionBase('pdf-u3-028', '19:48', 154, 'Post 2', ['60', '65', '80'], ['69', '41', '47', '55', '44', '35']),
+        _tiristoresMedicionBase('pdf-u3-029', '19:48', 154, 'Post 3', ['62', '99', '73'], ['41', '35', '43', '36', '60', '39']),
+        _tiristoresMedicionBase('pdf-u3-030', '20:38', 154, 'Post 2', ['51', '60', '80'], ['69', '39', '46', '54', '44', '33']),
+        _tiristoresMedicionBase('pdf-u3-031', '20:38', 154, 'Post 3', ['60', '53', '70'], ['39', '34', '42', '35', '56', '37'])
+    ],
+    U5: [
+        _tiristoresMedicionBase('pdf-u5-001', '18:18', 0, 'Prueba 0MW', ['27', '28', '29'], ['26', '25', '27', '26', '24', '25'], 'U5'),
+        _tiristoresMedicionBase('pdf-u5-002', '18:29', 7.5, 'Prueba 7,5MW', ['34', '36', '35'], ['28', '27', '28', '29', '28', '29'], 'U5', {
+            parametros: { vcampo: '64', icampo: '557' },
+            frente: { x2: '73', y2: '68', z2: '66' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-003', '22:07', 7.5, 'Prueba 7,5MW', ['19', '20', '20'], ['20', '20', '20', '20', '20', '20'], 'U5', {
+            parametros: { vcampo: '60.5', icampo: '536' },
+            frente: { x2: '20', y2: '20', z2: '20' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-004', '22:45', 20, 'Prueba 20MW', ['20', '20', '19'], ['20', '20', '19', '20', '19', '20'], 'U5', {
+            parametros: { vcampo: '62.6', icampo: '542' },
+            frente: { x2: '20', y2: '20', z2: '20' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-005', '23:10', 30, 'Prueba 30MW', ['19', '20', '19'], ['20', '20', '19', '20', '19', '19'], 'U5', {
+            parametros: { vcampo: '65.6', icampo: '560' },
+            frente: { x2: '19', y2: '19', z2: '20' }
+        })
+    ]
+};
+
+function _tiristoresUnidadEquipo(equipo) {
+    const texto = [
+        equipo?.activo,
+        equipo?.componente,
+        equipo?.ubicacion,
+        equipo?.denominacion_ut,
+        equipo?.kks,
+        equipo?.ubicacion_tecnica
+    ].filter(Boolean).join(' ')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    const unidad = (texto.match(/\bU\s?([35])\b/) || [])[1];
+    if (!unidad) return '';
+    if (!/(EXCITATRIZ|EXCITACION|TIRISTOR|RECTIFICADOR)/.test(texto)) return '';
+    return `U${unidad}`;
+}
+
+function _tiristoresStoreLeer() {
+    try {
+        const data = JSON.parse(localStorage.getItem('planify_tiristores_excitatriz') || '{}');
+        return data && typeof data === 'object' ? data : {};
+    } catch (e) {
+        return {};
+    }
+}
+
+function _tiristoresLeerUnidad(unidad) {
+    const store = _tiristoresStoreLeer();
+    const tieneUnidadGuardada = Object.prototype.hasOwnProperty.call(store, unidad);
+    const base = TIRISTORES_BASE_PDF[unidad] || [];
+    const guardadas = tieneUnidadGuardada && Array.isArray(store[unidad]) ? store[unidad] : [];
+    const idsGuardadas = new Set(guardadas.map(item => String(item?.id || '')));
+    const lista = tieneUnidadGuardada
+        ? (unidad === 'U5' ? [...base.filter(item => !idsGuardadas.has(String(item.id))), ...guardadas] : guardadas)
+        : base;
+    return lista
+        .map(item => ({
+            ...item,
+            entrada: item.entrada || {},
+            salida: item.salida || {},
+            frente: item.frente || {},
+            parametros: item.parametros || {}
+        }))
+        .filter(item => _tiristoresTieneDatos(item))
+        .sort((a, b) => _tiristoresHoraMin(a.hora) - _tiristoresHoraMin(b.hora) || String(a.created_at || '').localeCompare(String(b.created_at || '')));
+}
+
+function _tiristoresGuardarUnidad(unidad, mediciones) {
+    const store = _tiristoresStoreLeer();
+    store[unidad] = (mediciones || []).filter(_tiristoresTieneDatos);
+    localStorage.setItem('planify_tiristores_excitatriz', JSON.stringify(store));
+}
+
+function _tiristoresHoraMin(hora) {
+    const m = String(hora || '').match(/^(\d{1,2}):(\d{2})$/);
+    return m ? Number(m[1]) * 60 + Number(m[2]) : 99999;
+}
+
+function _tiristoresNumero(valor) {
+    if (valor === null || valor === undefined || valor === '') return null;
+    const n = Number(String(valor).replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+}
+
+function _tiristoresOrdenMw(a, b) {
+    const ma = _tiristoresNumero(a?.mw);
+    const mb = _tiristoresNumero(b?.mw);
+    const va = Number.isFinite(ma) ? ma : Number.POSITIVE_INFINITY;
+    const vb = Number.isFinite(mb) ? mb : Number.POSITIVE_INFINITY;
+    return va - vb
+        || _tiristoresHoraMin(a?.hora) - _tiristoresHoraMin(b?.hora)
+        || String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
+}
+
+function _tiristoresOrdenHora(a, b) {
+    return _tiristoresHoraMin(a?.hora) - _tiristoresHoraMin(b?.hora)
+        || String(a?.created_at || '').localeCompare(String(b?.created_at || ''));
+}
+
+function _tiristoresRangoMw(lista = []) {
+    const cargas = lista
+        .map(item => _tiristoresNumero(item?.mw))
+        .filter(v => Number.isFinite(v));
+    return cargas.length ? { min: Math.min(...cargas), max: Math.max(...cargas) } : null;
+}
+
+function _tiristoresFiltrarPorRangoMw(lista = [], rango = null) {
+    if (!rango) return lista;
+    return lista.filter(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        return Number.isFinite(mw) && mw >= rango.min - 0.001 && mw <= rango.max + 0.001;
+    });
+}
+
+function _tiristoresMwUnicos(lista = []) {
+    const valores = new Map();
+    lista.forEach(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (Number.isFinite(mw)) valores.set(mw.toFixed(3), mw);
+    });
+    return [...valores.values()].sort((a, b) => a - b);
+}
+
+function _tiristoresFiltrarBrechasComparacion(listaComparacion = [], listaActual = []) {
+    const cargasActuales = _tiristoresMwUnicos(listaActual);
+    if (cargasActuales.length < 2) return listaComparacion;
+    return listaComparacion.filter(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (!Number.isFinite(mw)) return true;
+        return !cargasActuales.some((inicio, index) => {
+            const fin = cargasActuales[index + 1];
+            return Number.isFinite(fin) && mw > inicio + 0.001 && mw < fin - 0.001;
+        });
+    });
+}
+
+function _tiristoresLimitarComparacionPorConteoMw(listaComparacion = [], listaActual = []) {
+    const disponibles = new Map();
+    const cargasActuales = [];
+    listaActual.forEach(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (!Number.isFinite(mw)) return;
+        cargasActuales.push(mw);
+        const key = mw.toFixed(3);
+        disponibles.set(key, (disponibles.get(key) || 0) + 1);
+    });
+    const maxActual = cargasActuales.length ? Math.max(...cargasActuales) : null;
+    const usados = new Map();
+    return listaComparacion.filter(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (!Number.isFinite(mw)) return true;
+        const key = mw.toFixed(3);
+        const max = disponibles.get(key) || 0;
+        if (!max) return Number.isFinite(maxActual) && mw > maxActual + 0.001;
+        const actual = usados.get(key) || 0;
+        if (actual >= max) return false;
+        usados.set(key, actual + 1);
+        return true;
+    });
+}
+
+function _tiristoresTieneDatos(item) {
+    if (!item) return false;
+    if (String(item.hora || '').trim() || String(item.mw || '').trim()) return true;
+    return TIRISTOR_PUNTOS_FICHA.some(p => item.entrada?.[p] || item.salida?.[p] || item.frente?.[p]);
+}
+
+function _tiristoresMax(item, tipo) {
+    const values = TIRISTOR_PUNTOS_FICHA
+        .map(p => _tiristoresNumero(item?.[tipo]?.[p]))
+        .filter(v => Number.isFinite(v));
+    return values.length ? Math.max(...values) : null;
+}
+
+function _tiristoresMaxDetalle(mediciones = []) {
+    let best = null;
+    mediciones.forEach((item, index) => {
+        ['entrada', 'salida'].forEach(tipo => {
+            TIRISTOR_PUNTOS_FICHA.forEach(punto => {
+                const value = _tiristoresNumero(item?.[tipo]?.[punto]);
+                if (!Number.isFinite(value)) return;
+                if (!best || value > best.value) {
+                    best = { id: item?.id || '', value, tipo, punto, index, hora: item?.hora || '', nota: item?.nota || '', mw: item?.mw || '' };
+                }
+            });
+        });
+    });
+    return best;
+}
+
+function _tiristoresModuloDePunto(punto) {
+    const modulo = String(punto || '').trim().charAt(0).toLowerCase();
+    return TIRISTOR_MODULOS_FICHA.includes(modulo) ? modulo : 'x';
+}
+
+function _tiristoresTipoLabel(tipo) {
+    return tipo === 'entrada' ? 'Entrada' : tipo === 'salida' ? 'Salida' : 'Frente';
+}
+
+function _tiristoresParametroTexto(item, key, unidad) {
+    const value = String(item?.parametros?.[key] || '').trim();
+    return value ? `${value}${unidad}` : '-';
+}
+
+function _tiristoresFrenteResumen(item) {
+    const partes = TIRISTOR_PUNTOS_FICHA
+        .map(p => {
+            const value = String(item?.frente?.[p] || '').trim();
+            return value ? `${TIRISTOR_LABELS_FICHA[p]} ${value} C` : '';
+        })
+        .filter(Boolean);
+    return partes.length ? partes.join(' / ') : '-';
+}
+
+function _tiristoresUnidadesDisponibles(unidadActual = '') {
+    const store = _tiristoresStoreLeer();
+    const unidades = new Set(['U3', 'U5']);
+    Object.keys(store || {}).forEach(key => {
+        if (/^U[35]$/.test(key)) unidades.add(key);
+    });
+    Object.keys(TIRISTORES_BASE_PDF || {}).forEach(key => unidades.add(key));
+    return [...unidades].filter(u => u && u !== unidadActual).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+}
+
+function _tiristoresLabelMedicion(item, index) {
+    const hora = String(item?.hora || '').trim();
+    const nota = String(item?.nota || '').trim();
+    return [hora, nota].filter(Boolean).join(' ') || `#${index + 1}`;
+}
+
+function _tiristoresLabelCarga(item, index, mostrarHora = true) {
+    const mw = String(item?.mw || '').trim();
+    const hora = String(item?.hora || '').trim();
+    const carga = mw ? `${mw.replace('.', ',')} MW` : `#${index + 1}`;
+    return mostrarHora && hora ? [carga, hora] : carga;
+}
+
+function _tiristoresPuntoGrafico(item, valor) {
+    const xVisual = _tiristoresNumero(item?._chartX);
+    const x = Number.isFinite(xVisual) ? xVisual : _tiristoresNumero(item?.mw);
+    const y = _tiristoresNumero(valor);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return {
+        x,
+        y,
+        id: item?.id || '',
+        hora: item?.hora || '',
+        mw: item?.mw || '',
+        nota: item?.nota || '',
+        parametros: item?.parametros || {}
+    };
+}
+
+function _tiristoresSepararCargasRepetidas(lista = [], offsetUnidad = 0) {
+    const grupos = new Map();
+    lista.forEach((item, index) => {
+        const mw = _tiristoresNumero(item?.mw);
+        const key = Number.isFinite(mw) ? mw.toFixed(3) : `sin-${item?.id || index}`;
+        grupos.set(key, (grupos.get(key) || 0) + 1);
+    });
+    const vistos = new Map();
+    return lista.map(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (!Number.isFinite(mw)) return { ...item, _chartX: offsetUnidad };
+        const key = mw.toFixed(3);
+        const total = grupos.get(key) || 1;
+        const pos = vistos.get(key) || 0;
+        vistos.set(key, pos + 1);
+        const step = total <= 1 ? 0 : total <= 2 ? 2.4 : total <= 4 ? 1.9 : 1.45;
+        const offset = (pos - (total - 1) / 2) * step + offsetUnidad;
+        return { ...item, _chartX: Math.max(0, mw + offset) };
+    });
+}
+
+function _tiristoresPrepararSecuencia(lista = [], offsetUnidad = 0) {
+    return lista.map((item, index) => ({
+        ...item,
+        _chartX: index + 1 + offsetUnidad,
+        _chartIndex: index
+    }));
+}
+
+function _tiristoresPrepararComparacionEnSlots(listaComparacion = [], listaActualPreparada = []) {
+    const slotsPorMw = new Map();
+    const cargasActuales = [];
+    let siguienteX = 1;
+    listaActualPreparada.forEach(item => {
+        const mw = _tiristoresNumero(item?.mw);
+        if (!Number.isFinite(mw)) return;
+        cargasActuales.push(mw);
+        siguienteX = Math.max(siguienteX, Math.ceil(Number(item._chartX) || 0) + 1);
+        const key = mw.toFixed(3);
+        if (!slotsPorMw.has(key)) slotsPorMw.set(key, []);
+        slotsPorMw.get(key).push(item._chartX);
+    });
+    const maxActual = cargasActuales.length ? Math.max(...cargasActuales) : null;
+    const usados = new Map();
+    return listaComparacion
+        .map(item => {
+            const mw = _tiristoresNumero(item?.mw);
+            if (!Number.isFinite(mw)) return null;
+            const key = mw.toFixed(3);
+            const slots = slotsPorMw.get(key) || [];
+            const index = usados.get(key) || 0;
+            if (!slots[index]) {
+                if (Number.isFinite(maxActual) && mw > maxActual + 0.001) {
+                    return { ...item, _chartX: siguienteX++, _chartIndex: index };
+                }
+                return null;
+            }
+            usados.set(key, index + 1);
+            return { ...item, _chartX: slots[index], _chartIndex: index };
+        })
+        .filter(Boolean);
+}
+
+function _tiristoresJs(value) {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function _tiristoresInputGrid(data = {}) {
+    const input = (tipo, punto) => {
+        const cls = tipo === 'entrada' ? 'tir-in' : tipo === 'salida' ? 'tir-out' : 'tir-front';
+        return `<input type="number" class="form-control ${cls}-${punto}" step="0.1" min="-50" value="${escapeHtml(data?.[tipo]?.[punto] || '')}" placeholder="${TIRISTOR_LABELS_FICHA[punto]}" style="font-size:0.82rem; padding:0.42rem 0.5rem;">`;
+    };
+    const fila = tipo => `<div style="display:grid; grid-template-columns:78px repeat(6, minmax(58px, 1fr)); gap:0.35rem; align-items:center;">
+        <strong style="font-size:0.78rem; color:#475569;">${tipo === 'entrada' ? 'Entrada' : tipo === 'salida' ? 'Salida' : 'Frente'}</strong>
+        ${TIRISTOR_PUNTOS_FICHA.map(p => input(tipo, p)).join('')}
+    </div>`;
+    return `<div style="display:grid; gap:0.45rem;">
+        <div style="display:grid; grid-template-columns:78px repeat(6, minmax(58px, 1fr)); gap:0.35rem; align-items:center; color:#64748b; font-size:0.72rem; font-weight:800; text-align:center;">
+            <span></span>${TIRISTOR_PUNTOS_FICHA.map(p => `<span>${TIRISTOR_LABELS_FICHA[p]}</span>`).join('')}
+        </div>
+        ${fila('entrada')}
+        ${fila('salida')}
+        ${fila('frente')}
+    </div>`;
+}
+
+function renderFichaTiristoresPanel(equipo) {
+    const cont = document.getElementById('ficha-tiristores');
+    if (!cont) return;
+    const unidad = _tiristoresUnidadEquipo(equipo);
+    window._planifyFichaTiristores = { unidad, mediciones: [] };
+    if (!unidad) {
+        cont.innerHTML = `<div class="planify-ficha-card-head"><div><h3>Tiristores</h3><span>Modulo disponible para Excitatriz U3 y U5.</span></div></div>${emptyFichaState('Sin modulo de tiristores', 'Abre la ficha de la excitatriz U3 o U5 para registrar entrada, salida, hora y MW.')}`;
+        return;
+    }
+
+    const mediciones = _tiristoresLeerUnidad(unidad);
+    window._planifyFichaTiristores = { unidad, mediciones };
+    const latest = mediciones[mediciones.length - 1] || null;
+    const maxSalida = mediciones.map(m => _tiristoresMax(m, 'salida')).filter(v => v !== null);
+    const maxEntrada = mediciones.map(m => _tiristoresMax(m, 'entrada')).filter(v => v !== null);
+    const maxTemp = Math.max(...[...maxSalida, ...maxEntrada, 0]);
+    const maxDetalle = _tiristoresMaxDetalle(mediciones);
+    window._planifyTiristorMaxDetalle = maxDetalle;
+    const maxMw = Math.max(...mediciones.map(m => _tiristoresNumero(m.mw) || 0), 0);
+    const promedio = values => values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
+    const allTemps = mediciones.flatMap(m => TIRISTOR_PUNTOS_FICHA.flatMap(p => [
+        _tiristoresNumero(m.entrada?.[p]),
+        _tiristoresNumero(m.salida?.[p])
+    ])).filter(v => Number.isFinite(v));
+    const maxTempMeta = maxDetalle
+        ? `Modulo ${TIRISTOR_MODULO_LABELS_FICHA[_tiristoresModuloDePunto(maxDetalle.punto)]} / ${_tiristoresTipoLabel(maxDetalle.tipo)}${maxDetalle.hora ? ` / ${escapeHtml(maxDetalle.hora)}` : ''}`
+        : 'Mayor valor entre entrada y salida';
+    const maxTempCard = maxDetalle ? `
+            <article class="planify-ficha-mini ${getEstadoCondicionFicha('termografia', maxTemp).tone}" role="button" tabindex="0"
+                onclick="window.irMaximaTempTiristores()"
+                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.irMaximaTempTiristores();}"
+                title="Ver modulo ${escapeHtml(TIRISTOR_MODULO_LABELS_FICHA[_tiristoresModuloDePunto(maxDetalle.punto)])} en el grafico"
+                style="cursor:pointer; border-color:#fecaca; box-shadow:0 10px 24px rgba(220,38,38,0.08);">
+                <div class="planify-ficha-mini-label">Maximo temp.</div>
+                <div class="planify-ficha-mini-value">${numeroFicha(maxTemp, 1)} C</div>
+                <div class="planify-ficha-mini-meta">${maxTempMeta}</div>
+            </article>` : crearTarjetaMiniFicha({ label: 'Maximo temp.', value: `${numeroFicha(maxTemp, 1)} C`, meta: 'Mayor valor entre entrada y salida', tone: getEstadoCondicionFicha('termografia', maxTemp).tone });
+    const resumen = mediciones.length ? `
+        <div class="planify-ficha-subgrid" style="margin-bottom:0.9rem;">
+            ${crearTarjetaMiniFicha({ label: 'Mediciones', value: numeroFicha(mediciones.length), meta: latest?.hora ? `Ultima hora: ${escapeHtml(latest.hora)}` : 'Sin hora registrada' })}
+            ${maxTempCard}
+            ${crearTarjetaMiniFicha({ label: 'Promedio', value: allTemps.length ? `${numeroFicha(promedio(allTemps), 1)} C` : 'Sin dato', meta: `${numeroFicha(allTemps.length)} punto(s) con temperatura` })}
+            ${crearTarjetaMiniFicha({ label: 'Maximo MW', value: maxMw ? `${numeroFicha(maxMw, 0)} MW` : 'Sin dato', meta: 'Carga asociada a las mediciones' })}
+        </div>` : '';
+    const moduloActivo = TIRISTOR_MODULOS_FICHA.includes(window._planifyTiristorModuloActivo)
+        ? window._planifyTiristorModuloActivo
+        : _tiristoresModuloDePunto(window._planifyTiristorPuntoActivo);
+    window._planifyTiristorModuloActivo = moduloActivo;
+    const unidadesComparables = _tiristoresUnidadesDisponibles(unidad);
+    const compararActivo = unidadesComparables.includes(window._planifyTiristorCompararUnidad)
+        ? window._planifyTiristorCompararUnidad
+        : '';
+    window._planifyTiristorCompararUnidad = compararActivo;
+    const modoActivo = window._planifyTiristorModo === 'mw-real' ? 'mw-real' : 'secuencia';
+    window._planifyTiristorModo = modoActivo;
+    const charts = mediciones.length ? `
+        <section style="border:1px solid #e5e7eb; border-radius:14px; background:#fff; padding:0.9rem; margin-top:0.9rem;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:0.8rem; flex-wrap:wrap; margin-bottom:0.75rem;">
+                <div>
+                    <div style="font-size:0.95rem; color:#0f172a; font-weight:900;"><i class="fa-solid fa-chart-line" style="color:#7c3aed;"></i> Modulo <span id="tir-modulo-titulo">${TIRISTOR_MODULO_LABELS_FICHA[moduloActivo]}</span></div>
+                    <div id="tir-comparador-subtitulo" style="font-size:0.78rem; color:#64748b; margin-top:0.18rem;">Entrada y salidas del modulo en Orden Medición.</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                    <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.78rem; color:#64748b; font-weight:800;">
+                        Modo
+                        <select id="tir-modo-select" class="form-control" onchange="window.seleccionarModoTiristores(this.value)" style="width:auto; min-width:150px; font-size:0.82rem; padding:0.38rem 0.55rem;">
+                            <option value="secuencia" ${modoActivo === 'secuencia' ? 'selected' : ''}>Orden Medición</option>
+                            <option value="mw-real" ${modoActivo === 'mw-real' ? 'selected' : ''}>Tendencia MW</option>
+                        </select>
+                    </label>
+                    <div id="tir-modulo-botones" style="display:flex; gap:0.35rem; flex-wrap:wrap;">
+                        ${TIRISTOR_MODULOS_FICHA.map(m => {
+                            const active = m === moduloActivo;
+                            return `<button type="button" data-tir-modulo="${m}" onclick="window.seleccionarModuloTiristores('${m}')"
+                                style="min-width:42px; border:1px solid ${active ? '#7c3aed' : '#e5e7eb'}; background:${active ? '#f5f3ff' : '#fff'}; color:${active ? '#6d28d9' : '#475569'}; border-radius:999px; padding:0.38rem 0.65rem; font-size:0.78rem; font-weight:900; cursor:pointer;">
+                                ${TIRISTOR_MODULO_LABELS_FICHA[m]}
+                            </button>`;
+                        }).join('')}
+                    </div>
+                    <select id="tir-modulo-select" class="form-control" onchange="window.seleccionarModuloTiristores(this.value)" style="width:auto; min-width:90px; font-size:0.82rem; padding:0.38rem 0.55rem;">
+                        ${TIRISTOR_MODULOS_FICHA.map(m => `<option value="${m}" ${m === moduloActivo ? 'selected' : ''}>Modulo ${TIRISTOR_MODULO_LABELS_FICHA[m]}</option>`).join('')}
+                    </select>
+                    <label style="display:flex; align-items:center; gap:0.35rem; font-size:0.78rem; color:#64748b; font-weight:800;">
+                        Comparar
+                        <select id="tir-comparar-select" class="form-control" onchange="window.seleccionarComparadorTiristores(this.value)" style="width:auto; min-width:132px; font-size:0.82rem; padding:0.38rem 0.55rem;">
+                            <option value="">Sin comparacion</option>
+                            ${unidadesComparables.map(u => `<option value="${u}" ${u === compararActivo ? 'selected' : ''}>con ${u}</option>`).join('')}
+                        </select>
+                    </label>
+                </div>
+            </div>
+            <div style="height:clamp(520px, 68vh, 680px); min-height:520px;"><canvas id="tir-chart-principal"></canvas></div>
+            <div id="tir-comparador-estado" style="font-size:0.78rem; color:#64748b; margin-top:0.55rem;"></div>
+        </section>` : emptyFichaState('Sin mediciones de tiristores', 'Agrega la hora de medicion, MW y temperaturas de entrada/salida para graficar cada punto.');
+    const filas = mediciones.length ? `<div style="overflow-x:auto; margin-top:0.9rem;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.82rem; min-width:980px;">
+            <thead><tr style="background:#f8fafc; color:#475569;">
+                <th style="text-align:left; padding:0.5rem;">Hora</th>
+                <th style="text-align:center; padding:0.5rem;">MW</th>
+                <th style="text-align:center; padding:0.5rem;">V campo</th>
+                <th style="text-align:center; padding:0.5rem;">I campo</th>
+                <th style="text-align:center; padding:0.5rem;">Max entrada</th>
+                <th style="text-align:center; padding:0.5rem;">Max salida</th>
+                <th style="text-align:left; padding:0.5rem;">Frente</th>
+                <th style="text-align:left; padding:0.5rem;">Nota</th>
+                <th style="text-align:right; padding:0.5rem;">Acciones</th>
+            </tr></thead>
+            <tbody>${mediciones.map(m => `<tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:0.45rem 0.5rem; font-weight:800; color:#0f172a;">${escapeHtml(m.hora || '-')}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(m.mw || '-')}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'vcampo', 'V'))}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'icampo', 'A'))}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'entrada') !== null ? `${numeroFicha(_tiristoresMax(m, 'entrada'), 1)} C` : '-'}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'salida') !== null ? `${numeroFicha(_tiristoresMax(m, 'salida'), 1)} C` : '-'}</td>
+                <td style="padding:0.45rem 0.5rem;">${escapeHtml(_tiristoresFrenteResumen(m))}</td>
+                <td style="padding:0.45rem 0.5rem;">${escapeHtml(m.nota || '')}</td>
+                <td style="padding:0.45rem 0.5rem; text-align:right; white-space:nowrap;">
+                    <button onclick="window.abrirModalTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Editar" style="background:none; border:none; color:#7c3aed; cursor:pointer; padding:0.25rem;"><i class="fa-solid fa-pen"></i></button>
+                    <button onclick="window.eliminarMedicionTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Eliminar" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:0.25rem;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>`).join('')}</tbody>
+        </table>
+    </div>` : '';
+
+    cont.innerHTML = `
+        <div class="planify-ficha-card-head">
+            <div>
+                <h3><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores ${unidad}</h3>
+                <span>Tendencias por punto con hora de medicion, sin fecha visible.</span>
+            </div>
+            <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#7c3aed; border-color:#ddd6fe;">
+                <i class="fa-solid fa-plus"></i> Agregar medicion
+            </button>
+        </div>
+        ${resumen}
+        ${charts}
+        ${filas}
+    `;
+}
+
+window.abrirModalTiristores = function(unidad, id = '') {
+    const lista = _tiristoresLeerUnidad(unidad);
+    const actual = id ? lista.find(item => String(item.id) === String(id)) : null;
+    document.getElementById('modal-tiristores')?.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-tiristores';
+    overlay.dataset.unidad = unidad;
+    overlay.dataset.id = actual?.id || '';
+    overlay.style.cssText = 'position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:12000; display:flex; align-items:flex-start; justify-content:center; padding:2rem 1rem; overflow:auto;';
+    overlay.innerHTML = `
+        <div style="background:#fff; border-radius:16px; max-width:880px; width:100%; box-shadow:0 24px 60px rgba(0,0,0,0.3);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; padding:1rem 1.2rem; border-bottom:1px solid #eef2f7;">
+                <strong style="font-size:1rem; color:#0f172a;"><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> ${actual ? 'Editar' : 'Agregar'} medicion Tiristores ${unidad}</strong>
+                <button onclick="document.getElementById('modal-tiristores').remove()" style="background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; color:#94a3b8;">&times;</button>
+            </div>
+            <div style="padding:1rem 1.2rem; display:grid; gap:0.85rem;">
+                <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.7rem;">
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">Hora medicion
+                        <input type="time" id="tir-hora" class="form-control" value="${escapeHtml(actual?.hora || '')}">
+                    </label>
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">Megawatts
+                        <input type="number" id="tir-mw" class="form-control" step="0.1" min="0" value="${escapeHtml(actual?.mw || '')}" placeholder="Ej: 67">
+                    </label>
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">V campo
+                        <input type="number" id="tir-vcampo" class="form-control" step="0.1" min="0" value="${escapeHtml(actual?.parametros?.vcampo || '')}" placeholder="Ej: 64">
+                    </label>
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">I campo
+                        <input type="number" id="tir-icampo" class="form-control" step="0.1" min="0" value="${escapeHtml(actual?.parametros?.icampo || '')}" placeholder="Ej: 557">
+                    </label>
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">Medicion
+                        <input id="tir-nota" class="form-control" value="${escapeHtml(actual?.nota || '')}" placeholder="Ej: 1, 2 o post intervencion">
+                    </label>
+                </div>
+                <div style="border:1px solid #e5e7eb; border-radius:12px; padding:0.8rem; background:#f8fafc; overflow-x:auto;">
+                    ${_tiristoresInputGrid(actual || {})}
+                </div>
+            </div>
+            <div style="display:flex; gap:0.6rem; justify-content:flex-end; padding:1rem 1.2rem; border-top:1px solid #eef2f7;">
+                <button onclick="document.getElementById('modal-tiristores').remove()" style="background:#fff; border:1px solid #e5e7eb; border-radius:9px; padding:0.6rem 1.1rem; font-weight:700; cursor:pointer; color:#475569;">Cancelar</button>
+                <button onclick="window.guardarMedicionTiristores()" style="background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; border:none; border-radius:9px; padding:0.6rem 1.3rem; font-weight:800; cursor:pointer;"><i class="fa-solid fa-floppy-disk"></i> Guardar</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+};
+
+window.guardarMedicionTiristores = function() {
+    const modal = document.getElementById('modal-tiristores');
+    if (!modal) return;
+    const unidad = modal.dataset.unidad || '';
+    const id = modal.dataset.id || crypto.randomUUID();
+    const entrada = {}, salida = {}, frente = {};
+    TIRISTOR_PUNTOS_FICHA.forEach(p => {
+        entrada[p] = modal.querySelector(`.tir-in-${p}`)?.value.trim() || '';
+        salida[p] = modal.querySelector(`.tir-out-${p}`)?.value.trim() || '';
+        frente[p] = modal.querySelector(`.tir-front-${p}`)?.value.trim() || '';
+    });
+    const item = {
+        id,
+        unidad,
+        hora: modal.querySelector('#tir-hora')?.value || '',
+        mw: modal.querySelector('#tir-mw')?.value.trim() || '',
+        nota: modal.querySelector('#tir-nota')?.value.trim() || '',
+        entrada,
+        salida,
+        frente,
+        parametros: {
+            vcampo: modal.querySelector('#tir-vcampo')?.value.trim() || '',
+            icampo: modal.querySelector('#tir-icampo')?.value.trim() || ''
+        },
+        created_at: new Date().toISOString()
+    };
+    if (!_tiristoresTieneDatos(item)) {
+        alert('Ingresa al menos hora, MW o una temperatura.');
+        return;
+    }
+    const lista = _tiristoresLeerUnidad(unidad).filter(m => String(m.id) !== String(id));
+    lista.push(item);
+    _tiristoresGuardarUnidad(unidad, lista);
+    modal.remove();
+    const equipo = window._planifyFichaTiristoresEquipo;
+    if (equipo) {
+        renderFichaTiristoresPanel(equipo);
+        setTimeout(() => initFichaTiristoresCharts(), 30);
+    }
+};
+
+window.eliminarMedicionTiristores = function(unidad, id) {
+    if (!confirm('Eliminar esta medicion de tiristores?')) return;
+    _tiristoresGuardarUnidad(unidad, _tiristoresLeerUnidad(unidad).filter(item => String(item.id) !== String(id)));
+    const equipo = window._planifyFichaTiristoresEquipo;
+    if (equipo) {
+        renderFichaTiristoresPanel(equipo);
+        setTimeout(() => initFichaTiristoresCharts(), 30);
+    }
+};
+
+window.seleccionarModuloTiristores = function(modulo) {
+    if (!TIRISTOR_MODULOS_FICHA.includes(modulo)) return;
+    window._planifyTiristorModuloActivo = modulo;
+    window._planifyTiristorPuntoActivo = `${modulo}1`;
+    document.getElementById('tir-modulo-titulo')?.replaceChildren(document.createTextNode(TIRISTOR_MODULO_LABELS_FICHA[modulo]));
+    const select = document.getElementById('tir-modulo-select');
+    if (select) select.value = modulo;
+    document.querySelectorAll('[data-tir-modulo]').forEach(btn => {
+        const active = btn.dataset.tirModulo === modulo;
+        btn.style.borderColor = active ? '#7c3aed' : '#e5e7eb';
+        btn.style.background = active ? '#f5f3ff' : '#fff';
+        btn.style.color = active ? '#6d28d9' : '#475569';
+    });
+    initFichaTiristoresCharts();
+};
+
+window.seleccionarPuntoTiristores = function(punto) {
+    window.seleccionarModuloTiristores(_tiristoresModuloDePunto(punto));
+};
+
+window.seleccionarComparadorTiristores = function(unidad) {
+    const actual = window._planifyFichaTiristores?.unidad || '';
+    const opciones = _tiristoresUnidadesDisponibles(actual);
+    window._planifyTiristorCompararUnidad = opciones.includes(unidad) ? unidad : '';
+    const select = document.getElementById('tir-comparar-select');
+    if (select) select.value = window._planifyTiristorCompararUnidad;
+    initFichaTiristoresCharts();
+};
+
+window.seleccionarOrdenTiristores = function(orden) {
+    window.seleccionarModoTiristores(orden === 'mw' ? 'mw-real' : 'secuencia');
+};
+
+window.seleccionarModoTiristores = function(modo) {
+    window._planifyTiristorModo = modo === 'mw-real' ? 'mw-real' : 'secuencia';
+    const select = document.getElementById('tir-modo-select');
+    if (select) select.value = window._planifyTiristorModo;
+    initFichaTiristoresCharts();
+};
+
+window.irMaximaTempTiristores = function() {
+    const detalle = window._planifyTiristorMaxDetalle;
+    if (!detalle?.punto) return;
+    window.seleccionarModuloTiristores(_tiristoresModuloDePunto(detalle.punto));
+    setTimeout(() => {
+        const canvas = document.getElementById('tir-chart-principal');
+        const section = canvas?.closest('section');
+        section?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (section) {
+            section.style.boxShadow = '0 0 0 3px rgba(124,58,237,0.18)';
+            setTimeout(() => { section.style.boxShadow = ''; }, 1400);
+        }
+        const chart = activeCharts.find(item => item?.canvas?.id === 'tir-chart-principal');
+        let datasetIndex = 0;
+        if (detalle.tipo === 'salida') datasetIndex = String(detalle.punto || '').endsWith('2') ? 2 : 1;
+        if (!chart || datasetIndex < 0) return;
+        const dataset = chart.data?.datasets?.[datasetIndex];
+        const index = dataset?.data?.findIndex(point => String(point?.id || '') === String(detalle.id || '')) ?? -1;
+        if (index < 0) return;
+        const point = dataset.data[index] || {};
+        const x = chart.scales?.x?.getPixelForValue(point.x) || 0;
+        const y = chart.scales?.y?.getPixelForValue(point.y) || 0;
+        chart.setActiveElements([{ datasetIndex, index }]);
+        chart.tooltip?.setActiveElements([{ datasetIndex, index }], { x, y });
+        chart.update();
+    }, 80);
+};
+
 function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones) {
     // 1º técnico desde la ejecución de ruta (las mediciones de ruta no guardan
     // técnico en la tabla, lo heredan de la ruta asignada); 2º desde tareas.
@@ -19980,6 +20868,8 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
             : [];
         excitatrizCont.innerHTML = renderFichaTermoExcitatriz(trabajosExc, esEquipoExc);
     }
+    window._planifyFichaTiristoresEquipo = equipo;
+    renderFichaTiristoresPanel(equipo);
 document.getElementById('lista-mediciones-lubricacion').innerHTML = lubs.length ? lubs.slice(0, 6).map(item => `<article id="med-${item.id}" class="planify-ficha-reading"><div class="planify-ficha-reading-top"><div><div class="planify-ficha-reading-title">${item.punto_medicion || 'Actividad de lubricacion'}</div><div class="planify-ficha-reading-meta"><span><i class="fa-regular fa-calendar"></i> ${formatearFechaHoraFicha(item.fecha)}</span><span><i class="fa-solid fa-user-gear"></i> ${escapeHtml(getNombresTecnicosFicha(item).join(', ') || 'Sin técnico')}</span></div></div><div class="planify-ficha-reading-value">${item.valor || 'Registro'}</div></div><div style="display:flex;justify-content:space-between;gap:.75rem;align-items:flex-start;"><div class="planify-ficha-reading-note">${item.observaciones || 'Sin observaciones registradas.'}</div><button onclick="window._borrarMedicion('${item.id}')" title="Eliminar medicion" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px 4px;font-size:0.84rem;line-height:1;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button></div></article>`).join('') : emptyFichaState('Sin cambios de aceite o engrase', 'Esta pestana mostrara registros de lubricacion cuando existan.');
     document.getElementById('ficha-actividad-trabajos').innerHTML = tareasRelacionadas.length ? tareasRelacionadas.map(task => renderActividadFicha(task, equipo)).join('') : emptyFichaState('Sin cierres relacionados', 'No se encontraron trabajos finalizados asociados a este activo.');
     document.getElementById('ficha-componentes-relacionados').innerHTML = siblingEquipos.length ? siblingEquipos.map(item => renderComponenteRelacionadoFicha(item, medicionesGrupo, siblingIds)).join('') : emptyFichaState('Sin componentes relacionados', 'No se encontraron otros componentes del mismo activo en esta unidad.');
@@ -20179,7 +21069,10 @@ window.abrirFichaTecnica = async function(equipoId) {
     const tareasRelacionadas = getTareasRelacionadasFicha(equipo, siblingIds);
     renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones);
 
-    setTimeout(() => initFichaCharts(medicionesEquipo), 40);
+    setTimeout(() => {
+        initFichaCharts(medicionesEquipo);
+        initFichaTiristoresCharts();
+    }, 40);
 
     // Exponer mediciones del grupo para el visor 3D (usadas por el popup al clickear escobillas).
     // Enriquecemos con técnicos desde tareas relacionadas — mismo paso que hace la pestaña Termografía.
@@ -20377,6 +21270,264 @@ function initFichaCharts(mediciones) {
             }
         }));
     }
+}
+
+function initFichaTiristoresCharts() {
+    if (!window.Chart) return;
+    activeCharts = activeCharts.filter(chart => {
+        const id = chart?.canvas?.id || '';
+        if (id.startsWith('tir-chart-')) {
+            try { chart.destroy(); } catch (e) { /* noop */ }
+            return false;
+        }
+        return true;
+    });
+    const data = window._planifyFichaTiristores || {};
+    const mediciones = Array.isArray(data.mediciones) ? data.mediciones : [];
+    if (!mediciones.length) return;
+
+    const modulo = TIRISTOR_MODULOS_FICHA.includes(window._planifyTiristorModuloActivo)
+        ? window._planifyTiristorModuloActivo
+        : _tiristoresModuloDePunto(window._planifyTiristorPuntoActivo);
+    window._planifyTiristorModuloActivo = modulo;
+    window._planifyTiristorPuntoActivo = `${modulo}1`;
+    const moduloLabel = TIRISTOR_MODULO_LABELS_FICHA[modulo];
+    const moduloPuntos = TIRISTOR_MODULO_PUNTOS_FICHA[modulo];
+    const unidadActual = data.unidad || '';
+    const compararUnidad = _tiristoresUnidadesDisponibles(unidadActual).includes(window._planifyTiristorCompararUnidad)
+        ? window._planifyTiristorCompararUnidad
+        : '';
+    window._planifyTiristorCompararUnidad = compararUnidad;
+    const modoGrafico = window._planifyTiristorModo === 'mw-real' ? 'mw-real' : 'secuencia';
+    window._planifyTiristorModo = modoGrafico;
+    const hayComparacion = !!compararUnidad;
+    const baseOrdenMw = [...mediciones].sort(_tiristoresOrdenMw);
+    const medicionesComparacionRaw = compararUnidad ? _tiristoresLeerUnidad(compararUnidad) : [];
+    const medicionesComparacion = hayComparacion
+        ? _tiristoresLimitarComparacionPorConteoMw(medicionesComparacionRaw, mediciones)
+        : [];
+    const compOrdenMw = [...medicionesComparacion].sort(_tiristoresOrdenMw);
+    const medicionesBaseOrdenadas = modoGrafico === 'mw-real'
+        ? baseOrdenMw
+        : [...mediciones];
+    const medicionesComparacionOrdenadas = modoGrafico === 'mw-real'
+        ? compOrdenMw
+        : [...medicionesComparacion];
+    const medicionesGrafico = modoGrafico === 'mw-real'
+        ? _tiristoresPrepararSecuencia(medicionesBaseOrdenadas, 0)
+        : _tiristoresPrepararSecuencia(medicionesBaseOrdenadas, hayComparacion ? -0.08 : 0);
+    const medicionesComparacionGrafico = modoGrafico === 'mw-real'
+        ? _tiristoresPrepararComparacionEnSlots(medicionesComparacionOrdenadas, medicionesGrafico)
+        : _tiristoresPrepararSecuencia(medicionesComparacionOrdenadas, 0.08);
+    window._planifyTiristorChartMediciones = medicionesGrafico;
+    const hayDatosComparacion = !!compararUnidad && medicionesComparacionGrafico.length > 0;
+    const canvas = document.getElementById('tir-chart-principal');
+    if (!canvas) return;
+    const serie = (lista, getter) => lista.map(item => _tiristoresPuntoGrafico(item, getter(item))).filter(Boolean);
+    const entrada = serie(medicionesGrafico, item => item.entrada?.[moduloPuntos.entrada]);
+    const salida1 = serie(medicionesGrafico, item => item.salida?.[moduloPuntos.salida1]);
+    const salida2 = serie(medicionesGrafico, item => item.salida?.[moduloPuntos.salida2]);
+    const entradaComp = serie(medicionesComparacionGrafico, item => item.entrada?.[moduloPuntos.entrada]);
+    const salida1Comp = serie(medicionesComparacionGrafico, item => item.salida?.[moduloPuntos.salida1]);
+    const salida2Comp = serie(medicionesComparacionGrafico, item => item.salida?.[moduloPuntos.salida2]);
+    const temps = [...entrada, ...salida1, ...salida2, ...entradaComp, ...salida1Comp, ...salida2Comp].map(p => p.y).filter(v => Number.isFinite(v));
+    const etiquetasPorX = new Map();
+    [...medicionesGrafico, ...medicionesComparacionGrafico].forEach((item, index) => {
+        const x = Math.round(Number(item?._chartX));
+        if (Number.isFinite(x) && !etiquetasPorX.has(x)) etiquetasPorX.set(x, { item, index });
+    });
+    const totalSecuencia = Math.max(1, ...[...etiquetasPorX.keys()]);
+    const etiquetaSecuencia = value => {
+        const x = Math.round(Number(value));
+        const entry = etiquetasPorX.get(x);
+        const index = x - 1;
+        if (Math.abs(Number(value) - Math.round(Number(value))) > 0.05 || index < 0 || index >= totalSecuencia) return '';
+        if (!entry) return '';
+        return _tiristoresLabelCarga(entry.item, entry.index, modoGrafico !== 'mw-real' && !hayDatosComparacion);
+    };
+    const maxTemp = Math.max(40, ...temps);
+    const maxCarga = Math.max(1, totalSecuencia);
+    const estadoComp = document.getElementById('tir-comparador-estado');
+    if (estadoComp) {
+        estadoComp.innerHTML = compararUnidad
+            ? (hayDatosComparacion
+                ? `<i class="fa-solid fa-code-compare" style="color:#7c3aed;"></i> Comparando ${escapeHtml(unidadActual)} con ${escapeHtml(compararUnidad)}. Coincide por MW y mantiene la tendencia posterior de ${escapeHtml(compararUnidad)}.`
+                : `<i class="fa-solid fa-circle-info" style="color:#b45309;"></i> ${escapeHtml(compararUnidad)} no tiene mediciones con MW coincidente con ${escapeHtml(unidadActual)}.`)
+            : 'Selecciona otra unidad para superponer sus temperaturas en el mismo punto.';
+    }
+    const subtituloComp = document.getElementById('tir-comparador-subtitulo');
+    if (subtituloComp) {
+        subtituloComp.textContent = compararUnidad
+            ? `Modulo ${moduloLabel}: ${unidadActual || 'unidad actual'} vs ${compararUnidad} (${modoGrafico === 'mw-real' ? 'tendencia por MW' : 'Orden Medición'})`
+            : `Modulo ${moduloLabel}: entrada y salidas en ${modoGrafico === 'mw-real' ? 'tendencia por MW' : 'Orden Medición'}.`;
+    }
+    const ctx = canvas.getContext('2d');
+    activeCharts.push(new window.Chart(ctx, {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: `${unidadActual || 'Actual'} entrada ${moduloLabel}`,
+                    data: entrada,
+                    borderColor: '#0f766e',
+                    backgroundColor: 'rgba(15,118,110,0.08)',
+                    tension: 0.28,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#0f766e',
+                    pointBorderWidth: 2,
+                    spanGaps: true,
+                    yAxisID: 'y'
+                },
+                {
+                    label: `${unidadActual || 'Actual'} salida ${moduloLabel}1`,
+                    data: salida1,
+                    borderColor: '#dc2626',
+                    backgroundColor: 'rgba(220,38,38,0.08)',
+                    tension: 0.28,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#dc2626',
+                    pointBorderWidth: 2,
+                    spanGaps: true,
+                    yAxisID: 'y'
+                },
+                {
+                    label: `${unidadActual || 'Actual'} salida ${moduloLabel}2`,
+                    data: salida2,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249,115,22,0.08)',
+                    tension: 0.28,
+                    borderWidth: 3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#fff',
+                    pointBorderColor: '#f97316',
+                    pointBorderWidth: 2,
+                    spanGaps: true,
+                    yAxisID: 'y'
+                },
+                ...(hayDatosComparacion ? [
+                    {
+                        label: `${compararUnidad} entrada ${moduloLabel}`,
+                        data: entradaComp,
+                        borderColor: '#0ea5e9',
+                        backgroundColor: 'rgba(14,165,233,0.05)',
+                        borderDash: [8, 5],
+                        tension: 0.28,
+                        borderWidth: 2.6,
+                        pointRadius: 3.5,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#0ea5e9',
+                        pointBorderWidth: 2,
+                        spanGaps: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: `${compararUnidad} salida ${moduloLabel}1`,
+                        data: salida1Comp,
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.05)',
+                        borderDash: [8, 5],
+                        tension: 0.28,
+                        borderWidth: 2.6,
+                        pointRadius: 3.5,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#ef4444',
+                        pointBorderWidth: 2,
+                        spanGaps: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: `${compararUnidad} salida ${moduloLabel}2`,
+                        data: salida2Comp,
+                        borderColor: '#b45309',
+                        backgroundColor: 'rgba(180,83,9,0.05)',
+                        borderDash: [8, 5],
+                        tension: 0.28,
+                        borderWidth: 2.6,
+                        pointRadius: 3.5,
+                        pointHoverRadius: 5,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#b45309',
+                        pointBorderWidth: 2,
+                        spanGaps: true,
+                        yAxisID: 'y'
+                    }
+                ] : [])
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            parsing: false,
+            interaction: { mode: 'x', intersect: false },
+            plugins: {
+                legend: { labels: { color: '#475569', usePointStyle: true, boxWidth: 10, font: { size: 13, weight: '700' } } },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    titleFont: { size: 16, weight: '800', lineHeight: 1.35 },
+                    bodyFont: { size: 14, weight: '700', lineHeight: 1.45 },
+                    footerFont: { size: 13, weight: '700', lineHeight: 1.35 },
+                    padding: { top: 16, right: 18, bottom: 18, left: 18 },
+                    titleMarginBottom: 10,
+                    bodySpacing: 8,
+                    boxWidth: 16,
+                    boxHeight: 16,
+                    boxPadding: 7,
+                    caretSize: 8,
+                    caretPadding: 12,
+                    callbacks: {
+                        title: items => {
+                            const item = items?.[0]?.raw || {};
+                            return item.hora ? `Hora ${item.hora}` : 'Sin hora';
+                        },
+                        afterTitle: items => {
+                            const item = items?.[0]?.raw || {};
+                            const lineas = [];
+                            if (item.mw) lineas.push(`${item.mw} MW${item.nota ? ` / ${item.nota}` : ''}`);
+                            else if (item.nota) lineas.push(item.nota);
+                            const vcampo = String(item.parametros?.vcampo || '').trim();
+                            const icampo = String(item.parametros?.icampo || '').trim();
+                            if (vcampo) lineas.push(`V campo: ${vcampo} V`);
+                            if (icampo) lineas.push(`I campo: ${icampo} A`);
+                            return lineas;
+                        },
+                        label: context => `${context.dataset.label}: ${numeroFicha(context.parsed.y, 1)} C`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'MW', color: '#64748b' },
+                    ticks: {
+                        color: '#64748b',
+                        maxRotation: 45,
+                        minRotation: 45,
+                        stepSize: 1,
+                        callback: value => etiquetaSecuencia(value)
+                    },
+                    grid: { color: 'rgba(226,232,240,0.75)' },
+                    min: 0,
+                    suggestedMax: maxCarga + 1
+                },
+                y: {
+                    title: { display: true, text: 'Temp C', color: '#64748b' },
+                    ticks: { color: '#64748b', callback: value => `${numeroFicha(value, 0)} C` },
+                    grid: { color: 'rgba(226,232,240,0.75)' },
+                    suggestedMin: 0,
+                    suggestedMax: maxTemp + 5
+                }
+            }
+        }
+    }));
 }
 
 function setupFichaEvents() {
