@@ -2234,6 +2234,7 @@ async function guardarTareaFinalizada({
     recomendacionAnalista,
     fechaTerminoManual = '',
     trafoData = null,
+    salaRelesData = null,
     medicionesData = []
 }) {
     const tarea = estado.tareas.find(t => t.id === id);
@@ -2255,6 +2256,15 @@ async function guardarTareaFinalizada({
     // Datos del transformador (planilla): se guardan indexados por el id del
     // registro para poder descargar la planilla desde el historial.
     if (trafoData) _trafoGuardarLocal(histId, trafoData);
+    if (salaRelesData) {
+        _salaRelesGuardarLocal(histId, salaRelesData);
+        const salaRelesTxt = _serializarSalaRelesData(salaRelesData);
+        if (salaRelesTxt) {
+            accionesRealizadas = accionesRealizadas
+                ? `${salaRelesTxt}\n\n${accionesRealizadas}`
+                : salaRelesTxt;
+        }
+    }
     const esReq = esRequerimiento(tarea.otNumero);
     const inicioReq = esReq ? normalizarHoraInput(horaInicio) : '';
     const terminoReq = esReq ? normalizarHoraInput(horaTermino) : '';
@@ -2984,6 +2994,15 @@ window.abrirDetalleHistorial = function(registroId) {
             </div>
         ` : ''}
 
+        ${(typeof esTareaSalaReles === 'function' && esTareaSalaReles({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion })) ? `
+            <div style="display:flex; justify-content:flex-end; margin-bottom:0.75rem;">
+                <button type="button" onclick="window.generarPlanillaSalaRelesHistorial('${String(registroId).replace(/'/g, "\\'")}')"
+                    style="border:1px solid #fdba74; background:#fff7ed; color:#9a3412; border-radius:10px; padding:0.45rem 0.75rem; font-size:0.84rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:0.4rem;">
+                    <i class="fa-solid fa-file-excel"></i> Descargar planilla Sala de Reles
+                </button>
+            </div>
+        ` : ''}
+
         <div style="padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:10px;">
             <div style="font-size:0.78rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.5rem;">
                 <i class="fa-solid fa-people-group" style="color:#FF6900;"></i> Equipo de trabajo
@@ -3077,6 +3096,7 @@ function _parseExcitatrizAcciones(texto) {
 function _accionesResumenHistorial(texto) {
     const t = String(texto || '').trim();
     if (!t) return '';
+    if (/\[Sala Reles\]/i.test(t)) return 'Planilla Sala de Reles';
     // 1) Volcado de escobillas (termografía de excitatriz).
     const nEscob = (t.match(/Escobilla\s+\d+\.\d+/gi) || []).length;
     if (nEscob >= 4) return 'Termografía';
@@ -3300,6 +3320,55 @@ window.generarPlanillaExcitatrizHistorial = async function(registroId) {
         loading.remove();
         console.error('[planilla-exc] Error:', e);
         alert('Error generando planilla:\n' + e.message);
+    }
+};
+
+window.generarPlanillaSalaRelesHistorial = async function(registroId) {
+    const item = (estado.historialTareas || []).find(t => String(t.id) === String(registroId));
+    if (!item) { alert('Registro no encontrado'); return; }
+    const data = _salaRelesDataDesdeItem(item);
+    if (!data) {
+        alert('No hay datos de Sala de Reles para este trabajo.');
+        return;
+    }
+    const fechaObj = new Date(item.fecha_termino || item.created_at || item.fecha_med || Date.now());
+    if (!data.fecha && !isNaN(fechaObj.getTime())) {
+        data.fecha = `${String(fechaObj.getDate()).padStart(2, '0')}/${String(fechaObj.getMonth() + 1).padStart(2, '0')}/${fechaObj.getFullYear()}`;
+    }
+    if (!data.tecnicos) data.tecnicos = getNombresTecnicosFicha(item).join(' / ');
+    if (!data.ot) data.ot = item.ot_numero || '';
+
+    const server = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+        ? '' : (window.PLANIFY_PDF_BACKEND || 'https://planify-backend-lfq3.onrender.com');
+    const loading = document.createElement('div');
+    loading.style.cssText = 'position:fixed; bottom:24px; right:24px; background:#9a3412; color:#fff; padding:0.7rem 1.1rem; border-radius:10px; font-weight:600; box-shadow:0 12px 24px rgba(154,52,18,0.28); z-index:11000; display:flex; align-items:center; gap:0.5rem;';
+    loading.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generando planilla Sala de Reles...';
+    document.body.appendChild(loading);
+    try {
+        const resp = await fetch(`${server}/generar-planilla-sala-reles?_=${Date.now()}`, {
+            method: 'POST',
+            cache: 'no-store',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${resp.status}`);
+        }
+        const blob = await resp.blob();
+        const cd = resp.headers.get('Content-Disposition') || '';
+        const fnMatch = cd.match(/filename="?([^"]+)"?/);
+        const filename = fnMatch ? decodeURIComponent(fnMatch[1]) : `Planilla Sala Reles ${data.unidad || ''}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        loading.remove();
+    } catch (e) {
+        loading.remove();
+        console.error('[planilla-sala-reles]', e);
+        alert('Error generando planilla Sala de Reles:\n' + e.message);
     }
 };
 
@@ -3680,6 +3749,103 @@ function _trafoGuardarLocal(registroId, payload) {
 function _trafoLeerLocal(registroId) {
     try { return (JSON.parse(localStorage.getItem('planify_trafo_data') || '{}'))[registroId] || null; }
     catch (e) { return null; }
+}
+
+function _salaRelesGuardarLocal(registroId, payload) {
+    if (!registroId || !payload) return;
+    try {
+        const map = JSON.parse(localStorage.getItem('planify_sala_reles_data') || '{}');
+        map[registroId] = payload;
+        localStorage.setItem('planify_sala_reles_data', JSON.stringify(map));
+    } catch (e) { console.warn('[sala-reles] no se pudo guardar local:', e?.message); }
+}
+function _salaRelesLeerLocal(registroId) {
+    try { return (JSON.parse(localStorage.getItem('planify_sala_reles_data') || '{}'))[registroId] || null; }
+    catch (e) { return null; }
+}
+
+function _leerPanelSalaReles(scope) {
+    const panel = scope.querySelector('#sala-reles-panel');
+    if (!panel) return null;
+    const val = id => (panel.querySelector('#' + id)?.value || '').trim();
+    const unidadNum = Number(panel.dataset.unidad || 1) || 1;
+    const paneles = Array.from(panel.querySelectorAll('.sr-panel-item')).map(item => {
+        const elementos = Array.from(item.querySelectorAll('.sr-element-row')).map(row => ({
+            elemento: row.querySelector('.sr-elemento')?.value.trim() || '',
+            temperatura: row.querySelector('.sr-temp')?.value.trim() || ''
+        })).filter(x => x.elemento || x.temperatura);
+        return { panel: item.dataset.panel || '', elementos };
+    });
+    return {
+        tipo: 'sala_reles',
+        unidad: `U${unidadNum}`,
+        fecha: val('sr-fecha'),
+        tecnicos: val('sr-tecnicos'),
+        ot: val('sr-ot'),
+        generacion: val('sr-generacion'),
+        tempAmb: val('sr-temp-amb'),
+        paneles
+    };
+}
+
+function _serializarSalaRelesData(data) {
+    if (!data) return '';
+    const header = [];
+    if (data.fecha) header.push(`Fecha: ${data.fecha}`);
+    if (data.generacion) header.push(`Generacion: ${data.generacion} MW`);
+    if (data.tempAmb) header.push(`Temp amb: ${data.tempAmb}`);
+    if (data.tecnicos) header.push(`Tecnicos: ${data.tecnicos}`);
+    const lines = header.length ? [`[Sala Reles] ${header.join(' | ')}`] : ['[Sala Reles] Planilla capturada'];
+    (data.paneles || []).forEach(p => {
+        (p.elementos || []).forEach(el => {
+            const partes = [`Panel: ${p.panel || ''}`];
+            if (el.elemento) partes.push(`Elemento: ${el.elemento}`);
+            if (el.temperatura) partes.push(`Temp: ${el.temperatura} C`);
+            lines.push(`[Sala Reles] ${partes.join(' | ')}`);
+        });
+    });
+    return lines.join('\n');
+}
+
+function _parseSalaRelesAcciones(texto, item = null) {
+    const unidadNum = obtenerUnidadTarea({ tipo: item?.tipo, subtitulo: item?.subtitulo, ubicacion: item?.ubicacion }) || 1;
+    const data = {
+        tipo: 'sala_reles',
+        unidad: `U${unidadNum}`,
+        fecha: '',
+        tecnicos: '',
+        ot: item?.ot_numero || '',
+        generacion: '',
+        tempAmb: '',
+        paneles: salaRelesPanelesPorUnidad(unidadNum).map(panel => ({ panel, elementos: [] }))
+    };
+    const byPanel = new Map(data.paneles.map(p => [p.panel, p]));
+    String(texto || '').split(/\r?\n/).forEach(line => {
+        if (!/\[Sala Reles\]/i.test(line)) return;
+        const grab = (re) => { const m = line.match(re); return m ? m[1].trim() : ''; };
+        data.fecha = data.fecha || grab(/Fecha:\s*([^|]+)/i);
+        data.generacion = data.generacion || grab(/Generacion:\s*([^|]+)/i).replace(/\s*MW$/i, '');
+        data.tempAmb = data.tempAmb || grab(/Temp amb:\s*([^|]+)/i);
+        data.tecnicos = data.tecnicos || grab(/Tecnicos:\s*([^|]+)/i);
+        const panel = grab(/Panel:\s*([^|]+)/i);
+        if (!panel) return;
+        const elemento = grab(/Elemento:\s*([^|]+)/i);
+        const temperatura = grab(/Temp:\s*([^|]+)/i).replace(/\s*C$/i, '');
+        if (!elemento && !temperatura) return;
+        if (!byPanel.has(panel)) {
+            byPanel.set(panel, { panel, elementos: [] });
+            data.paneles.push(byPanel.get(panel));
+        }
+        byPanel.get(panel).elementos.push({ elemento, temperatura });
+    });
+    return data;
+}
+
+function _salaRelesDataDesdeItem(item) {
+    if (!item) return null;
+    const local = _salaRelesLeerLocal(item.id);
+    if (local) return local;
+    return _parseSalaRelesAcciones(item.acciones_realizadas, item);
 }
 
 // Descarga la planilla del transformador a partir de un payload ya capturado.
@@ -13749,6 +13915,43 @@ const RUTAS_VIBRACION_SEED = [{"nombre":"MP MM MONITOREO BOMBAS U1 15D","unidad"
 // requerir migración de la base de datos remota.
 // ═══════════════════════════════════════════════════════════════════════════
 
+function ordenarMotorPrimeroBombas15D() {
+    if (typeof RUTAS_VIBRACION_SEED === 'undefined') return;
+    RUTAS_VIBRACION_SEED
+        .filter(ruta => /BOMBAS\s+U\d\s+15D/i.test(String(ruta.nombre || '')))
+        .forEach(ruta => {
+            (ruta.equipos || []).forEach(equipo => {
+                if (!Array.isArray(equipo.componentes) || equipo.componentes.length < 2) return;
+                equipo.componentes.sort((a, b) => {
+                    const aMotor = /^MOTOR\b/i.test(String(a.nombre || ''));
+                    const bMotor = /^MOTOR\b/i.test(String(b.nombre || ''));
+                    return Number(bMotor) - Number(aMotor);
+                });
+            });
+        });
+}
+ordenarMotorPrimeroBombas15D();
+
+function normalizarLlenadoSiloPuntos() {
+    if (typeof RUTAS_VIBRACION_SEED === 'undefined') return;
+    const rutas = RUTAS_VIBRACION_SEED.filter(ruta => /LLENADO\s+SILO|SILO\s+LLENADO/i.test(String(ruta.nombre || '')));
+    rutas.forEach(ruta => {
+        (ruta.equipos || []).forEach(equipo => {
+            if (!/CORREA\s+(TRANSPORTADORA|TRIPPER)/i.test(String(equipo.nombre || ''))) return;
+            const componentes = Array.isArray(equipo.componentes) ? equipo.componentes : [];
+            const motor = componentes.find(c => /MOTOR/i.test(String(c.nombre || '')));
+            const reductor = componentes.find(c => /REDUCTOR/i.test(String(c.nombre || '')));
+            const pulley = componentes.find(c => /PULLEY|POLEA/i.test(String(c.nombre || '')));
+            equipo.componentes = [
+                motor || { nombre: 'MOTOR ELECTRICO', ubicacion_tecnica: '', unidad: equipo.unidad || ruta.unidad || 'SMC' },
+                reductor || { nombre: 'REDUCTOR', ubicacion_tecnica: '', unidad: equipo.unidad || ruta.unidad || 'SMC' },
+                pulley || { nombre: 'PULLEY', ubicacion_tecnica: '', unidad: equipo.unidad || ruta.unidad || 'SMC' }
+            ];
+        });
+    });
+}
+normalizarLlenadoSiloPuntos();
+
 const RUTAS_COLOR_UNIDAD = {
     'U1':   '#3B82F6',
     'U2':   '#10B981',
@@ -14547,6 +14750,12 @@ function equipoEsBbaAguaAlim(rutaIdx, eqIdx) {
 // global queda Motor → 1,2 · Amplificador → 3,4,5,6 · Bomba → 7,8.
 function countsTempEquipo(eq) {
     if (!eq || !Array.isArray(eq.componentes)) return null;
+    const esLlenadoSilo = /CORREA\s+(TRANSPORTADORA|TRIPPER)/i.test(String(eq.nombre || ''))
+        && eq.componentes.some(c => /PULLEY|POLEA/i.test(c.nombre || ''))
+        && eq.componentes.some(c => /REDUCTOR/i.test(c.nombre || ''));
+    if (esLlenadoSilo) {
+        return eq.componentes.map(c => /REDUCTOR/i.test(c.nombre || '') ? 4 : 2);
+    }
     const esBbaAguaU1U2 = /BOMBA\s+AGUA\s+ALIMENTACION/i.test(String(eq.nombre || ''))
         && /^U[12]$/i.test(String(eq.unidad || ''))
         && eq.componentes.some(c => /AMPLIFICADOR/i.test(c.nombre || ''));
@@ -15700,6 +15909,7 @@ function renderVibracionesHub() {
 // (incluye excitatriz/escobillas, que también son termografía).
 function esTrabajoTermografia(item) {
     if (!item) return false;
+    if (typeof esTareaSalaReles === 'function' && esTareaSalaReles(item)) return true;
     const texto = `${item.tipo || ''} ${item.subtitulo || ''}`
         .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     // Señales inequívocas de termografía (incluye excitatriz/escobillas).
@@ -16121,6 +16331,7 @@ function renderTermografiaDetalle(registroId) {
     const esExc = g.esExc;
     const esTrafo = !esExc && _tgEsTrafo(item);
     const esRectif = !esExc && !esTrafo && _tgEsRectif(item);
+    const esSalaReles = !esExc && !esTrafo && !esRectif && esTareaSalaReles({ tipo: item.tipo, subtitulo: item.subtitulo, ubicacion: item.ubicacion });
     const color = colorUnidad(g.unidad || '');
     const ayudantes = _tgAyudantes(item);
     const fechaLarga = _tgFmtFechaLarga(item.fecha_termino || item.created_at);
@@ -16280,6 +16491,39 @@ function renderTermografiaDetalle(registroId) {
                     </div>
                 </div>`;
         }
+    } else if (esSalaReles) {
+        const data = _salaRelesDataDesdeItem(item);
+        const filas = (data?.paneles || []).flatMap(p => {
+            const els = (p.elementos || []).length ? p.elementos : [{ elemento: '', temperatura: '' }, { elemento: '', temperatura: '' }];
+            return els.map((el, idx) => `
+                <tr style="border-top:1px solid #e5e7eb;">
+                    <td style="padding:0.5rem 0.65rem; color:#0f172a; font-weight:${idx === 0 ? '800' : '600'};">${idx === 0 ? escapeHtml(p.panel || '') : ''}</td>
+                    <td style="padding:0.5rem 0.65rem; color:#334155;">${escapeHtml(el.elemento || '')}</td>
+                    <td style="padding:0.5rem 0.65rem; color:#0f172a; text-align:center; font-weight:800;">${el.temperatura ? `${escapeHtml(el.temperatura)} C` : ''}</td>
+                </tr>`);
+        }).join('');
+        cuerpo = `
+            <div style="margin-top:0.85rem; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden; background:#fff;">
+                <div style="background:#fff7ed; color:#9a3412; padding:0.65rem 0.9rem; font-size:0.86rem; font-weight:900;">
+                    <i class="fa-solid fa-plug-circle-bolt"></i> Paneles inspeccionados Sala de Reles
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:0.86rem; min-width:620px;">
+                        <thead>
+                            <tr style="background:#f8fafc; color:#475569; text-align:left;">
+                                <th style="padding:0.55rem 0.65rem;">Panel</th>
+                                <th style="padding:0.55rem 0.65rem;">Elemento mayor temperatura</th>
+                                <th style="padding:0.55rem 0.65rem; text-align:center;">Temp.</th>
+                            </tr>
+                        </thead>
+                        <tbody>${filas}</tbody>
+                    </table>
+                </div>
+            </div>
+            ${item.observaciones ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
+                <div style="font-size:0.78rem; font-weight:800; color:#0f172a; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.4rem;"><i class="fa-solid fa-comment-dots" style="color:#dc2626;"></i> Observaciones</div>
+                <div style="font-size:0.92rem; color:#1f2937; white-space:pre-wrap; line-height:1.5;">${escapeHtml(item.observaciones)}</div>
+            </div>` : ''}`;
     } else {
         const seccion = (titulo, contenido, icon) => contenido
             ? `<div style="margin-top:0.85rem; padding:0.85rem 1rem; background:#fff; border:1px solid #e5e7eb; border-radius:12px;">
@@ -16330,6 +16574,12 @@ function renderTermografiaDetalle(registroId) {
                         <button onclick="window.editarDatosRectificador('${String(item.id).replace(/'/g, "\\'")}')"
                             style="background:linear-gradient(135deg, #7c3aed 0%, #a855f7 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(124,58,237,0.25);">
                             <i class="fa-solid fa-pen-to-square"></i> Rellenar datos
+                        </button>
+                    </div>` : ''}
+                    ${esSalaReles ? `<div style="display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end;">
+                        <button onclick="window.generarPlanillaSalaRelesHistorial('${String(item.id).replace(/'/g, "\\'")}')"
+                            style="background:linear-gradient(135deg, #ea580c 0%, #f97316 100%); color:#fff; border:none; border-radius:10px; padding:0.6rem 1rem; font-weight:800; font-size:0.88rem; cursor:pointer; display:inline-flex; align-items:center; gap:0.5rem; box-shadow:0 4px 12px rgba(234,88,12,0.25);">
+                            <i class="fa-solid fa-file-excel"></i> Descargar planilla
                         </button>
                     </div>` : ''}
                 </div>
@@ -16554,6 +16804,16 @@ function renderRutasLista() {
 
     const unidadesUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.unidad))];
     const frecuenciasUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.frecuencia))];
+    const textoBusquedaRuta = (r) => [
+        r.nombre,
+        r.plan,
+        r.unidad,
+        r.frecuencia,
+        ...(r.equipos || []).flatMap(eq => [
+            eq.nombre,
+            ...(eq.componentes || []).map(c => `${c.nombre || ''} ${c.ubicacion_tecnica || ''}`)
+        ])
+    ].join(' ').toLowerCase();
 
     const filtradas = RUTAS_VIBRACION_SEED
         .map((r, idx) => ({ ...r, idx }))
@@ -16562,7 +16822,7 @@ function renderRutasLista() {
             if (vistaRutasEstado.filtroFrecuencia && r.frecuencia !== vistaRutasEstado.filtroFrecuencia) return false;
             if (vistaRutasEstado.busqueda) {
                 const q = vistaRutasEstado.busqueda.toLowerCase();
-                if (!r.nombre.toLowerCase().includes(q) && !(r.plan || '').toLowerCase().includes(q)) return false;
+                if (!textoBusquedaRuta(r).includes(q)) return false;
             }
             return true;
         });
@@ -16584,7 +16844,7 @@ function renderRutasLista() {
         const tieneEjecucion = !!ej;
 
         return `<article class="rutas-card" data-ruta-idx="${r.idx}"
-            data-ruta-search="${escapeHtml(`${r.nombre} ${r.plan || ''}`.toLowerCase())}"
+            data-ruta-search="${escapeHtml(textoBusquedaRuta(r))}"
             onclick="window.rutasAbrirDetalle(${r.idx})"
             style="cursor:pointer; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.04);">
             <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
@@ -16643,7 +16903,7 @@ function renderRutasLista() {
 
             <section class="panel" style="margin-bottom:1.2rem; padding:1rem;">
                 <div style="display:flex; flex-direction:column; gap:0.7rem;">
-                    <input id="rutas-search" type="text" class="form-control" placeholder="Buscar por nombre o plan SAP…" value="${escapeHtml(vistaRutasEstado.busqueda)}" style="font-size:0.9rem;">
+                    <input id="rutas-search" type="text" class="form-control" placeholder="Buscar por nombre, equipo o plan SAP…" value="${escapeHtml(vistaRutasEstado.busqueda)}" style="font-size:0.9rem;">
                     <div style="display:flex; flex-direction:column; gap:0.5rem;">
                         <div>
                             <div style="font-size:0.74rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem;">Unidad</div>
@@ -17793,6 +18053,15 @@ const navConfig = {
     'nav-perfil': 'perfil'
 };
 
+function esTrabajadorBrandonTiristores() {
+    const nombreTrab = String(estado.trabajadorLogueado?.nombre || '');
+    return estado.usuarioActual === 'trabajador' && /brandon/i.test(nombreTrab) && /mancilla/i.test(nombreTrab);
+}
+
+function vistaNavDestino(id) {
+    return navConfig[id];
+}
+
 function renderizarVistaActual() {
     pendingRealtimeRender = false;
     clearTimeout(realtimeResumeTimer);
@@ -17815,7 +18084,7 @@ function renderizarVistaActual() {
     // Actualizar clases activas en nav
     Object.keys(navConfig).forEach(id => {
         const btn = document.getElementById(id);
-        if (btn) btn.classList.toggle('active', navConfig[id] === vistaActual);
+        if (btn) btn.classList.toggle('active', vistaNavDestino(id) === vistaActual);
     });
 
     // Renderizar según estado
@@ -17908,7 +18177,7 @@ Object.keys(navConfig).forEach(id => {
     const btn = document.getElementById(id);
     if (btn) {
         btn.addEventListener('click', () => {
-            vistaActual = navConfig[id];
+            vistaActual = vistaNavDestino(id);
             if (vistaActual === 'rutas') {
                 vistaRutasEstado.seccionActiva = '';
                 vistaRutasEstado.rutaActivaIdx = null;
@@ -18054,6 +18323,81 @@ function esTareaSalaElectrica(tarea) {
     const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''}`
         .normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     return texto.includes('SALA ELECTRICA') || texto.includes('SALA ELÉCTRICA');
+}
+
+const SALA_RELES_PANELES = {
+    1: [
+        'PANEL DE DCS (DP) DP1 G1-13.2M11',
+        'PANEL DE DCS TRP4 G1-13.2M11',
+        'ATS CONTROL PANEL',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP1) G1-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-Lrp2) G1-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP3) G1-13.2M17',
+        'PANEL AVR CUBICLE',
+        'PANEL AVR-1',
+        'PANEL AVR-2',
+        'PANEL AVR-3',
+        'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G1-12.02G46',
+        'PANEL MEDIDOR DE ENERGIA G1-12.02G49'
+    ],
+    2: [
+        'PANEL DE DCS (DP) DP1 G2-13.2M11',
+        'PANEL DE DCS TRP4 G1-13.2M11',
+        'ATS CONTROL PANEL',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP1) G2-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-Lrp2) G2-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP3) G2-13.2M17',
+        'PANEL AVR CUBICLE',
+        'PANEL AVR-1',
+        'PANEL AVR-2',
+        'PANEL AVR-3',
+        'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G2-12.02G46',
+        'PANEL MEDIDOR DE ENERGIA G2-12.02G49'
+    ],
+    3: [
+        'TURBINE PROTECTION CABINET 03CAB00GH001',
+        'TURBINE SUPERVISORY INSTRUMENT CABINET 03CFA00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (1) 03CAB00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (2) 03CAB00GH002',
+        'INTERPOSING RELAY CABINET (1) 03CHM00GH001',
+        'INTERPOSING RELAY CABINET (2) 03CHM00GH002',
+        'GENERADOR PROTECTION RELAY PANEL 03CHA00GH001',
+        'TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH002',
+        'GENERATOR CONTROL PANEL 03CHC00GH001',
+        'ELECTRICAL INTERLOCK RELAY PANEL 03CHJ00GH001',
+        'AVR CUBICLE 03MKC01GK101',
+        'HYDROGEN GAS CONTROL PANEL 03MKV51GH001',
+        'STATION TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH003',
+        'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (1) 03CBP00GH001',
+        'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (2) 03CBP00GH002'
+    ]
+};
+
+function esTareaSalaReles(tarea) {
+    if (!tarea) return false;
+    const texto = `${tarea.tipo || ''} ${tarea.subtitulo || ''} ${tarea.ubicacion || ''}`
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+    return /SALA\s+(DE\s+)?REL(E|ES)\b/.test(texto)
+        || /SALA\s+(DE\s+)?RELES\b/.test(texto)
+        || /REL[EÉ]S/.test(`${tarea.tipo || ''} ${tarea.subtitulo || ''}`.toUpperCase());
+}
+
+function salaRelesPanelesPorUnidad(unidad) {
+    return SALA_RELES_PANELES[Number(unidad)] || SALA_RELES_PANELES[1];
+}
+
+function _normalizarClaveSalaReles(valor) {
+    return String(valor || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toUpperCase();
+}
+
+function _salaRelesImportadaPorUnidad(unidad) {
+    const base = window.SALA_RELES_IMPORTADAS?.[`U${Number(unidad)}`];
+    if (!base) return null;
+    return JSON.parse(JSON.stringify(base));
 }
 
 // Detecta tareas de Excitatriz/Escobillas/Carbones (Unidades U3, U4, U5)
@@ -18203,11 +18547,100 @@ function _buildPanelBombaAceiteEmergencia(container, tareaCtx) {
         </div>`;
 }
 
+function _buildPanelSalaReles(container, tareaCtx) {
+    const unidadNum = obtenerUnidadTarea(tareaCtx) || 1;
+    const unidad = `U${unidadNum}`;
+    const paneles = salaRelesPanelesPorUnidad(unidadNum);
+    const precarga = _salaRelesImportadaPorUnidad(unidadNum);
+    const precargaPorPanel = new Map((precarga?.paneles || []).map(p => [_normalizarClaveSalaReles(p.panel), p]));
+    const ot = tareaCtx?.otNumero || tareaCtx?.ot_numero || precarga?.ot || '';
+    const tecnicos = (typeof getNombresTecnicosFicha === 'function' ? getNombresTecnicosFicha(tareaCtx).join(' / ') : '')
+        || tareaCtx?.liderNombre || tareaCtx?.lider_nombre || precarga?.tecnicos || '';
+    const hoy = new Date();
+    const fechaDef = precarga?.fecha || `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    const inp = (id, ph = '', val = '') => `<input id="${id}" class="form-control" placeholder="${ph}" value="${escapeHtml(val)}" style="font-size:0.88rem; padding:0.45rem 0.55rem;">`;
+    const rowHtml = (idx, row = 0, dato = {}) => `
+        <div class="sr-element-row" data-panel-idx="${idx}" style="display:grid; grid-template-columns:minmax(180px,1fr) 120px 32px; gap:0.45rem; margin-bottom:0.35rem;">
+            <input class="form-control sr-elemento" data-panel-idx="${idx}" placeholder="Elemento con mayor temperatura" value="${escapeHtml(dato.elemento || '')}" style="font-size:0.84rem; padding:0.42rem 0.5rem;">
+            <input type="text" class="form-control sr-temp" data-panel-idx="${idx}" inputmode="decimal" placeholder="Temp C" value="${escapeHtml(dato.temperatura || '')}" style="font-size:0.84rem; padding:0.42rem 0.5rem;">
+            <button type="button" class="sr-row-del" title="Eliminar" style="border:1px solid #fecaca; background:#fff5f5; color:#b91c1c; border-radius:8px; cursor:pointer; visibility:${row < 2 ? 'hidden' : 'visible'};"><i class="fa-solid fa-xmark"></i></button>
+        </div>`;
+    const panelHtml = (nombre, idx) => {
+        const datosPanel = precargaPorPanel.get(_normalizarClaveSalaReles(nombre));
+        const elementos = (datosPanel?.elementos || []).filter(e => (e.elemento || e.temperatura));
+        const rows = Array.from({ length: Math.max(2, elementos.length) }, (_, row) => rowHtml(idx, row, elementos[row] || {})).join('');
+        return `
+        <div class="sr-panel-item" data-panel-idx="${idx}" data-panel="${escapeHtml(nombre)}"
+            style="border:1px solid #e5e7eb; border-radius:10px; background:#fff; overflow:hidden;">
+            <div style="display:flex; align-items:flex-start; gap:0.55rem; padding:0.7rem 0.85rem; border-bottom:1px solid #eef2f7;">
+                <span style="width:26px; height:26px; border-radius:8px; background:#fff7ed; color:#ea580c; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;"><i class="fa-solid fa-table-cells-large"></i></span>
+                <div style="min-width:0;">
+                    <div style="font-size:0.88rem; font-weight:850; color:#0f172a; line-height:1.25;">${escapeHtml(nombre)}</div>
+                    <div style="font-size:0.74rem; color:#64748b; margin-top:0.1rem;">Dos campos base; agrega mas solo si hay otro elemento caliente.</div>
+                </div>
+            </div>
+            <div style="padding:0.75rem 0.85rem; background:#f8fafc;">
+                <div class="sr-element-list" data-panel-idx="${idx}">
+                    ${rows}
+                </div>
+                <button type="button" class="sr-row-add" data-panel-idx="${idx}"
+                    style="border:1px dashed #fdba74; background:#fff7ed; color:#9a3412; border-radius:8px; padding:0.38rem 0.65rem; font-size:0.8rem; font-weight:800; cursor:pointer;">
+                    <i class="fa-solid fa-plus"></i> Elemento
+                </button>
+            </div>
+        </div>`;
+    };
+
+    container.innerHTML = `
+        <div id="sala-reles-panel" data-unidad="${unidadNum}" style="border:1px solid #fed7aa; background:#fff7ed; border-radius:12px; padding:1rem;">
+            <div style="display:flex; align-items:flex-start; gap:0.65rem; margin-bottom:0.9rem;">
+                <span style="width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#ffedd5; color:#9a3412;">
+                    <i class="fa-solid fa-plug-circle-bolt"></i>
+                </span>
+                <div>
+                    <div style="font-size:0.95rem; font-weight:900; color:#0f172a;">Sala de Reles ${escapeHtml(unidad)}</div>
+                    <div style="font-size:0.82rem; color:#64748b; line-height:1.45;">Paneles fijos inspeccionados. Registra los elementos con mayor temperatura.</div>
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:0.55rem; margin-bottom:0.9rem;">
+                <div><label style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">Fecha</label>${inp('sr-fecha', '', fechaDef)}</div>
+                <div><label style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">Tecnicos</label>${inp('sr-tecnicos', '', tecnicos)}</div>
+                <div><label style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">OT</label>${inp('sr-ot', '', String(ot))}</div>
+                <div><label style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">Generacion [MW]</label>${inp('sr-generacion', 'Ej: 70', precarga?.generacion || '')}</div>
+                <div><label style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">Temp. amb.</label>${inp('sr-temp-amb', 'Ej: 22', precarga?.tempAmb || '')}</div>
+            </div>
+            <div class="sr-panel-list" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:0.75rem;">
+                ${paneles.map(panelHtml).join('')}
+            </div>
+        </div>`;
+
+    container.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.sr-row-add');
+        const delBtn = e.target.closest('.sr-row-del');
+        if (addBtn) {
+            const idx = addBtn.dataset.panelIdx;
+            const list = container.querySelector(`.sr-element-list[data-panel-idx="${idx}"]`);
+            if (!list) return;
+            const wrap = document.createElement('div');
+            wrap.innerHTML = rowHtml(idx, 3).trim();
+            const row = wrap.firstElementChild;
+            list.appendChild(row);
+            row.querySelector('input')?.focus();
+        }
+        if (delBtn) delBtn.closest('.sr-element-row')?.remove();
+    });
+}
+
 function _buildMedicionesForm(tipos, componentes, tareaCtx = null) {
     const container = document.getElementById('modal-mediciones-container');
     if (!container) return;
 
     // Panel especial: SALA ELÉCTRICA — checklist de equipos con sub-formulario
+    if (tareaCtx && esTareaSalaReles(tareaCtx)) {
+        _buildPanelSalaReles(container, tareaCtx);
+        return;
+    }
+
     if (tareaCtx && esTareaSalaElectrica(tareaCtx)) {
         _buildPanelSalaElectrica(container);
         return;
@@ -19035,6 +19468,24 @@ if (btnConfirmarFinalizar) {
                 });
             });
 
+            const salaRelesPanel = medContainer.querySelector('#sala-reles-panel');
+            if (salaRelesPanel) {
+                const dataSr = _leerPanelSalaReles(medContainer);
+                (dataSr?.paneles || []).forEach(p => {
+                    (p.elementos || []).forEach(el => {
+                        if (!el.elemento && !el.temperatura) return;
+                        medicionesData.push({
+                            componente: el.elemento ? `${p.panel} - ${el.elemento}` : p.panel,
+                            activo: true,
+                            vibracion: null,
+                            temperatura: el.temperatura || null,
+                            temperaturas: el.temperatura ? [el.temperatura] : [],
+                            acciones: el.elemento ? `Elemento: ${el.elemento}` : null
+                        });
+                    });
+                });
+            }
+
             // Panel especial Bomba Aceite Emergencia: guarda cada escobilla y
             // cada punto de vibracion como lectura independiente; las medidas
             // electricas quedan como acciones estructuradas en el historial.
@@ -19091,7 +19542,8 @@ if (btnConfirmarFinalizar) {
         // así que no obligamos a escribir "Acciones realizadas".
         const tieneAccionesComp = medicionesData.some(m => m.activo && m.acciones);
         const esTrafoCierre = !!medContainer?.querySelector('#trafo-panel');
-        if (!acciones && !tieneAccionesComp && !esTrafoCierre) {
+        const esSalaRelesCierre = !!medContainer?.querySelector('#sala-reles-panel');
+        if (!acciones && !tieneAccionesComp && !esTrafoCierre && !esSalaRelesCierre) {
             alert("Debes ingresar las acciones realizadas.");
             return;
         }
@@ -19144,6 +19596,7 @@ if (btnConfirmarFinalizar) {
         // Datos del transformador (si el trabajo es un trafo): se leen del panel
         // inyectado en el modal y se guardan para descargar la planilla luego.
         const trafoData = medContainer ? _leerPanelTrafo(medContainer) : null;
+        const salaRelesData = medContainer ? _leerPanelSalaReles(medContainer) : null;
 
         try {
             await guardarTareaFinalizada({
@@ -19160,6 +19613,7 @@ if (btnConfirmarFinalizar) {
                 recomendacionAnalista: document.getElementById('modal-recomendacion-analista').value.trim(),
                 fechaTerminoManual: esReq ? '' : (document.getElementById('modal-fecha-termino')?.value || ''),
                 trafoData,
+                salaRelesData,
                 medicionesData
             });
             cerrarModalFinalizarTarea();
@@ -19956,6 +20410,61 @@ const TIRISTORES_BASE_PDF = {
         _tiristoresMedicionBase('pdf-u4-004', '22:30', 154, 'X2 2', ['72', '113', '55'], ['44', '35', '55', '39', '30', '43'], 'U4', {
             fecha: '2026-07-06',
             parametros: { vcampo: '140', icampo: '1100' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-005', '14:23', 154, 'Entrada 14:23', ['158', '71', '137'], ['', '', '', '', '', ''], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-006', '14:40', 154, 'Lectura 14:40', ['147', '67', '138'], ['36', '35', '48', '37', '55', '35'], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-007', '15:00', 154, 'Lectura 15:00', ['143', '71', '148'], ['37', '36', '52', '33', '52', '35'], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-008', '14:00', 0, 'No energizado', ['26', '25', '26'], ['25', '25', '26', '26', '26', '26'], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-009', '17:00', 0, 'Prueba 0MW', ['34', '45', '29'], ['29', '26', '29', '27', '29', '27'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '38', y2: '37', z2: '38' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-010', '17:23', 30, 'Prueba 30MW', ['52', '53', '39'], ['35', '31', '38', '32', '34', '29'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '39', y2: '39', z2: '40' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-011', '18:05', 50, 'Prueba 50MW', ['66', '52', '36'], ['39', '32', '41', '35', '35', '32'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '43', y2: '42', z2: '44' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-012', '18:50', 75, 'Prueba 75MW', ['', '', ''], ['51', '35', '50', '38', '42', '35'], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-013', '20:38', 154, 'Prueba 154MW', ['215', '161', '143'], ['89', '54', '93', '54', '97', '48'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '86', y2: '83', z2: '88' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-014', '21:20', 154, 'Prueba 154MW', ['261', '176', '143'], ['94', '57', '104', '59', '121', '58'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '100', y2: '97', z2: '99' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-015', '21:20', 154, 'Entrada vent.', ['195', '', '167'], ['', '', '', '', '', ''], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-016', '21:20', 135, 'Entrada 135MW', ['164', '', ''], ['', '', '', '', '', ''], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-017', '21:20', 125, 'Entrada 125MW', ['147', '118', '126'], ['', '', '', '', '', ''], 'U4', {
+            fecha: '2026-07-06'
+        }),
+        _tiristoresMedicionBase('pdf-u4-018', '22:22', 110, 'Prueba 110MW', ['153', '144', '91'], ['59', '42', '66', '40', '77', '36'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '62', y2: '61', z2: '62' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-019', '22:50', 100, 'Prueba 100MW', ['140', '88', '123'], ['54', '36', '68', '35', '73', '35'], 'U4', {
+            fecha: '2026-07-06',
+            frente: { x2: '56', y2: '55', z2: '56' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-020', '23:00', 100, 'Prueba 100MW', ['', '', ''], ['53', '35', '76', '39', '78', '38'], 'U4', {
+            fecha: '2026-07-06'
         })
     ],
     U5: [
@@ -20024,11 +20533,23 @@ function _tiristoresStoreLeer() {
     }
 }
 
+const TIRISTORES_CORRECCIONES_BASE = {
+    'pdf-u4-005': { hora: '14:23', mw: '154' },
+    'pdf-u4-006': { hora: '14:40', mw: '154' },
+    'pdf-u4-007': { hora: '15:00', mw: '154' },
+    'pdf-u4-008': { hora: '14:00', mw: '0' }
+};
+
+function _tiristoresAplicarCorreccionesBase(item) {
+    const patch = TIRISTORES_CORRECCIONES_BASE[String(item?.id || '')];
+    return patch ? { ...item, ...patch } : item;
+}
+
 function _tiristoresLeerUnidad(unidad) {
     const store = _tiristoresStoreLeer();
     const tieneUnidadGuardada = Object.prototype.hasOwnProperty.call(store, unidad);
-    const base = TIRISTORES_BASE_PDF[unidad] || [];
-    const guardadas = tieneUnidadGuardada && Array.isArray(store[unidad]) ? store[unidad] : [];
+    const base = (TIRISTORES_BASE_PDF[unidad] || []).map(_tiristoresAplicarCorreccionesBase);
+    const guardadas = tieneUnidadGuardada && Array.isArray(store[unidad]) ? store[unidad].map(_tiristoresAplicarCorreccionesBase) : [];
     const idsGuardadas = new Set(guardadas.map(item => String(item?.id || '')));
     const lista = tieneUnidadGuardada
         ? [...base.filter(item => !idsGuardadas.has(String(item.id))), ...guardadas]
@@ -20801,22 +21322,37 @@ window.seleccionarUnidadVistaTiristores = function(unidad) {
     renderizarVistaActual();
 };
 
-// Vista "Tiristor U5" (trabajador Brandon Mancilla): solo la tabla de valores
-// y el rellenador de mediciones, sin grafico ni resumen.
+// Vista "Tiristor" (trabajador Brandon Mancilla): solo historial y rellenador
+// para U3/U4/U5, sin graficos ni resumen.
 function renderTiristorU5View() {
-    const unidad = 'U5';
+    const unidades = ['U5', 'U4', 'U3'];
+    const unidad = unidades.includes(window._planifyTiristorCargaUnidad)
+        ? window._planifyTiristorCargaUnidad
+        : 'U5';
+    window._planifyTiristorCargaUnidad = unidad;
     const mediciones = _tiristoresLeerUnidad(unidad);
     window._planifyFichaTiristores = { unidad, mediciones };
     mainContent.innerHTML = `
         <div style="max-width:1200px; margin:0 auto; padding:1.2rem;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:1rem;">
                 <div>
-                    <h2 style="margin:0; font-size:1.35rem;"><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristor U5</h2>
-                    <p style="margin:0.25rem 0 0; color:#64748b; font-size:0.88rem;">Valores registrados de la excitatriz U5. Usa el rellenador para agregar nuevas mediciones.</p>
+                    <h2 style="margin:0; font-size:1.35rem;"><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores Excitatriz</h2>
+                    <p style="margin:0.25rem 0 0; color:#64748b; font-size:0.88rem;">Recolector de datos. Elige U3, U4 o U5 para cargar mediciones y revisar el historial.</p>
                 </div>
-                <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline" style="color:#7c3aed; border-color:#ddd6fe;">
-                    <i class="fa-solid fa-plus"></i> Agregar medicion
-                </button>
+                <div style="display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; justify-content:flex-end;">
+                    ${unidades.map(u => `<button type="button" onclick="window.seleccionarUnidadCargaTiristores('${u}')"
+                        style="border:1px solid ${u === unidad ? '#7c3aed' : '#e5e7eb'}; background:${u === unidad ? '#f5f3ff' : '#fff'}; color:${u === unidad ? '#6d28d9' : '#475569'}; border-radius:999px; padding:0.5rem 1rem; font-weight:900; cursor:pointer;">${u}</button>`).join('')}
+                    <button onclick="window.abrirModalTiristores('${unidad}')" class="btn btn-outline" style="color:#7c3aed; border-color:#ddd6fe;">
+                        <i class="fa-solid fa-plus"></i> Agregar medicion
+                    </button>
+                </div>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; background:#f8fafc; border:1px solid #e5e7eb; border-radius:14px; padding:0.8rem 1rem; margin-bottom:0.8rem;">
+                <div>
+                    <div style="font-size:0.78rem; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;">Unidad seleccionada</div>
+                    <div style="font-size:1.15rem; font-weight:950; color:#0f172a;">Tiristores ${unidad}</div>
+                </div>
+                <div style="font-size:0.86rem; color:#64748b; font-weight:700;">${mediciones.length} medicion(es) en historial</div>
             </div>
             <div style="background:#fff; border:1px solid #e5e7eb; border-radius:16px; padding:0.4rem 1.1rem 1.1rem;">
                 ${_tiristoresTablaHtml(mediciones, unidad, false) || emptyFichaState('Sin mediciones de tiristores', 'Usa "Agregar medicion" para registrar hora, MW y temperaturas.')}
@@ -20824,6 +21360,12 @@ function renderTiristorU5View() {
         </div>`;
     refrescarTiristoresYRedibujar();
 }
+
+window.seleccionarUnidadCargaTiristores = function(unidad) {
+    if (!['U3', 'U4', 'U5'].includes(unidad)) return;
+    window._planifyTiristorCargaUnidad = unidad;
+    renderizarVistaActual();
+};
 
 window.abrirModalTiristores = function(unidad, id = '') {
     const lista = _tiristoresLeerUnidad(unidad);
@@ -23014,11 +23556,12 @@ function accederApp(rol, trabajadorObj = null) {
         const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
         el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
     });
-    // "Tiristor U5" es por persona, no por rol: solo Brandon Mancilla lo ve.
+    const esBrandonTir = esTrabajadorBrandonTiristores();
+    // "Tiristor" es por persona, no por rol: solo Brandon Mancilla lo ve.
     const navTirU5 = document.getElementById('nav-tiristor-u5');
     if (navTirU5) {
-        const nombreTrab = String(estado.trabajadorLogueado?.nombre || '');
-        navTirU5.style.display = (rol === 'trabajador' && /brandon/i.test(nombreTrab) && /mancilla/i.test(nombreTrab)) ? 'inline-block' : 'none';
+        navTirU5.textContent = 'Tiristor';
+        navTirU5.style.display = esBrandonTir ? 'inline-block' : 'none';
     }
     actualizarVisibilidadModulosPredictivos();
     const mobileDock = document.getElementById('mobile-dock');
@@ -23072,7 +23615,9 @@ function accederApp(rol, trabajadorObj = null) {
             if (vistaGuardada) {
                 const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
-                const permitidoTrabajador = ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
+                const permitidoTrabajador = esBrandonTir
+                    ? ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle']
+                    : ['dashboard','semanal','rutas','termografia','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
                 const permitidoVisita = ['tiristores'];
                 const permitidoIto = ['ito'];
                 const lista = rol === 'admin' ? permitidoAdmin

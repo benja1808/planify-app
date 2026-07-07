@@ -367,12 +367,17 @@ async function generarPlanillaMoncon(body) {
         // componente a su fila por nombre. Además su amplificador tiene 4 puntos
         // de temperatura, así que esas filas usan las 4 columnas (T°1..T°4).
         const esBbaAgua = /BOMBA\s+AGUA\s+ALIMENTACION/i.test(String(eq.nombre || ''));
+        const esLlenadoSilo = /LLENADO\s+SILO|SILO\s+LLENADO/i.test(String(plantilla.tipo || ''))
+            || /CORREA\s+(TRANSPORTADORA|TRIPPER)/i.test(String(eq.nombre || ''));
         comps.forEach((comp, compIdx) => {
             let fila = filaBase + compIdx;
             // Columnas de temperatura: por defecto el 1er componente usa T°1,T°2
             // (5,6) y el resto T°3,T°4 (7,8). En BBA Agua Alim. cada fila parte en
             // T°1 (5) y puede ocupar hasta las 4 columnas.
             let colsTemp = compIdx === 0 ? [5, 6] : [7, 8];
+            if (esLlenadoSilo) {
+                colsTemp = /REDUCTOR/i.test(String(comp.nombre || '')) ? [5, 6, 7, 8] : [5, 6];
+            }
             if (esBbaAgua) {
                 const n = normStr(comp.nombre);
                 if (/^MOTOR BOMBA AGUA/.test(n))      fila = filaBase + 0;
@@ -914,6 +919,147 @@ async function generarPlanillaTrafo(body) {
     return { buffer: Buffer.from(buffer), filename };
 }
 
+const SALA_RELES_TEMPLATE = 'RUTA TERMOGRAFIA SALA RELES.xlsx';
+const SALA_RELES_PANELES = {
+    1: [
+        'PANEL DE DCS (DP) DP1 G1-13.2M11',
+        'PANEL DE DCS TRP4 G1-13.2M11',
+        'ATS CONTROL PANEL',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP1) G1-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-Lrp2) G1-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP3) G1-13.2M17',
+        'PANEL AVR CUBICLE',
+        'PANEL AVR-1',
+        'PANEL AVR-2',
+        'PANEL AVR-3',
+        'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G1-12.02G46',
+        'PANEL MEDIDOR DE ENERGIA G1-12.02G49'
+    ],
+    2: [
+        'PANEL DE DCS (DP) DP1 G2-13.2M11',
+        'PANEL DE DCS TRP4 G1-13.2M11',
+        'ATS CONTROL PANEL',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP1) G2-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-Lrp2) G2-13.2M17',
+        'PANEL DE RELES DE ENCLAVAMIENTO CALDERA-TURBINA (BT-lRP3) G2-13.2M17',
+        'PANEL AVR CUBICLE',
+        'PANEL AVR-1',
+        'PANEL AVR-2',
+        'PANEL AVR-3',
+        'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G2-12.02G46',
+        'PANEL MEDIDOR DE ENERGIA G2-12.02G49'
+    ],
+    3: [
+        'TURBINE PROTECTION CABINET 03CAB00GH001',
+        'TURBINE SUPERVISORY INSTRUMENT CABINET 03CFA00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (1) 03CAB00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (2) 03CAB00GH002',
+        'INTERPOSING RELAY CABINET (1) 03CHM00GH001',
+        'INTERPOSING RELAY CABINET (2) 03CHM00GH002',
+        'GENERADOR PROTECTION RELAY PANEL 03CHA00GH001',
+        'TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH002',
+        'GENERATOR CONTROL PANEL 03CHC00GH001',
+        'ELECTRICAL INTERLOCK RELAY PANEL 03CHJ00GH001',
+        'AVR CUBICLE 03MKC01GK101',
+        'HYDROGEN GAS CONTROL PANEL 03MKV51GH001',
+        'STATION TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH003',
+        'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (1) 03CBP00GH001',
+        'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (2) 03CBP00GH002'
+    ]
+};
+
+function salaRelesPanelesServer(unidad) {
+    return SALA_RELES_PANELES[Number(unidad)] || SALA_RELES_PANELES[1];
+}
+
+function cloneCellStyle(from, to) {
+    if (!from || !to) return;
+    to.style = JSON.parse(JSON.stringify(from.style || {}));
+    if (from.numFmt) to.numFmt = from.numFmt;
+    if (from.alignment) to.alignment = { ...from.alignment };
+    if (from.border) to.border = JSON.parse(JSON.stringify(from.border));
+    if (from.fill) to.fill = JSON.parse(JSON.stringify(from.fill));
+    if (from.font) to.font = JSON.parse(JSON.stringify(from.font));
+}
+
+async function generarPlanillaSalaReles(body) {
+    const unidadNum = Number(String(body?.unidad || '').replace(/\D/g, '')) || 1;
+    const templatePath = path.join(FORMATOS_DIR, SALA_RELES_TEMPLATE);
+    if (!fs.existsSync(templatePath)) throw new Error(`Plantilla no encontrada: ${SALA_RELES_TEMPLATE}`);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+    const hoja = `SALA RELES U${unidadNum}`;
+    const ws = workbook.getWorksheet(hoja) || workbook.getWorksheet('SALA RELES U1');
+    if (!ws) throw new Error(`Hoja "${hoja}" no encontrada.`);
+
+    workbook.worksheets.slice().forEach(sheet => {
+        if (sheet.id !== ws.id) { try { workbook.removeWorksheet(sheet.id); } catch (e) {} }
+    });
+    ws.name = `SALA RELES U${unidadNum}`;
+    workbook.views = [{ activeTab: 0 }];
+
+    const panelesBase = salaRelesPanelesServer(unidadNum);
+    const panelMap = new Map((body?.paneles || []).map(p => [String(p.panel || '').trim(), p]));
+    const filas = panelesBase.flatMap(panel => {
+        const capturados = (panelMap.get(panel)?.elementos || [])
+            .filter(e => e && (e.elemento || e.temperatura));
+        const elementos = capturados.length > 2 ? capturados : [...capturados, ...Array.from({ length: 2 - capturados.length }, () => ({ elemento: '', temperatura: '' }))];
+        return elementos.map(e => ({ panel, elemento: e.elemento || '', temperatura: e.temperatura || '' }));
+    });
+
+    const obsRow = (() => {
+        for (let r = 3; r <= ws.rowCount; r++) {
+            const v = normStr(ws.getCell(r, 1).value);
+            if (v.includes('OBSERVACION')) return r;
+        }
+        return ws.rowCount + 1;
+    })();
+    const dataStart = 3;
+    const dataRows = Math.max(0, obsRow - dataStart);
+
+    (ws.model.merges || []).slice().forEach(range => {
+        const nums = String(range).match(/\d+/g)?.map(Number) || [];
+        if (!nums.length) return;
+        const minRow = Math.min(...nums);
+        const maxRow = Math.max(...nums);
+        if (maxRow >= dataStart && minRow < obsRow) {
+            try { ws.unMergeCells(range); } catch (e) {}
+        }
+    });
+
+    if (filas.length > dataRows) ws.insertRows(obsRow, Array.from({ length: filas.length - dataRows }, () => []));
+    if (filas.length < dataRows) ws.spliceRows(dataStart + filas.length, dataRows - filas.length);
+
+    const styleRow = ws.getRow(3);
+    for (let i = 0; i < filas.length; i++) {
+        const r = dataStart + i;
+        ws.getRow(r).height = styleRow.height || 18;
+        for (let c = 1; c <= 10; c++) cloneCellStyle(styleRow.getCell(c), ws.getCell(r, c));
+        try { ws.mergeCells(r, 1, r, 4); } catch (e) {}
+        try { ws.mergeCells(r, 5, r, 9); } catch (e) {}
+        ws.getCell(r, 1).value = filas[i].panel;
+        ws.getCell(r, 5).value = filas[i].elemento;
+        const tempRaw = String(filas[i].temperatura || '').trim();
+        const tempNum = Number(tempRaw.replace(',', '.'));
+        ws.getCell(r, 10).value = tempRaw ? (Number.isFinite(tempNum) ? tempNum : tempRaw) : '';
+        ws.getCell(r, 1).alignment = { ...(ws.getCell(r, 1).alignment || {}), wrapText: true, vertical: 'middle' };
+        ws.getCell(r, 5).alignment = { ...(ws.getCell(r, 5).alignment || {}), wrapText: true, vertical: 'middle' };
+        ws.getCell(r, 10).alignment = { ...(ws.getCell(r, 10).alignment || {}), horizontal: 'center', vertical: 'middle' };
+    }
+
+    ws.getCell('C1').value = body?.fecha || '';
+    ws.getCell('D1').value = body?.tecnicos ? `Tecnicos: ${body.tecnicos}` : '';
+    ws.getCell('F1').value = body?.generacion ? `${body.generacion} Mw` : '';
+    ws.getCell('H1').value = body?.tempAmb || '';
+    ws.getCell('J2').value = 'TEMPERATURA MAX';
+
+    const filename = `Planilla Sala Reles U${unidadNum} OT ${body?.ot || 'sn'}.xlsx`
+        .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
+    const buffer = await workbook.xlsx.writeBuffer();
+    return { buffer: Buffer.from(buffer), filename };
+}
+
 function writeJson(res, status, payload) {
     res.writeHead(status, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(payload));
@@ -1384,6 +1530,28 @@ const server = http.createServer(async (req, res) => {
             res.end(result.buffer);
         } catch (error) {
             console.error('[server] /generar-planilla-trafo error:', error.message);
+            writeJson(res, 500, { ok: false, error: error.message });
+        }
+        return;
+    }
+
+    // POST /generar-planilla-sala-reles — planilla termografica Sala de Reles
+    if (req.method === 'POST' && pathname === '/generar-planilla-sala-reles') {
+        try {
+            const body = await readBody(req);
+            const result = await generarPlanillaSalaReles(body);
+            res.writeHead(200, {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(result.filename)}"`,
+                'Content-Length': result.buffer.length,
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Planify-Generated-At': new Date().toISOString()
+            });
+            res.end(result.buffer);
+        } catch (error) {
+            console.error('[server] /generar-planilla-sala-reles error:', error.message);
             writeJson(res, 500, { ok: false, error: error.message });
         }
         return;
