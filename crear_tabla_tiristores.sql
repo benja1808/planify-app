@@ -1,4 +1,4 @@
--- Tabla de mediciones de tiristores de excitatriz (U3/U5)
+-- Tabla de mediciones de tiristores de excitatriz (U3/U4/U5)
 -- Ejecutar en: Supabase Dashboard -> SQL Editor
 --
 -- La app sube sola los datos existentes (seed del PDF + lo guardado en cada

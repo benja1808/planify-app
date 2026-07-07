@@ -19885,16 +19885,18 @@ const TIRISTOR_MODULO_PUNTOS_FICHA = {
 function _tiristoresMedicionBase(id, hora, mw, nota, entradaXYZ, salidaPuntos, unidad = 'U3', extras = {}) {
     const [ex, ey, ez] = entradaXYZ;
     const [x1, x2, y1, y2, z1, z2] = salidaPuntos;
+    const fecha = extras.fecha || '2026-07-07';
     return {
         id,
         unidad,
+        fecha,
         hora,
         mw: String(mw),
         nota,
         entrada: { x1: ex, x2: ex, y1: ey, y2: ey, z1: ez, z2: ez },
         salida: { x1, x2, y1, y2, z1, z2 },
         ...extras,
-        created_at: `2026-07-05T${hora || '00:00'}:00`
+        created_at: extras.created_at || `${fecha}T${hora || '00:00'}:00`
     };
 }
 
@@ -19930,7 +19932,31 @@ const TIRISTORES_BASE_PDF = {
         _tiristoresMedicionBase('pdf-u3-028', '19:48', 154, 'Post 2', ['60', '65', '80'], ['69', '41', '47', '55', '44', '35']),
         _tiristoresMedicionBase('pdf-u3-029', '19:48', 154, 'Post 3', ['62', '99', '73'], ['41', '35', '43', '36', '60', '39']),
         _tiristoresMedicionBase('pdf-u3-030', '20:38', 154, 'Post 2', ['51', '60', '80'], ['69', '39', '46', '54', '44', '33']),
-        _tiristoresMedicionBase('pdf-u3-031', '20:38', 154, 'Post 3', ['60', '53', '70'], ['39', '34', '42', '35', '56', '37'])
+        _tiristoresMedicionBase('pdf-u3-031', '20:38', 154, 'Post 3', ['60', '53', '70'], ['39', '34', '42', '35', '56', '37']),
+        _tiristoresMedicionBase('pdf-u3-032', '21:45', 153, 'X3 1', ['67', '48', '57'], ['29', '52', '30', '37', '26', '29'], 'U3', {
+            parametros: { vcampo: '130', icampo: '1300' }
+        }),
+        _tiristoresMedicionBase('pdf-u3-033', '21:45', 153, 'X2 2', ['39', '46', '70'], ['30', '28', '30', '48', '29', '37'], 'U3', {
+            parametros: { vcampo: '130', icampo: '1300' }
+        })
+    ],
+    U4: [
+        _tiristoresMedicionBase('pdf-u4-001', '11:21', 154, 'X2 manuscrito', ['42.1', '60.6', '29'], ['39.8', '33.5', '40.8', '32.8', '33.3', '28.1'], 'U4', {
+            fecha: '2026-07-07',
+            parametros: { vcampo: '140', icampo: '1100' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-002', '11:21', 154, 'X1 manuscrito', ['68', '111', '67'], ['29', '37.8', '61.7', '32.4', '33', '30'], 'U4', {
+            fecha: '2026-07-07',
+            parametros: { vcampo: '140', icampo: '1100' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-003', '22:30', 154, 'X3 1', ['44', '47', '47'], ['50', '37', '49.5', '35', '32', '31'], 'U4', {
+            fecha: '2026-07-06',
+            parametros: { vcampo: '140', icampo: '1100' }
+        }),
+        _tiristoresMedicionBase('pdf-u4-004', '22:30', 154, 'X2 2', ['72', '113', '55'], ['44', '35', '55', '39', '30', '43'], 'U4', {
+            fecha: '2026-07-06',
+            parametros: { vcampo: '140', icampo: '1100' }
+        })
     ],
     U5: [
         _tiristoresMedicionBase('pdf-u5-001', '18:18', 0, 'Prueba 0MW', ['27', '28', '29'], ['26', '25', '27', '26', '24', '25'], 'U5'),
@@ -19947,6 +19973,7 @@ const TIRISTORES_BASE_PDF = {
             frente: { x2: '20', y2: '20', z2: '20' }
         }),
         _tiristoresMedicionBase('pdf-u5-005', '23:10', 30, 'Prueba 30MW', ['19', '20', '19'], ['20', '20', '19', '20', '19', '19'], 'U5', {
+            fecha: '2026-07-06',
             parametros: { vcampo: '65.6', icampo: '560' },
             frente: { x2: '19', y2: '19', z2: '20' }
         }),
@@ -19961,6 +19988,13 @@ const TIRISTORES_BASE_PDF = {
         _tiristoresMedicionBase('pdf-u5-008', '00:18', 60, 'Prueba 60MW', ['19', '19', '19'], ['19', '20', '19', '19', '19', '19'], 'U5', {
             parametros: { vcampo: '74.7', icampo: '644' },
             frente: { x2: '20', y2: '20', z2: '19' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-009', '11:46', 106, 'Manuscrito 106MW', ['21', '21', '21.3'], ['21', '20', '21', '20', '22', '22'], 'U5', {
+            parametros: { vcampo: '110', icampo: '940' }
+        }),
+        _tiristoresMedicionBase('pdf-u5-010', '23:10', 150, 'Prueba 150MW', ['24', '27', '29'], ['24', '33', '24', '25', '24', '25'], 'U5', {
+            fecha: '2026-07-06',
+            parametros: { vcampo: '140', icampo: '1100' }
         })
     ]
 };
@@ -19975,7 +20009,7 @@ function _tiristoresUnidadEquipo(equipo) {
         equipo?.ubicacion_tecnica
     ].filter(Boolean).join(' ')
         .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
-    const unidad = (texto.match(/\bU\s?([35])\b/) || [])[1];
+    const unidad = (texto.match(/\bU\s?([345])\b/) || [])[1];
     if (!unidad) return '';
     if (!/(EXCITATRIZ|EXCITACION|TIRISTOR|RECTIFICADOR)/.test(texto)) return '';
     return `U${unidad}`;
@@ -19997,11 +20031,12 @@ function _tiristoresLeerUnidad(unidad) {
     const guardadas = tieneUnidadGuardada && Array.isArray(store[unidad]) ? store[unidad] : [];
     const idsGuardadas = new Set(guardadas.map(item => String(item?.id || '')));
     const lista = tieneUnidadGuardada
-        ? (unidad === 'U5' ? [...base.filter(item => !idsGuardadas.has(String(item.id))), ...guardadas] : guardadas)
+        ? [...base.filter(item => !idsGuardadas.has(String(item.id))), ...guardadas]
         : base;
     return lista
         .map(item => ({
             ...item,
+            fecha: _tiristoresFechaIso(item),
             entrada: item.entrada || {},
             salida: item.salida || {},
             frente: item.frente || {},
@@ -20015,6 +20050,50 @@ function _tiristoresGuardarUnidad(unidad, mediciones) {
     const store = _tiristoresStoreLeer();
     store[unidad] = (mediciones || []).filter(_tiristoresTieneDatos);
     localStorage.setItem('planify_tiristores_excitatriz', JSON.stringify(store));
+}
+
+function _tiristoresFechaIso(item) {
+    const fecha = String(item?.fecha || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return fecha;
+    const created = String(item?.created_at || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(created)) return created.slice(0, 10);
+    return '';
+}
+
+function _tiristoresCreatedAt(fecha, hora) {
+    const f = /^\d{4}-\d{2}-\d{2}$/.test(String(fecha || '')) ? fecha : new Date().toISOString().slice(0, 10);
+    const h = /^\d{1,2}:\d{2}$/.test(String(hora || '')) ? hora : '00:00';
+    return `${f}T${h}:00`;
+}
+
+function _tiristoresFechaHoraTs(item) {
+    const fecha = _tiristoresFechaIso(item);
+    const hora = String(item?.hora || '').trim();
+    const base = fecha ? `${fecha}T${/^\d{1,2}:\d{2}$/.test(hora) ? hora : '00:00'}:00` : item?.created_at;
+    const ts = new Date(base || 0).getTime();
+    return Number.isFinite(ts) ? ts : 0;
+}
+
+function _tiristoresOrdenFechaDesc(a, b) {
+    return _tiristoresFechaHoraTs(b) - _tiristoresFechaHoraTs(a)
+        || String(b?.created_at || '').localeCompare(String(a?.created_at || ''));
+}
+
+function _tiristoresFechaTabla(item) {
+    const fecha = _tiristoresFechaIso(item);
+    if (!fecha) return '-';
+    const [year, month, day] = fecha.split('-');
+    return `${day}/${month}/${year}`;
+}
+
+function _tiristoresNotaDefault(item) {
+    const mw = String(item?.mw || '').trim();
+    return mw ? `Prueba ${mw.replace('.', ',')}MW` : 'Prueba';
+}
+
+function _tiristoresNotaVisible(item) {
+    const nota = String(item?.nota || '').trim();
+    return nota || _tiristoresNotaDefault(item);
 }
 
 // ── Sincronizacion de tiristores con Supabase ────────────────────────────────
@@ -20116,6 +20195,7 @@ async function sincronizarTiristoresSupabase() {
                 id: r.id,
                 unidad: r.unidad,
                 hora: r.hora || '',
+                fecha: _tiristoresFechaIso(r),
                 mw: r.mw || '',
                 nota: r.nota || '',
                 entrada: r.entrada || {},
@@ -20264,7 +20344,7 @@ function _tiristoresMaxDetalle(mediciones = []) {
                 const value = _tiristoresNumero(item?.[tipo]?.[punto]);
                 if (!Number.isFinite(value)) return;
                 if (!best || value > best.value) {
-                    best = { id: item?.id || '', value, tipo, punto, index, hora: item?.hora || '', nota: item?.nota || '', mw: item?.mw || '' };
+                    best = { id: item?.id || '', value, tipo, punto, index, hora: item?.hora || '', nota: _tiristoresNotaVisible(item), mw: item?.mw || '' };
                 }
             });
         });
@@ -20298,9 +20378,9 @@ function _tiristoresFrenteResumen(item) {
 
 function _tiristoresUnidadesDisponibles(unidadActual = '') {
     const store = _tiristoresStoreLeer();
-    const unidades = new Set(['U3', 'U5']);
+    const unidades = new Set(['U3', 'U4', 'U5']);
     Object.keys(store || {}).forEach(key => {
-        if (/^U[35]$/.test(key)) unidades.add(key);
+        if (/^U[345]$/.test(key)) unidades.add(key);
     });
     Object.keys(TIRISTORES_BASE_PDF || {}).forEach(key => unidades.add(key));
     return [...unidades].filter(u => u && u !== unidadActual).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
@@ -20308,7 +20388,7 @@ function _tiristoresUnidadesDisponibles(unidadActual = '') {
 
 function _tiristoresLabelMedicion(item, index) {
     const hora = String(item?.hora || '').trim();
-    const nota = String(item?.nota || '').trim();
+    const nota = _tiristoresNotaVisible(item);
     return [hora, nota].filter(Boolean).join(' ') || `#${index + 1}`;
 }
 
@@ -20330,7 +20410,7 @@ function _tiristoresPuntoGrafico(item, valor) {
         id: item?.id || '',
         hora: item?.hora || '',
         mw: item?.mw || '',
-        nota: item?.nota || '',
+        nota: _tiristoresNotaVisible(item),
         parametros: item?.parametros || {}
     };
 }
@@ -20484,7 +20564,7 @@ function renderFichaTiristoresPanel(equipo) {
     const unidad = _tiristoresUnidadEquipo(equipo);
     window._planifyFichaTiristores = { unidad, mediciones: [] };
     if (!unidad) {
-        cont.innerHTML = `<div class="planify-ficha-card-head"><div><h3>Tiristores</h3><span>Modulo disponible para Excitatriz U3 y U5.</span></div></div>${emptyFichaState('Sin modulo de tiristores', 'Abre la ficha de la excitatriz U3 o U5 para registrar entrada, salida, hora y MW.')}`;
+        cont.innerHTML = `<div class="planify-ficha-card-head"><div><h3>Tiristores</h3><span>Modulo disponible para Excitatriz U3, U4 y U5.</span></div></div>${emptyFichaState('Sin modulo de tiristores', 'Abre la ficha de la excitatriz U3, U4 o U5 para registrar entrada, salida, hora y MW.')}`;
         return;
     }
     renderPanelTiristoresEn(cont, unidad);
@@ -20495,9 +20575,11 @@ function renderFichaTiristoresPanel(equipo) {
 // vista visita) y la vista "Tiristor U5" del trabajador (solo tabla + rellenador).
 function _tiristoresTablaHtml(mediciones, unidad, soloLectura) {
     if (!mediciones.length) return '';
+    const filasOrdenadas = [...mediciones].sort(_tiristoresOrdenFechaDesc);
     return `<div style="overflow-x:auto; margin-top:0.9rem;">
         <table style="width:100%; border-collapse:collapse; font-size:0.82rem; min-width:980px;">
             <thead><tr style="background:#f8fafc; color:#475569;">
+                <th style="text-align:left; padding:0.5rem;">Fecha</th>
                 <th style="text-align:left; padding:0.5rem;">Hora</th>
                 <th style="text-align:center; padding:0.5rem;">MW</th>
                 <th style="text-align:center; padding:0.5rem;">V campo</th>
@@ -20508,7 +20590,8 @@ function _tiristoresTablaHtml(mediciones, unidad, soloLectura) {
                 <th style="text-align:left; padding:0.5rem;">Nota</th>
                 ${soloLectura ? '' : '<th style="text-align:right; padding:0.5rem;">Acciones</th>'}
             </tr></thead>
-            <tbody>${mediciones.map(m => `<tr style="border-top:1px solid #e5e7eb;">
+            <tbody>${filasOrdenadas.map(m => `<tr style="border-top:1px solid #e5e7eb;">
+                <td style="padding:0.45rem 0.5rem; color:#475569; white-space:nowrap;">${escapeHtml(_tiristoresFechaTabla(m))}</td>
                 <td style="padding:0.45rem 0.5rem; font-weight:800; color:#0f172a;">${escapeHtml(m.hora || '-')}</td>
                 <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(m.mw || '-')}</td>
                 <td style="padding:0.45rem 0.5rem; text-align:center;">${escapeHtml(_tiristoresParametroTexto(m, 'vcampo', 'V'))}</td>
@@ -20516,7 +20599,7 @@ function _tiristoresTablaHtml(mediciones, unidad, soloLectura) {
                 <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'entrada') !== null ? `${numeroFicha(_tiristoresMax(m, 'entrada'), 1)} C` : '-'}</td>
                 <td style="padding:0.45rem 0.5rem; text-align:center;">${_tiristoresMax(m, 'salida') !== null ? `${numeroFicha(_tiristoresMax(m, 'salida'), 1)} C` : '-'}</td>
                 <td style="padding:0.45rem 0.5rem;">${escapeHtml(_tiristoresFrenteResumen(m))}</td>
-                <td style="padding:0.45rem 0.5rem;">${escapeHtml(m.nota || '')}</td>
+                <td style="padding:0.45rem 0.5rem;">${escapeHtml(_tiristoresNotaVisible(m))}</td>
                 ${soloLectura ? '' : `<td style="padding:0.45rem 0.5rem; text-align:right; white-space:nowrap;">
                     <button onclick="window.abrirModalTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Editar" style="background:none; border:none; color:#7c3aed; cursor:pointer; padding:0.25rem;"><i class="fa-solid fa-pen"></i></button>
                     <button onclick="window.eliminarMedicionTiristores('${unidad}','${_tiristoresJs(m.id)}')" title="Eliminar" style="background:none; border:none; color:#94a3b8; cursor:pointer; padding:0.25rem;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'"><i class="fa-solid fa-trash"></i></button>
@@ -20532,7 +20615,8 @@ function renderPanelTiristoresEn(cont, unidad) {
     const soloLectura = (estado.usuarioActual || '') === 'visita';
     const mediciones = _tiristoresLeerUnidad(unidad);
     window._planifyFichaTiristores = { unidad, mediciones };
-    const latest = mediciones[mediciones.length - 1] || null;
+    const medicionesPorFecha = [...mediciones].sort(_tiristoresOrdenFechaDesc);
+    const latest = medicionesPorFecha[0] || null;
     const maxSalida = mediciones.map(m => _tiristoresMax(m, 'salida')).filter(v => v !== null);
     const maxEntrada = mediciones.map(m => _tiristoresMax(m, 'entrada')).filter(v => v !== null);
     const maxTemp = Math.max(...[...maxSalida, ...maxEntrada, 0]);
@@ -20544,26 +20628,73 @@ function renderPanelTiristoresEn(cont, unidad) {
         _tiristoresNumero(m.entrada?.[p]),
         _tiristoresNumero(m.salida?.[p])
     ])).filter(v => Number.isFinite(v));
+    const toneCard = tone => {
+        if (tone === 'is-critical') return { bg: 'linear-gradient(135deg,#fef2f2,#fff)', border: '#fecaca', icon: '#dc2626' };
+        if (tone === 'is-watch') return { bg: 'linear-gradient(135deg,#fff7ed,#fff)', border: '#fed7aa', icon: '#f97316' };
+        if (tone === 'is-normal') return { bg: 'linear-gradient(135deg,#ecfdf5,#fff)', border: '#bbf7d0', icon: '#059669' };
+        return { bg: 'linear-gradient(135deg,#f8fafc,#fff)', border: '#e2e8f0', icon: '#7c3aed' };
+    };
+    const resumenCard = ({ icon, label, value, meta, tone = '', clickable = false }) => {
+        const colors = toneCard(tone);
+        const clickAttrs = clickable
+            ? `role="button" tabindex="0" onclick="window.irMaximaTempTiristores()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.irMaximaTempTiristores();}" title="Ver en el grafico"`
+            : '';
+        return `<article ${clickAttrs} style="min-height:118px; border:1px solid ${colors.border}; border-radius:14px; background:${colors.bg}; padding:0.9rem 1rem; display:grid; grid-template-columns:auto 1fr; gap:0.75rem; align-content:start; ${clickable ? 'cursor:pointer;' : ''}">
+            <div style="width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; background:#fff; color:${colors.icon}; box-shadow:0 8px 18px rgba(15,23,42,0.06);">
+                <i class="fa-solid ${icon}"></i>
+            </div>
+            <div style="min-width:0;">
+                <div style="font-size:0.72rem; text-transform:uppercase; letter-spacing:0.04em; color:#64748b; font-weight:900;">${label}</div>
+                <div style="font-size:1.18rem; line-height:1.15; color:#0f172a; font-weight:950; margin-top:0.28rem;">${value}</div>
+                <div style="font-size:0.78rem; line-height:1.38; color:#64748b; margin-top:0.35rem;">${meta}</div>
+            </div>
+        </article>`;
+    };
     const maxTempMeta = maxDetalle
         ? `Modulo ${TIRISTOR_MODULO_LABELS_FICHA[_tiristoresModuloDePunto(maxDetalle.punto)]} / ${_tiristoresTipoLabel(maxDetalle.tipo)}${maxDetalle.hora ? ` / ${escapeHtml(maxDetalle.hora)}` : ''}`
         : 'Mayor valor entre entrada y salida';
-    const maxTempCard = maxDetalle ? `
-            <article class="planify-ficha-mini ${getEstadoCondicionFicha('termografia', maxTemp).tone}" role="button" tabindex="0"
-                onclick="window.irMaximaTempTiristores()"
-                onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();window.irMaximaTempTiristores();}"
-                title="Ver modulo ${escapeHtml(TIRISTOR_MODULO_LABELS_FICHA[_tiristoresModuloDePunto(maxDetalle.punto)])} en el grafico"
-                style="cursor:pointer; border-color:#fecaca; box-shadow:0 10px 24px rgba(220,38,38,0.08);">
-                <div class="planify-ficha-mini-label">Maximo temp.</div>
-                <div class="planify-ficha-mini-value">${numeroFicha(maxTemp, 1)} C</div>
-                <div class="planify-ficha-mini-meta">${maxTempMeta}</div>
-            </article>` : crearTarjetaMiniFicha({ label: 'Maximo temp.', value: `${numeroFicha(maxTemp, 1)} C`, meta: 'Mayor valor entre entrada y salida', tone: getEstadoCondicionFicha('termografia', maxTemp).tone });
+    const maxTempTone = getEstadoCondicionFicha('termografia', maxTemp).tone;
+    const maxTempCard = resumenCard({
+        icon: 'fa-temperature-high',
+        label: 'Maximo temp.',
+        value: `${numeroFicha(maxTemp, 1)} C`,
+        meta: maxTempMeta,
+        tone: maxTempTone,
+        clickable: !!maxDetalle
+    });
     const resumen = mediciones.length ? `
-        <div class="planify-ficha-subgrid" style="margin-bottom:0.9rem;">
-            ${crearTarjetaMiniFicha({ label: 'Mediciones', value: numeroFicha(mediciones.length), meta: latest?.hora ? `Ultima hora: ${escapeHtml(latest.hora)}` : 'Sin hora registrada' })}
+        <section style="border:1px solid #e2e8f0; border-radius:16px; background:#fff; padding:1rem; margin:0.95rem 0; box-shadow:0 14px 32px rgba(15,23,42,0.04);">
+            <div style="display:flex; justify-content:space-between; gap:0.8rem; align-items:flex-start; flex-wrap:wrap; margin-bottom:0.85rem;">
+                <div>
+                    <div style="font-size:0.9rem; color:#0f172a; font-weight:950;"><i class="fa-solid fa-circle-info" style="color:#7c3aed;"></i> Resumen de ${escapeHtml(unidad)}</div>
+                    <div style="font-size:0.78rem; color:#64748b; margin-top:0.2rem;">Lectura rapida de carga, temperatura y ultimo registro disponible.</div>
+                </div>
+                <div style="font-size:0.76rem; color:#64748b; background:#f8fafc; border:1px solid #e2e8f0; border-radius:999px; padding:0.28rem 0.65rem; font-weight:800;">
+                    ${escapeHtml(_tiristoresFechaTabla(latest))} ${escapeHtml(latest?.hora || '')}
+                </div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:0.75rem;">
+            ${resumenCard({
+                icon: 'fa-list-check',
+                label: 'Mediciones',
+                value: numeroFicha(mediciones.length),
+                meta: latest?.hora ? `Ultima lectura: ${escapeHtml(_tiristoresFechaTabla(latest))} ${escapeHtml(latest.hora)} / ${escapeHtml(latest.mw || '-')} MW` : 'Sin hora registrada'
+            })}
             ${maxTempCard}
-            ${crearTarjetaMiniFicha({ label: 'Promedio', value: allTemps.length ? `${numeroFicha(promedio(allTemps), 1)} C` : 'Sin dato', meta: `${numeroFicha(allTemps.length)} punto(s) con temperatura` })}
-            ${crearTarjetaMiniFicha({ label: 'Maximo MW', value: maxMw ? `${numeroFicha(maxMw, 0)} MW` : 'Sin dato', meta: 'Carga asociada a las mediciones' })}
-        </div>` : '';
+            ${resumenCard({
+                icon: 'fa-chart-simple',
+                label: 'Promedio',
+                value: allTemps.length ? `${numeroFicha(promedio(allTemps), 1)} C` : 'Sin dato',
+                meta: `${numeroFicha(allTemps.length)} punto(s) con temperatura entre entrada y salida`
+            })}
+            ${resumenCard({
+                icon: 'fa-bolt',
+                label: 'Maximo MW',
+                value: maxMw ? `${numeroFicha(maxMw, 0)} MW` : 'Sin dato',
+                meta: 'Mayor carga asociada a las mediciones registradas'
+            })}
+            </div>
+        </section>` : '';
     const moduloActivo = TIRISTOR_MODULOS_FICHA.includes(window._planifyTiristorModuloActivo)
         ? window._planifyTiristorModuloActivo
         : _tiristoresModuloDePunto(window._planifyTiristorPuntoActivo);
@@ -20620,7 +20751,7 @@ function renderPanelTiristoresEn(cont, unidad) {
         <div class="planify-ficha-card-head">
             <div>
                 <h3><i class="fa-solid fa-microchip" style="color:#7c3aed;"></i> Tiristores ${unidad}</h3>
-                <span>Tendencias por punto con hora de medicion, sin fecha visible.</span>
+                <span>Tendencias por modulo con fecha, hora y carga asociada.</span>
             </div>
             ${soloLectura ? '' : `<div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
                 <button onclick="window.compartirVistaTiristores('${unidad}')" class="btn btn-outline planify-ficha-action-btn" style="color:#0f766e; border-color:#99f6e4;" title="Copiar link para visitas (solo lectura)">
@@ -20638,9 +20769,9 @@ function renderPanelTiristoresEn(cont, unidad) {
 }
 
 // Vista "Tiristores" (rol visita): el mismo panel de la ficha tecnica pero a
-// pantalla completa y en solo lectura, con selector de unidad U3/U5.
+// pantalla completa y en solo lectura, con selector de unidad U3/U4/U5.
 function renderTiristoresView() {
-    const unidades = ['U5', 'U3'];
+    const unidades = ['U5', 'U4', 'U3'];
     const unidad = unidades.includes(window._planifyTiristorVistaUnidad) ? window._planifyTiristorVistaUnidad : 'U5';
     window._planifyTiristorVistaUnidad = unidad;
     mainContent.innerHTML = `
@@ -20711,6 +20842,9 @@ window.abrirModalTiristores = function(unidad, id = '') {
             </div>
             <div style="padding:1rem 1.2rem; display:grid; gap:0.85rem;">
                 <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:0.7rem;">
+                    <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">Fecha
+                        <input type="date" id="tir-fecha" class="form-control" value="${escapeHtml(_tiristoresFechaIso(actual) || new Date().toISOString().slice(0, 10))}">
+                    </label>
                     <label style="display:grid; gap:0.25rem; font-size:0.78rem; color:#475569; font-weight:800;">Hora medicion
                         <input type="time" id="tir-hora" class="form-control" value="${escapeHtml(actual?.hora || '')}">
                     </label>
@@ -20753,9 +20887,10 @@ window.guardarMedicionTiristores = function() {
     const item = {
         id,
         unidad,
+        fecha: modal.querySelector('#tir-fecha')?.value || new Date().toISOString().slice(0, 10),
         hora: modal.querySelector('#tir-hora')?.value || '',
         mw: modal.querySelector('#tir-mw')?.value.trim() || '',
-        nota: modal.querySelector('#tir-nota')?.value.trim() || '',
+        nota: modal.querySelector('#tir-nota')?.value.trim() || _tiristoresNotaDefault({ mw: modal.querySelector('#tir-mw')?.value.trim() || '' }),
         entrada,
         salida,
         frente,
@@ -20763,7 +20898,10 @@ window.guardarMedicionTiristores = function() {
             vcampo: modal.querySelector('#tir-vcampo')?.value.trim() || '',
             icampo: modal.querySelector('#tir-icampo')?.value.trim() || ''
         },
-        created_at: new Date().toISOString()
+        created_at: _tiristoresCreatedAt(
+            modal.querySelector('#tir-fecha')?.value || new Date().toISOString().slice(0, 10),
+            modal.querySelector('#tir-hora')?.value || ''
+        )
     };
     if (!_tiristoresTieneDatos(item)) {
         alert('Ingresa al menos hora, MW o una temperatura.');
