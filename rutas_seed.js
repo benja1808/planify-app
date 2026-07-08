@@ -2794,6 +2794,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA02-AF003-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA02-AF003-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2809,6 +2814,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA03-AF004-MG01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA03-AF004-KE02",
             "unidad": "SMC"
           }
         ]
@@ -2826,6 +2836,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA04-AF001-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA04-AF001-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2841,6 +2856,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA05-AF001-MG01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA05-AF001-KE02",
             "unidad": "SMC"
           }
         ]
@@ -2858,6 +2878,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA06-AF001-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA06-AF001-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2873,6 +2898,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA08-AF001-MG01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA08-AF001-KE02",
             "unidad": "SMC"
           }
         ]
@@ -2890,6 +2920,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA09-AF001-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA09-AF001-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2905,6 +2940,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA10-AF001-MG01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA10-AF001-KE02",
             "unidad": "SMC"
           }
         ]
@@ -2922,6 +2962,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA11-AF001-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA11-AF001-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2937,6 +2982,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR CORREA TRIPPER",
             "ubicacion_tecnica": "2893-01-ECA17-AF001-MU01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA17-AF001-KE02",
             "unidad": "SMC"
           }
         ]
@@ -2954,6 +3004,11 @@ const RUTAS_VIBRACION_SEED = [
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA17-AF002-MG01",
             "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA17-AF002-KE02",
+            "unidad": "SMC"
           }
         ]
       },
@@ -2969,6 +3024,11 @@ const RUTAS_VIBRACION_SEED = [
           {
             "nombre": "REDUCTOR",
             "ubicacion_tecnica": "2893-01-ECA17-AF003-MG01",
+            "unidad": "SMC"
+          },
+          {
+            "nombre": "TAMBOR MOTRIZ",
+            "ubicacion_tecnica": "2893-01-ECA17-AF003-KE01",
             "unidad": "SMC"
           }
         ]

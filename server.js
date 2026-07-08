@@ -933,7 +933,14 @@ const SALA_RELES_PANELES = {
         'PANEL AVR-2',
         'PANEL AVR-3',
         'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G1-12.02G46',
-        'PANEL MEDIDOR DE ENERGIA G1-12.02G49'
+        'PANEL MEDIDOR DE ENERGIA G1-12.02G49',
+        'PANEL ANUNCIADOR DE ALARMA G1-12.02G47',
+        'PANEL SINCRONIZADOR G1-12.02G42',
+        'PANEL CONTROL DE HIDROGENO G1-12.02G45',
+        'PANEL DE RELES DE PROTECCION PARA TRANSFORMADOR ESTACION G1-12.04M14',
+        'PANEL RELES PROTECCION-1 GENERADOR Y TRANSF PPAL G1-12.02G43',
+        'PANEL RELES PROTECCION-2 GENERADOR Y TRANSF PPAL G1-12.02G43',
+        '01 BMS INTERFACE 01CAA01GH001'
     ],
     2: [
         'PANEL DE DCS (DP) DP1 G2-13.2M11',
@@ -947,7 +954,14 @@ const SALA_RELES_PANELES = {
         'PANEL AVR-2',
         'PANEL AVR-3',
         'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G2-12.02G46',
-        'PANEL MEDIDOR DE ENERGIA G2-12.02G49'
+        'PANEL MEDIDOR DE ENERGIA G2-12.02G49',
+        'PANEL ANUNCIADOR DE ALARMA G2-12.02G47',
+        'PANEL SINCRONIZADOR G2-12.02G42',
+        'PANEL CONTROL DE HIDROGENO G2-12.02G45',
+        'PANEL RELES PROTECCION-1 GENERADOR Y TRANSF PPAL G2-12.02G43',
+        'PANEL RELES PROTECCION-2 GENERADOR Y TRANSF PPAL G1-12.02G43',
+        '01 BMS INTERFACE 02CAA01GH001',
+        'PROTECCION RETROFIT (GABINETE) GUA1-7CHB01-GH112'
     ],
     3: [
         'TURBINE PROTECTION CABINET 03CAB00GH001',
@@ -1055,6 +1069,81 @@ async function generarPlanillaSalaReles(body) {
     ws.getCell('J2').value = 'TEMPERATURA MAX';
 
     const filename = `Planilla Sala Reles U${unidadNum} OT ${body?.ot || 'sn'}.xlsx`
+        .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
+    const buffer = await workbook.xlsx.writeBuffer();
+    return { buffer: Buffer.from(buffer), filename };
+}
+
+const DESALADORAS_TEMPLATE = 'RUTA DESALADORAS.xlsx';
+const DESALADORAS_SHEETS = [8, 9, 10, 11];
+
+function setTempCell(ws, address, raw) {
+    const txt = String(raw ?? '').trim();
+    const cell = ws.getCell(address);
+    if (!txt) { cell.value = ''; return; }
+    const n = Number(txt.replace(',', '.'));
+    cell.value = Number.isFinite(n) ? n : txt;
+}
+
+async function generarPlanillaDesaladoras(body) {
+    const templatePath = path.join(FORMATOS_DIR, DESALADORAS_TEMPLATE);
+    if (!fs.existsSync(templatePath)) throw new Error(`Plantilla no encontrada: ${DESALADORAS_TEMPLATE}`);
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+
+    const data = (body?.desaladoras || []).filter(d => d && DESALADORAS_SHEETS.includes(Number(d.id)));
+    if (!data.length) throw new Error('No se recibieron datos de desaladoras.');
+    const idsUsados = new Set(data.map(d => Number(d.id)));
+
+    workbook.worksheets.slice().forEach(sheet => {
+        const id = Number(String(sheet.name || '').match(/(\d+)$/)?.[1] || 0);
+        if (!idsUsados.has(id)) {
+            try { workbook.removeWorksheet(sheet.id); } catch (e) {}
+        }
+    });
+
+    const fusibleCols = { A: 'B', B: 'D', C: 'F' };
+    const contactorCols = { L1: 'I', L2: 'K', L3: 'M', T1: 'O', T2: 'Q', T3: 'S' };
+    const portaRows = [8, 13, 18, 23, 28];
+    const relRows = Array.from({ length: 12 }, (_, i) => 33 + i);
+
+    data.forEach(d => {
+        const id = Number(d.id);
+        const ws = workbook.getWorksheet(`Desal ${id}`);
+        if (!ws) throw new Error(`Hoja "Desal ${id}" no encontrada.`);
+
+        setTempCell(ws, 'B4', d.regleta?.fase1);
+        setTempCell(ws, 'D4', d.regleta?.fase2);
+        setTempCell(ws, 'F4', d.regleta?.fase3);
+
+        (d.portas || []).forEach(porta => {
+            const rowA = portaRows[Number(porta.n) - 1];
+            if (!rowA) return;
+            const rowB = rowA + 1;
+            Object.entries(fusibleCols).forEach(([fase, col]) => {
+                setTempCell(ws, `${col}${rowA}`, porta.fusibles?.[fase]?.puntoA);
+                setTempCell(ws, `${col}${rowB}`, porta.fusibles?.[fase]?.puntoB);
+            });
+            Object.entries(contactorCols).forEach(([fase, col]) => {
+                setTempCell(ws, `${col}${rowA}`, porta.contactor?.[fase]);
+            });
+        });
+
+        (d.relevantes || []).slice(0, relRows.length).forEach((rel, idx) => {
+            const r = relRows[idx];
+            ws.getCell(`A${r}`).value = rel.elemento || '';
+            setTempCell(ws, `D${r}`, rel.temps?.[0]);
+            setTempCell(ws, `F${r}`, rel.temps?.[1]);
+            setTempCell(ws, `H${r}`, rel.temps?.[2]);
+            setTempCell(ws, `J${r}`, rel.temps?.[3]);
+            ws.getCell(`L${r}`).value = rel.comentario || '';
+        });
+    });
+
+    workbook.views = [{ activeTab: 0 }];
+    const hojas = [...idsUsados].sort((a, b) => a - b).join('-');
+    const filename = `Planilla Desaladoras ${hojas} OT ${body?.ot || 'sn'}.xlsx`
         .replace(/\s+/g, ' ').replace(/[\\/:*?"<>|]/g, '-');
     const buffer = await workbook.xlsx.writeBuffer();
     return { buffer: Buffer.from(buffer), filename };
@@ -1552,6 +1641,28 @@ const server = http.createServer(async (req, res) => {
             res.end(result.buffer);
         } catch (error) {
             console.error('[server] /generar-planilla-sala-reles error:', error.message);
+            writeJson(res, 500, { ok: false, error: error.message });
+        }
+        return;
+    }
+
+    // POST /generar-planilla-desaladoras — planilla termografica RUTA DESALADORAS
+    if (req.method === 'POST' && pathname === '/generar-planilla-desaladoras') {
+        try {
+            const body = await readBody(req);
+            const result = await generarPlanillaDesaladoras(body);
+            res.writeHead(200, {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(result.filename)}"`,
+                'Content-Length': result.buffer.length,
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Planify-Generated-At': new Date().toISOString()
+            });
+            res.end(result.buffer);
+        } catch (error) {
+            console.error('[server] /generar-planilla-desaladoras error:', error.message);
             writeJson(res, 500, { ok: false, error: error.message });
         }
         return;

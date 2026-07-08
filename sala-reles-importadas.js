@@ -1,6 +1,7 @@
 window.SALA_RELES_IMPORTADAS = {
     U1: {
-        fecha: '29/06/2026',
+        unidad: 'U1',
+        fecha: '30/06/2026',
         ot: 'TEST-SALA-RELES-U1',
         generacion: '38',
         tempAmb: '',
@@ -17,10 +18,18 @@ window.SALA_RELES_IMPORTADAS = {
             { panel: 'PANEL AVR-2', elementos: [] },
             { panel: 'PANEL AVR-3', elementos: [] },
             { panel: 'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G1-12.02G46', elementos: [{ elemento: 'RELE (0-8X)', temperatura: '40,5' }] },
-            { panel: 'PANEL MEDIDOR DE ENERGIA G1-12.02G49', elementos: [{ elemento: 'TRANSD ENERGGIA REACTIVA JT-8005 G23', temperatura: '44,1' }] }
+            { panel: 'PANEL MEDIDOR DE ENERGIA G1-12.02G49', elementos: [{ elemento: 'TRANSD ENERGGIA REACTIVA JT-8005 G23', temperatura: '44,1' }] },
+            { panel: 'PANEL ANUNCIADOR DE ALARMA G1-12.02G47', elementos: [{ elemento: 'RELE (EA11X)', temperatura: '47,4' }, { elemento: 'ANUNCIADOR DE ALARMA (AMPA)', temperatura: '36,1' }] },
+            { panel: 'PANEL SINCRONIZADOR G1-12.02G42', elementos: [{ elemento: 'TRAFO PT1 110-120V', temperatura: '30,8' }] },
+            { panel: 'PANEL CONTROL DE HIDROGENO G1-12.02G45', elementos: [{ elemento: 'RELE 30Z2 (H32)', temperatura: '43,8' }] },
+            { panel: 'PANEL DE RELES DE PROTECCION PARA TRANSFORMADOR ESTACION G1-12.04M14', elementos: [{ elemento: 'DIFERENCIAL DEL TRAFO ESTACION -C 87S', temperatura: '101' }] },
+            { panel: 'PANEL RELES PROTECCION-1 GENERADOR Y TRANSF PPAL G1-12.02G43', elementos: [{ elemento: 'PROTECCION 87G DIFERENCIAL GENERADOR', temperatura: '35,8' }] },
+            { panel: 'PANEL RELES PROTECCION-2 GENERADOR Y TRANSF PPAL G1-12.02G43', elementos: [{ elemento: 'PROTECCION 87U (A) DIFERENCIAL A TRAFO UNIDAD', temperatura: '106' }] },
+            { panel: '01 BMS INTERFACE 01CAA01GH001', elementos: [{ elemento: 'RELE FINDER', temperatura: '44,5' }, { elemento: 'RELE (U1FMCBIRF0FF)', temperatura: '36,7' }] }
         ]
     },
     U2: {
+        unidad: 'U2',
         fecha: '29/06/2026',
         ot: 'TEST-SALA-RELES-U2',
         generacion: '70',
@@ -38,10 +47,18 @@ window.SALA_RELES_IMPORTADAS = {
             { panel: 'PANEL AVR-2', elementos: [] },
             { panel: 'PANEL AVR-3', elementos: [] },
             { panel: 'PANEL DE RELES ENCLAVAMIENTO ELECTRICO (INTERLOCK) G2-12.02G46', elementos: [{ elemento: 'RELE 0-8X', temperatura: '43,0' }] },
-            { panel: 'PANEL MEDIDOR DE ENERGIA G2-12.02G49', elementos: [{ elemento: 'MODULO MEDIDOR KWH/KVARH', temperatura: '39,7' }] }
+            { panel: 'PANEL MEDIDOR DE ENERGIA G2-12.02G49', elementos: [{ elemento: 'MODULO MEDIDOR KWH/KVARH', temperatura: '39,7' }] },
+            { panel: 'PANEL ANUNCIADOR DE ALARMA G2-12.02G47', elementos: [{ elemento: 'RELE EC16X1', temperatura: '54,9' }] },
+            { panel: 'PANEL SINCRONIZADOR G2-12.02G42', elementos: [{ elemento: 'TRANFORMADOR', temperatura: '32,3' }] },
+            { panel: 'PANEL CONTROL DE HIDROGENO G2-12.02G45', elementos: [{ elemento: 'RELE 24 VDC (30Z2)', temperatura: '45,6' }] },
+            { panel: 'PANEL RELES PROTECCION-1 GENERADOR Y TRANSF PPAL G2-12.02G43', elementos: [{ elemento: 'PROTECCION 87G DIF GENERADOR', temperatura: '36,2' }] },
+            { panel: 'PANEL RELES PROTECCION-2 GENERADOR Y TRANSF PPAL G1-12.02G43', elementos: [{ elemento: 'PROTECCION DIFERENCIAL UNIDAD 87U ©', temperatura: '112' }] },
+            { panel: '01 BMS INTERFACE 02CAA01GH001', elementos: [{ elemento: 'RELE FINDER', temperatura: '46,3' }] },
+            { panel: 'PROTECCION RETROFIT (GABINETE) GUA1-7CHB01-GH112', elementos: [{ elemento: 'PLC MODULOS', temperatura: '39,6' }] }
         ]
     },
     U3: {
+        unidad: 'U3',
         fecha: '30/06/2026',
         ot: 'TEST-SALA-RELES-U3',
         generacion: '38',

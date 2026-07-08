@@ -1,4 +1,9 @@
-Planner app running at http://localhost:4173
-PDF/Excel server integrated at http://localhost:4173/generar-pdf
+Planner app running at http://localhost:4174
+PDF/Excel server integrated at http://localhost:4174/generar-pdf
+[server] Puerto solicitado 4173 ocupado; usando 4174.
+[push] Push remoto activo. Realtime + respaldo cada 30000 ms.
+Planner app running at http://localhost:4174
+PDF/Excel server integrated at http://localhost:4174/generar-pdf
+[server] Puerto solicitado 4173 ocupado; usando 4174.
 [push] Push remoto activo. Realtime + respaldo cada 30000 ms.
 [push] Realtime activo para notificaciones inmediatas.
