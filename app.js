@@ -20916,8 +20916,11 @@ function _tiristoresLabelMedicion(item, index) {
 function _tiristoresLabelCarga(item, index, mostrarHora = true) {
     const mw = String(item?.mw || '').trim();
     const hora = String(item?.hora || '').trim();
+    const fecha = _tiristoresFechaTabla(item);
     const carga = mw ? `${mw.replace('.', ',')} MW` : `#${index + 1}`;
-    return mostrarHora && hora ? [carga, hora] : carga;
+    return mostrarHora
+        ? [fecha && fecha !== '-' ? fecha : '', carga, hora].filter(Boolean)
+        : carga;
 }
 
 function _tiristoresPuntoGrafico(item, valor) {
@@ -20929,6 +20932,7 @@ function _tiristoresPuntoGrafico(item, valor) {
         x,
         y,
         id: item?.id || '',
+        fecha: _tiristoresFechaTabla(item),
         hora: item?.hora || '',
         mw: item?.mw || '',
         nota: _tiristoresNotaVisible(item),
@@ -21261,9 +21265,16 @@ function renderPanelTiristoresEn(cont, unidad) {
                             ${unidadesComparables.map(u => `<option value="${u}" ${u === compararActivo ? 'selected' : ''}>con ${u}</option>`).join('')}
                         </select>
                     </label>
+                    <button type="button" onclick="window.abrirTiristoresPantallaCompleta()" class="btn btn-outline" style="color:#7c3aed; border-color:#ddd6fe; padding:0.42rem 0.7rem; font-size:0.82rem; font-weight:900;">
+                        <i class="fa-solid fa-expand"></i> Pantalla completa
+                    </button>
                 </div>
             </div>
-            <div style="height:clamp(520px, 68vh, 680px); min-height:520px;"><canvas id="tir-chart-principal"></canvas></div>
+            <div style="height:clamp(520px, 68vh, 680px); min-height:520px; overflow-x:auto; overflow-y:hidden; padding-bottom:0.35rem;">
+                <div style="height:100%; min-width:${Math.max(1180, mediciones.length * 92)}px;">
+                    <canvas id="tir-chart-principal"></canvas>
+                </div>
+            </div>
             <div id="tir-comparador-estado" style="font-size:0.78rem; color:#64748b; margin-top:0.55rem;"></div>
         </section>` : emptyFichaState('Sin mediciones de tiristores', 'Agrega la hora de medicion, MW y temperaturas de entrada/salida para graficar cada punto.');
     const filas = _tiristoresTablaHtml(mediciones, unidad, soloLectura);
@@ -21518,6 +21529,82 @@ window.seleccionarModoTiristores = function(modo) {
     const select = document.getElementById('tir-modo-select');
     if (select) select.value = window._planifyTiristorModo;
     initFichaTiristoresCharts();
+};
+
+window.cerrarTiristoresPantallaCompleta = function() {
+    const overlay = document.getElementById('tiristores-fullscreen');
+    const chart = activeCharts.find(item => item?.canvas?.id === 'tir-chart-fullscreen');
+    if (chart) {
+        try { chart.destroy(); } catch (e) { /* noop */ }
+        activeCharts = activeCharts.filter(item => item !== chart);
+    }
+    if (overlay) overlay.remove();
+    if (typeof window._planifyTiristorOverflowPrev === 'string') {
+        document.body.style.overflow = window._planifyTiristorOverflowPrev;
+        delete window._planifyTiristorOverflowPrev;
+    }
+};
+
+window.abrirTiristoresPantallaCompleta = function() {
+    if (!window.Chart) return;
+    const chart = activeCharts.find(item => item?.canvas?.id === 'tir-chart-principal');
+    if (!chart) return;
+    window.cerrarTiristoresPantallaCompleta();
+
+    const titulo = document.getElementById('tir-modulo-titulo')?.textContent?.trim() || '';
+    const subtitulo = document.getElementById('tir-comparador-subtitulo')?.textContent?.trim() || '';
+    const estado = document.getElementById('tir-comparador-estado')?.innerHTML || '';
+    const overlay = document.createElement('div');
+    overlay.id = 'tiristores-fullscreen';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:15000; background:#f8fafc; display:flex; flex-direction:column; padding:1rem; gap:0.8rem;';
+    overlay.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.8rem; flex-wrap:wrap; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:0.75rem 1rem; box-shadow:0 16px 40px rgba(15,23,42,0.12);">
+            <div>
+                <div style="font-size:1rem; font-weight:950; color:#0f172a;"><i class="fa-solid fa-chart-line" style="color:#7c3aed;"></i> Modulo ${escapeHtml(titulo)}</div>
+                <div style="font-size:0.82rem; color:#64748b; margin-top:0.15rem;">${escapeHtml(subtitulo)}</div>
+            </div>
+            <button type="button" onclick="window.cerrarTiristoresPantallaCompleta()" class="btn btn-outline" style="color:#475569; border-color:#cbd5e1; padding:0.55rem 0.85rem; font-weight:900;">
+                <i class="fa-solid fa-compress"></i> Cerrar
+            </button>
+        </div>
+        <div style="flex:1; min-height:0; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:0.9rem 1rem 0.65rem; box-shadow:0 16px 40px rgba(15,23,42,0.08);">
+            <canvas id="tir-chart-fullscreen"></canvas>
+        </div>
+        <div style="font-size:0.82rem; color:#64748b; background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:0.55rem 0.75rem;">${estado}</div>
+    `;
+    document.body.appendChild(overlay);
+    window._planifyTiristorOverflowPrev = document.body.style.overflow || '';
+    document.body.style.overflow = 'hidden';
+
+    const canvas = document.getElementById('tir-chart-fullscreen');
+    const sourceConfig = chart.config?._config || chart.config || {};
+    const sourceOptions = sourceConfig.options || chart.options || {};
+    const data = {
+        datasets: (chart.data?.datasets || []).map(dataset => ({
+            ...dataset,
+            data: (dataset.data || []).map(point => ({ ...point }))
+        }))
+    };
+    const options = {
+        ...sourceOptions,
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            ...(sourceOptions.plugins || {}),
+            legend: {
+                ...((sourceOptions.plugins || {}).legend || {}),
+                labels: {
+                    ...(((sourceOptions.plugins || {}).legend || {}).labels || {}),
+                    font: { size: 14, weight: '800' }
+                }
+            }
+        }
+    };
+    activeCharts.push(new window.Chart(canvas.getContext('2d'), {
+        type: chart.config?.type || 'line',
+        data,
+        options
+    }));
 };
 
 // Compartir tiristores: link a la propia app. El destinatario entra con el
@@ -22345,10 +22432,12 @@ function initFichaTiristoresCharts() {
         const index = x - 1;
         if (Math.abs(Number(value) - Math.round(Number(value))) > 0.05 || index < 0 || index >= totalSecuencia) return '';
         if (!entry) return '';
-        return _tiristoresLabelCarga(entry.item, entry.index, modoGrafico !== 'mw-real' && !hayDatosComparacion);
+        return _tiristoresLabelCarga(entry.item, entry.index, !hayDatosComparacion);
     };
     const maxTemp = Math.max(40, ...temps);
     const maxCarga = Math.max(1, totalSecuencia);
+    const ticksCarga = [0, ...[...etiquetasPorX.keys()].sort((a, b) => a - b), maxCarga + 1]
+        .filter((value, index, list) => index === 0 || value !== list[index - 1]);
     const estadoComp = document.getElementById('tir-comparador-estado');
     if (estadoComp) {
         estadoComp.innerHTML = compararUnidad
@@ -22493,6 +22582,7 @@ function initFichaTiristoresCharts() {
                         afterTitle: items => {
                             const item = items?.[0]?.raw || {};
                             const lineas = [];
+                            if (item.fecha && item.fecha !== '-') lineas.push(item.fecha);
                             if (item.mw) lineas.push(`${item.mw} MW${item.nota ? ` / ${item.nota}` : ''}`);
                             else if (item.nota) lineas.push(item.nota);
                             const vcampo = String(item.parametros?.vcampo || '').trim();
@@ -22511,14 +22601,19 @@ function initFichaTiristoresCharts() {
                     title: { display: true, text: 'MW', color: '#64748b' },
                     ticks: {
                         color: '#64748b',
+                        autoSkip: false,
+                        maxTicksLimit: ticksCarga.length,
                         maxRotation: 45,
                         minRotation: 45,
                         stepSize: 1,
                         callback: value => etiquetaSecuencia(value)
                     },
+                    afterBuildTicks: axis => {
+                        axis.ticks = ticksCarga.map(value => ({ value, label: etiquetaSecuencia(value) }));
+                    },
                     grid: { color: 'rgba(226,232,240,0.75)' },
                     min: 0,
-                    suggestedMax: maxCarga + 1
+                    max: maxCarga + 1
                 },
                 y: {
                     title: { display: true, text: 'Temp C', color: '#64748b' },
