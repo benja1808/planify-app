@@ -11071,7 +11071,11 @@ async function autoCerrarTareasVibracionConRutasCerradas({ refrescar = false, so
 
         const tareasParaCerrar = (estado.tareas || []).filter(tarea => {
             const ot = _normalizarOtVibraciones(tarea.otNumero || tarea.ot_numero);
-            return ot && rutasPorOt.has(ot) && _esTareaVibraciones(tarea);
+            // La OT cerrada en Rutas VIB es la fuente de verdad. Algunas tarjetas
+            // de ruta quedan visualmente en "Otros" porque el titulo no dice
+            // "vibraciones", pero igual deben desaparecer del Diario al cerrar
+            // su ruta gemela.
+            return ot && rutasPorOt.has(ot);
         });
         for (const tarea of tareasParaCerrar) {
             const ot = _normalizarOtVibraciones(tarea.otNumero || tarea.ot_numero);
@@ -14210,8 +14214,23 @@ const RUTAS_FRECUENCIA_LABEL = {
     '2M': 'Bimestral',
     '3M': 'Trimestral',
     '6M': 'Semestral',
-    'U1': 'Semestral'  // Caso especial en la planilla
+    'U1': 'Semestral',  // Caso especial en la planilla
+    'REQ': 'Flexible'
 };
+
+const RUTA_REQUERIMIENTOS_IDX = -1;
+const RUTA_REQUERIMIENTOS_BASE = {
+    nombre: 'Requerimientos',
+    unidad: 'REQ',
+    frecuencia: 'REQ',
+    plan: '',
+    equipos: [],
+    esRequerimientos: true
+};
+RUTAS_COLOR_UNIDAD.REQ = '#0ea5e9';
+if (typeof RUTAS_VIBRACION_SEED !== 'undefined') {
+    RUTAS_VIBRACION_SEED[RUTA_REQUERIMIENTOS_IDX] = RUTA_REQUERIMIENTOS_BASE;
+}
 
 const vistaRutasEstado = {
     seccionActiva: '',
@@ -14238,6 +14257,9 @@ function getEjecucionActiva(rutaIdx) {
     return all[rutaIdx] || null;
 }
 function setEjecucionActiva(rutaIdx, ejecucion, opts = {}) {
+    if (ejecucion && esRutaRequerimientos(rutaIdx)) {
+        normalizarEjecucionRequerimientos(ejecucion);
+    }
     const all = getRutasEjecuciones();
     if (ejecucion === null) delete all[rutaIdx];
     else all[rutaIdx] = ejecucion;
@@ -14261,7 +14283,8 @@ function setEjecucionActiva(rutaIdx, ejecucion, opts = {}) {
 // → INSERT y guardamos el id en el cache local para futuros updates.
 async function _pushEjecucionASupabase(rutaIdx, ej) {
     if (!window.supabaseClient || !ej) return;
-    const r = (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED[rutaIdx] : null;
+    if (esRutaRequerimientos(rutaIdx)) normalizarEjecucionRequerimientos(ej);
+    const r = obtenerRutaVibracion(rutaIdx, ej);
 
     // Construir tecnicos a partir de la fuente que esté disponible:
     // 1) array tecnicosIds explícito (nuevo formato)
@@ -14371,6 +14394,9 @@ async function refrescarRutasEjecucionesDesdeSupabase() {
                 mediciones: row.mediciones || {},
                 estado: row.estado
             };
+            if (esRutaRequerimientos(row.ruta_idx)) {
+                normalizarEjecucionRequerimientos(porIdx[row.ruta_idx]);
+            }
         }
         saveRutasEjecuciones(porIdx);
         return porIdx;
@@ -14398,9 +14424,12 @@ async function refrescarHistorialDesdeSupabase() {
             localStorage.setItem('planify_rutas_historial', '[]');
             return;
         }
-        const todasRutas = typeof RUTAS_VIBRACION_SEED !== 'undefined' ? RUTAS_VIBRACION_SEED : [];
         const historial = data.map(row => {
-            const r = todasRutas[row.ruta_idx];
+            const fuenteRuta = {
+                componentesEstado: row.componentes_estado || {},
+                requerimientoEquipos: _reqEquiposDesdeFuente({ componentesEstado: row.componentes_estado || {} })
+            };
+            const r = obtenerRutaVibracion(row.ruta_idx, fuenteRuta);
             const totalEquipos = r ? (r.equipos || []).length : 0;
             const totalComponentes = r
                 ? (r.equipos || []).reduce((a, e) => a + (e.componentes?.length || 0), 0) : 0;
@@ -14441,6 +14470,7 @@ async function refrescarHistorialDesdeSupabase() {
                 componentesAt: row.componentes_at || {},
                 mediciones: row.mediciones || {},
                 observaciones: row.observaciones || {},
+                requerimientoEquipos: esRutaRequerimientos(row.ruta_idx) ? (r.equipos || []) : undefined,
                 estado: row.estado || 'cerrada'
             };
         });
@@ -14472,7 +14502,7 @@ window.verDetalleHistorial = function(origIdx) {
     try { hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch(e){}
     const h = hist[origIdx];
     if (!h) { alert('Entrada del historial no encontrada.'); return; }
-    const ruta = (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED[h.rutaIdx] : null;
+    const ruta = obtenerRutaVibracion(h.rutaIdx, h);
     if (!ruta) { alert('Ruta no encontrada en el catálogo.'); return; }
 
     const unidadColor = (typeof colorUnidad === 'function') ? colorUnidad(h.unidad || ruta.unidad || '') : '#64748b';
@@ -14791,6 +14821,67 @@ function labelFrecuencia(frec) {
     return RUTAS_FRECUENCIA_LABEL[frec] || frec;
 }
 
+function esRutaRequerimientos(idx, ruta = null) {
+    return Number(idx) === RUTA_REQUERIMIENTOS_IDX || ruta?.esRequerimientos === true;
+}
+
+function _reqEquiposDesdeFuente(fuente) {
+    if (!fuente) return [];
+    if (Array.isArray(fuente.requerimientoEquipos)) return fuente.requerimientoEquipos;
+    const estadoComp = fuente.componentesEstado || fuente.componentes_estado || {};
+    if (Array.isArray(estadoComp.__requerimientoEquipos)) return estadoComp.__requerimientoEquipos;
+    return [];
+}
+
+function _normalizarEquipoRequerimiento(eq) {
+    const componentes = (Array.isArray(eq?.componentes) ? eq.componentes : [])
+        .map((comp, idx) => ({
+            nombre: comp?.nombre || comp?.componente || `Componente ${idx + 1}`,
+            ubicacion_tecnica: comp?.ubicacion_tecnica || comp?.kks || '',
+            equipo_id: comp?.equipo_id || comp?.id || null,
+            componente: comp?.componente || comp?.nombre || ''
+        }));
+    return {
+        id: eq?.id || crypto.randomUUID(),
+        nombre: eq?.nombre || eq?.activo || 'Equipo requerido',
+        unidad: eq?.unidad || eq?.ubicacion || 'REQ',
+        ubicacion_tecnica: eq?.ubicacion_tecnica || eq?.kks || '',
+        componentes
+    };
+}
+
+function _normalizarEquiposRequerimiento(equipos) {
+    return (Array.isArray(equipos) ? equipos : [])
+        .map(_normalizarEquipoRequerimiento)
+        .filter(eq => eq.componentes.length > 0);
+}
+
+function normalizarEjecucionRequerimientos(ej) {
+    if (!ej) return ej;
+    const equipos = _normalizarEquiposRequerimiento(_reqEquiposDesdeFuente(ej));
+    ej.requerimientoEquipos = equipos;
+    ej.componentesEstado = ej.componentesEstado || {};
+    ej.componentesEstado.__requerimientoEquipos = equipos;
+    return ej;
+}
+
+function obtenerRutaVibracion(idx, fuente = null) {
+    if (esRutaRequerimientos(idx)) {
+        return {
+            ...RUTA_REQUERIMIENTOS_BASE,
+            equipos: _normalizarEquiposRequerimiento(_reqEquiposDesdeFuente(fuente))
+        };
+    }
+    return (typeof RUTAS_VIBRACION_SEED !== 'undefined') ? RUTAS_VIBRACION_SEED[idx] : null;
+}
+
+function catalogoRutasVibracion() {
+    const base = (typeof RUTAS_VIBRACION_SEED !== 'undefined')
+        ? RUTAS_VIBRACION_SEED.map((r, idx) => ({ ...r, idx }))
+        : [];
+    return [...base, { ...RUTA_REQUERIMIENTOS_BASE, idx: RUTA_REQUERIMIENTOS_IDX }];
+}
+
 // ── Vista principal ───────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────
 // Vista ITO Guacolda — solo lectura, foco en avances/porcentajes.
@@ -14887,7 +14978,7 @@ function renderTrabajadorRutasView() {
         }
 
         cont.innerHTML = misRutas.map(({ idx, ej }) => {
-            const r = RUTAS_VIBRACION_SEED[idx];
+            const r = obtenerRutaVibracion(idx, ej);
             if (!r) return '';
             const stats = rutasContarComponentes(idx, ej);
             const pct = stats.total ? Math.round((stats.listos / stats.total) * 100) : 0;
@@ -15413,8 +15504,8 @@ function renderTrabajadorRutaDetalle() {
     if (!host) return;
 
     const idx = _trabajadorRutaIdxActiva;
-    const r = (idx != null) ? RUTAS_VIBRACION_SEED[idx] : null;
     const ej = (idx != null) ? getEjecucionActiva(idx) : null;
+    const r = (idx != null) ? obtenerRutaVibracion(idx, ej) : null;
     if (!r || !ej) {
         // Sin idx (F5 que perdió contexto) o ruta inexistente → traemos del
         // remoto por si la cache local está desactualizada; si tampoco hay,
@@ -15422,7 +15513,7 @@ function renderTrabajadorRutaDetalle() {
         if (window.supabaseClient) {
             refrescarRutasEjecucionesDesdeSupabase().then(() => {
                 const ejFresca = (idx != null) ? getEjecucionActiva(idx) : null;
-                if (RUTAS_VIBRACION_SEED[idx] && ejFresca) {
+                if (obtenerRutaVibracion(idx, ejFresca) && ejFresca) {
                     renderTrabajadorRutaDetalle();
                 } else {
                     window.volverAMisRutas();
@@ -16104,8 +16195,12 @@ function renderRutasView() {
 
 function renderVibracionesHub() {
     const ejecuciones = getRutasEjecuciones();
-    const totalRutas = RUTAS_VIBRACION_SEED.length;
-    const totalEquipos = RUTAS_VIBRACION_SEED.reduce((acc, ruta) => acc + ruta.equipos.length, 0);
+    const rutasCatalogo = catalogoRutasVibracion();
+    const totalRutas = rutasCatalogo.length;
+    const totalEquipos = rutasCatalogo.reduce((acc, ruta) => {
+        const r = esRutaRequerimientos(ruta.idx) ? obtenerRutaVibracion(ruta.idx, ejecuciones[ruta.idx]) : ruta;
+        return acc + ((r.equipos || []).length);
+    }, 0);
     const enCurso = Object.keys(ejecuciones).length;
     let nFinalizadas = 0;
     try { nFinalizadas = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]').length; } catch (e) {}
@@ -17107,8 +17202,9 @@ function renderRutasLista() {
     const isAdmin = esRolGestion();
     const ejecuciones = getRutasEjecuciones();
 
-    const unidadesUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.unidad))];
-    const frecuenciasUnicas = [...new Set(RUTAS_VIBRACION_SEED.map(r => r.frecuencia))];
+    const rutasCatalogo = catalogoRutasVibracion();
+    const unidadesUnicas = [...new Set(rutasCatalogo.map(r => r.unidad))];
+    const frecuenciasUnicas = [...new Set(rutasCatalogo.map(r => r.frecuencia))];
     const textoBusquedaRuta = (r) => [
         r.nombre,
         r.plan,
@@ -17120,8 +17216,11 @@ function renderRutasLista() {
         ])
     ].join(' ').toLowerCase();
 
-    const filtradas = RUTAS_VIBRACION_SEED
-        .map((r, idx) => ({ ...r, idx }))
+    const filtradas = rutasCatalogo
+        .map(r => {
+            const ej = ejecuciones[r.idx];
+            return esRutaRequerimientos(r.idx) ? { ...obtenerRutaVibracion(r.idx, ej), idx: r.idx } : r;
+        })
         .filter(r => {
             if (vistaRutasEstado.filtroUnidad && r.unidad !== vistaRutasEstado.filtroUnidad) return false;
             if (vistaRutasEstado.filtroFrecuencia && r.frecuencia !== vistaRutasEstado.filtroFrecuencia) return false;
@@ -17132,13 +17231,16 @@ function renderRutasLista() {
             return true;
         });
 
-    const totalRutas = RUTAS_VIBRACION_SEED.length;
-    const totalEquipos = RUTAS_VIBRACION_SEED.reduce((acc, r) => acc + r.equipos.length, 0);
+    const totalRutas = rutasCatalogo.length;
+    const totalEquipos = rutasCatalogo.reduce((acc, r) => {
+        const ruta = esRutaRequerimientos(r.idx) ? obtenerRutaVibracion(r.idx, ejecuciones[r.idx]) : r;
+        return acc + ((ruta.equipos || []).length);
+    }, 0);
     const enProgreso = Object.keys(ejecuciones).length;
 
     const renderCard = (r) => {
         const ej = ejecuciones[r.idx];
-        const totalEquipos = r.equipos.length;
+        const totalEquipos = (r.equipos || []).length;
         // Conteo de componentes válido (solo cuenta estados cuya clave existe en
         // la ruta actual). Evita que claves obsoletas inflen el avance >100%.
         const cnt = rutasContarComponentes(r.idx, ej);
@@ -17274,10 +17376,11 @@ function renderRutasLista() {
 }
 
 function renderRutasDetalle(idx) {
-    const r = RUTAS_VIBRACION_SEED[idx];
+    const ej = getEjecucionActiva(idx);
+    const r = obtenerRutaVibracion(idx, ej);
     if (!r) { vistaRutasEstado.rutaActivaIdx = null; renderRutasView(); return; }
     const isAdmin = esRolGestion();
-    const ej = getEjecucionActiva(idx);
+    const esReqRuta = esRutaRequerimientos(idx, r);
     const estados = ej?.componentesEstado || {};
     const observaciones = ej?.observaciones || {};
     const cnt = rutasContarComponentes(idx, ej);
@@ -17511,6 +17614,14 @@ function renderRutasDetalle(idx) {
                         <button onclick="window.rutasGuardarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#16a34a; color:#15803d; background:#f0fdf4;" title="Guardar manual — confirma que tu avance está respaldado (igual se guarda solo a cada cambio)">
                             <i class="fa-solid fa-floppy-disk"></i> Guardar
                         </button>
+                        ${esReqRuta && isAdmin ? `
+                            <button onclick="window.rutasRequerimientosAgregarEquipo(${idx})" class="btn btn-primary" style="font-size:0.85rem;" title="Agregar equipos y componentes a esta ruta flexible">
+                                <i class="fa-solid fa-plus"></i> Agregar equipo
+                            </button>
+                            <button onclick="window.rutasEditarOtEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#bfdbfe; color:#1d4ed8; background:#eff6ff;" title="Agregar o cambiar la OT de esta ruta">
+                                <i class="fa-solid fa-hashtag"></i> Editar OT
+                            </button>
+                        ` : ''}
                         ${isAdmin ? `
                             <button onclick="window.rutasCerrarEjecucion(${idx})" class="btn btn-success" style="font-size:0.85rem;" title="Cerrar la ejecución y archivarla en Rutas cerradas">
                                 <i class="fa-solid fa-flag-checkered"></i> Cerrar ruta
@@ -17536,7 +17647,9 @@ function renderRutasDetalle(idx) {
                 <div style="font-size:0.85rem; font-weight:700; color:#0f172a; margin-bottom:0.5rem;">
                     <i class="fa-solid fa-list-check" style="color:#FF6900;"></i> Equipos de la ruta
                 </div>
-                ${r.equipos.map(renderEquipo).join('')}
+                ${(r.equipos || []).length
+                    ? r.equipos.map(renderEquipo).join('')
+                    : `<div class="empty-state"><div><strong>Sin equipos agregados</strong><p>Agrega equipos y selecciona los componentes que entran en este requerimiento.</p>${esReqRuta && isAdmin ? `<button onclick="window.rutasRequerimientosAgregarEquipo(${idx})" class="btn btn-primary" style="margin-top:0.65rem;"><i class="fa-solid fa-plus"></i> Agregar equipo</button>` : ''}</div></div>`}
             </section>
         </div>
     `;
@@ -17564,8 +17677,190 @@ window.rutasAbrirFichaEquipo = function(equipoId) {
         alert('La ficha técnica no está disponible.');
     }
 };
+function gruposEquiposParaRequerimiento() {
+    const grupos = new Map();
+    (estado.equipos || []).forEach(eq => {
+        const activo = String(eq.activo || '').trim();
+        if (!activo) return;
+        const ubicacion = String(eq.ubicacion || '').trim();
+        const key = `${activo.toLowerCase()}|${ubicacion.toLowerCase()}`;
+        if (!grupos.has(key)) {
+            grupos.set(key, { key, nombre: activo, unidad: ubicacion || 'REQ', componentes: [] });
+        }
+        grupos.get(key).componentes.push({
+            id: eq.id,
+            equipo_id: eq.id,
+            nombre: eq.componente || eq.denominacion_ut || eq.activo || 'Componente',
+            componente: eq.componente || '',
+            ubicacion_tecnica: eq.ubicacion_tecnica || eq.kks || '',
+            kks: eq.kks || ''
+        });
+    });
+    return [...grupos.values()]
+        .map(g => ({
+            ...g,
+            componentes: g.componentes
+                .filter(c => c.nombre || c.ubicacion_tecnica)
+                .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
+        }))
+        .filter(g => g.componentes.length)
+        .sort((a, b) =>
+            String(a.unidad || '').localeCompare(String(b.unidad || ''), 'es') ||
+            String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')
+        );
+}
+
+window.rutasEditarOtEjecucion = function(idx) {
+    const ej = getEjecucionActiva(idx);
+    if (!ej) return;
+    const nueva = prompt('Numero de OT para esta ruta (puede quedar vacio):', String(ej.ot || ''));
+    if (nueva === null) return;
+    ej.ot = String(nueva || '').trim().toUpperCase();
+    setEjecucionActiva(idx, ej);
+    renderRutasView();
+};
+
+window.rutasRequerimientosAgregarEquipo = function(idx) {
+    if (!esRutaRequerimientos(idx)) return;
+    const ej = getEjecucionActiva(idx);
+    if (!ej) { alert('Primero inicia la ruta Requerimientos.'); return; }
+    normalizarEjecucionRequerimientos(ej);
+    document.getElementById('modal-req-ruta-equipos')?.remove();
+
+    const grupos = gruposEquiposParaRequerimiento();
+    const seleccion = new Map();
+    const existentes = new Set((ej.requerimientoEquipos || []).flatMap(eq =>
+        (eq.componentes || []).map(c => String(c.equipo_id || c.id || `${c.ubicacion_tecnica}|${c.nombre}`))
+    ));
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-req-ruta-equipos';
+    overlay.className = 'modal-overlay-base';
+    overlay.style.cssText = 'display:flex; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10500; align-items:center; justify-content:center; padding:1rem;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; width:100%; max-width:760px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 30px 70px rgba(15,23,42,0.35); overflow:hidden;">
+        <div style="padding:1rem 1.2rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:0.8rem; align-items:flex-start;">
+          <div>
+            <div style="font-size:0.72rem; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.06em;">Ruta Requerimientos</div>
+            <h2 style="margin:0.25rem 0 0; font-size:1.08rem; color:#0f172a;">Agregar equipos y componentes</h2>
+            <p style="margin:0.25rem 0 0; font-size:0.82rem; color:#64748b;">Solo los componentes seleccionados cuentan para el porcentaje.</p>
+          </div>
+          <button type="button" id="req-ruta-cerrar" class="btn btn-outline btn-icon" style="border-color:#e5e7eb; color:#64748b;"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div style="padding:0.9rem 1.2rem; border-bottom:1px solid #eef2f7;">
+          <input id="req-ruta-buscar" class="form-control" type="text" placeholder="Buscar equipo, unidad, componente o KKS..." style="width:100%;">
+        </div>
+        <div id="req-ruta-lista" style="padding:0.85rem 1.2rem; overflow:auto; flex:1; background:#f8fafc;"></div>
+        <div style="padding:0.85rem 1.2rem; border-top:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:0.6rem; align-items:center; flex-wrap:wrap;">
+          <span id="req-ruta-count" style="font-size:0.82rem; color:#64748b;">0 componente(s) seleccionado(s)</span>
+          <div style="display:flex; gap:0.5rem;">
+            <button type="button" id="req-ruta-cancelar" class="btn btn-outline">Cancelar</button>
+            <button type="button" id="req-ruta-agregar" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Agregar a ruta</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const lista = overlay.querySelector('#req-ruta-lista');
+    const buscar = overlay.querySelector('#req-ruta-buscar');
+    const countEl = overlay.querySelector('#req-ruta-count');
+    const cerrar = () => overlay.remove();
+    const actualizarCount = () => {
+        const n = [...seleccion.values()].reduce((acc, set) => acc + set.size, 0);
+        if (countEl) countEl.textContent = `${n} componente(s) seleccionado(s)`;
+    };
+    const compIdDe = c => String(c.equipo_id || c.id || `${c.ubicacion_tecnica}|${c.nombre}`);
+    const renderLista = () => {
+        const q = String(buscar.value || '').toLowerCase().trim();
+        const visibles = grupos.filter(g => {
+            if (!q) return true;
+            const texto = [g.nombre, g.unidad, ...g.componentes.flatMap(c => [c.nombre, c.ubicacion_tecnica, c.kks])].join(' ').toLowerCase();
+            return texto.includes(q);
+        }).slice(0, 60);
+        lista.innerHTML = visibles.length ? visibles.map(g => `
+            <article style="background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:0.8rem 0.9rem; margin-bottom:0.65rem;">
+              <div style="display:flex; justify-content:space-between; gap:0.6rem; align-items:flex-start; margin-bottom:0.55rem;">
+                <div>
+                  <strong style="display:block; color:#0f172a; font-size:0.95rem;">${escapeHtml(g.nombre)}</strong>
+                  <span style="font-size:0.76rem; color:#64748b;"><i class="fa-solid fa-location-dot"></i> ${escapeHtml(g.unidad || 'Sin unidad')} - ${g.componentes.length} componente(s)</span>
+                </div>
+                <button type="button" data-req-all="${escapeHtml(g.key)}" style="border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:0.25rem 0.65rem; font-size:0.74rem; font-weight:800; cursor:pointer;">Todos</button>
+              </div>
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:0.45rem;">
+                ${g.componentes.map(c => {
+                    const compId = compIdDe(c);
+                    const checked = seleccion.get(g.key)?.has(compId);
+                    const yaExiste = existentes.has(compId);
+                    return `<label style="display:flex; gap:0.45rem; align-items:flex-start; border:1px solid ${checked ? '#0ea5e9' : '#e5e7eb'}; background:${checked ? '#eff6ff' : yaExiste ? '#f8fafc' : '#fff'}; border-radius:10px; padding:0.5rem 0.6rem; cursor:${yaExiste ? 'not-allowed' : 'pointer'}; opacity:${yaExiste ? '0.55' : '1'};">
+                        <input type="checkbox" data-req-comp="${escapeHtml(compId)}" data-req-group="${escapeHtml(g.key)}" ${checked ? 'checked' : ''} ${yaExiste ? 'disabled' : ''} style="margin-top:0.15rem; accent-color:#0ea5e9;">
+                        <span style="min-width:0;">
+                          <strong style="display:block; color:#0f172a; font-size:0.82rem; line-height:1.25;">${escapeHtml(c.nombre)}</strong>
+                          <span style="display:block; color:#64748b; font-size:0.68rem; font-family:ui-monospace,monospace; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(c.ubicacion_tecnica || c.kks || 'Sin KKS')}</span>
+                          ${yaExiste ? `<span style="display:inline-block; margin-top:0.2rem; color:#15803d; font-size:0.66rem; font-weight:800;">Ya agregado</span>` : ''}
+                        </span>
+                    </label>`;
+                }).join('')}
+              </div>
+            </article>
+        `).join('') : `<div class="empty-state"><div><strong>Sin coincidencias</strong><p>Busca por nombre del equipo, componente o KKS.</p></div></div>`;
+
+        lista.querySelectorAll('[data-req-comp]').forEach(input => {
+            input.addEventListener('change', () => {
+                const gKey = input.dataset.reqGroup;
+                const compId = input.dataset.reqComp;
+                if (!seleccion.has(gKey)) seleccion.set(gKey, new Set());
+                if (input.checked) seleccion.get(gKey).add(compId);
+                else seleccion.get(gKey).delete(compId);
+                actualizarCount();
+                renderLista();
+            });
+        });
+        lista.querySelectorAll('[data-req-all]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const grupo = grupos.find(g => g.key === btn.dataset.reqAll);
+                if (!grupo) return;
+                if (!seleccion.has(grupo.key)) seleccion.set(grupo.key, new Set());
+                grupo.componentes.forEach(c => {
+                    const compId = compIdDe(c);
+                    if (!existentes.has(compId)) seleccion.get(grupo.key).add(compId);
+                });
+                actualizarCount();
+                renderLista();
+            });
+        });
+    };
+
+    overlay.querySelector('#req-ruta-cerrar')?.addEventListener('click', cerrar);
+    overlay.querySelector('#req-ruta-cancelar')?.addEventListener('click', cerrar);
+    overlay.addEventListener('click', event => { if (event.target === overlay) cerrar(); });
+    buscar.addEventListener('input', renderLista);
+    overlay.querySelector('#req-ruta-agregar')?.addEventListener('click', () => {
+        const equiposActuales = _normalizarEquiposRequerimiento(ej.requerimientoEquipos || []);
+        seleccion.forEach((set, gKey) => {
+            if (!set.size) return;
+            const grupo = grupos.find(g => g.key === gKey);
+            if (!grupo) return;
+            const comps = grupo.componentes.filter(c => set.has(compIdDe(c)));
+            if (!comps.length) return;
+            equiposActuales.push(_normalizarEquipoRequerimiento({
+                nombre: grupo.nombre,
+                unidad: grupo.unidad,
+                componentes: comps
+            }));
+        });
+        ej.requerimientoEquipos = equiposActuales;
+        setEjecucionActiva(idx, ej);
+        cerrar();
+        renderRutasView();
+    });
+    renderLista();
+    actualizarCount();
+    setTimeout(() => buscar.focus(), 50);
+};
+
 window.rutasAbrirCapturaEquipo = function(idx, eqIdx) {
-    const ruta = RUTAS_VIBRACION_SEED[idx];
+    const ruta = obtenerRutaVibracion(idx, getEjecucionActiva(idx));
     const equipoRuta = ruta?.equipos?.[eqIdx];
     if (!ruta || !equipoRuta) return;
 
@@ -17818,8 +18113,9 @@ window.vibracionesVolver = function() {
     renderRutasView();
 };
 window.rutasIniciarEjecucion = function(idx) {
-    const r = RUTAS_VIBRACION_SEED[idx];
+    const r = obtenerRutaVibracion(idx);
     if (!r) return;
+    const esReqRuta = esRutaRequerimientos(idx, r);
 
     // Quitar modal previo si existe (idempotente)
     document.getElementById('modal-iniciar-ruta')?.remove();
@@ -17848,9 +18144,9 @@ window.rutasIniciarEjecucion = function(idx) {
         <div style="padding:1rem 1.3rem; display:flex; flex-direction:column; gap:0.9rem;">
           <div>
             <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;">
-              <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> Número de OT (obligatorio)
+              <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> Número de OT ${esReqRuta ? '(opcional)' : '(obligatorio)'}
             </label>
-            <input id="iniciar-ruta-ot" type="text" class="form-control" placeholder="Ej: 12345678" style="width:100%; text-transform:uppercase;">
+            <input id="iniciar-ruta-ot" type="text" class="form-control" placeholder="${esReqRuta ? 'Puedes dejarla en blanco y agregarla despues' : 'Ej: 12345678'}" style="width:100%; text-transform:uppercase;">
           </div>
 
           <div>
@@ -17928,7 +18224,7 @@ window.rutasIniciarEjecucion = function(idx) {
         const showErr = (m) => { errEl.textContent = m; errEl.style.display = 'block'; };
         errEl.style.display = 'none';
 
-        if (!ot) return showErr('El número de OT es obligatorio.');
+        if (!ot && !esReqRuta) return showErr('El número de OT es obligatorio.');
         if (seleccionados.length !== 2) return showErr('Selecciona exactamente 2 técnicos.');
 
         // Para compatibilidad con el resto del sistema (DB columns + filtros
@@ -17952,7 +18248,8 @@ window.rutasIniciarEjecucion = function(idx) {
             componentesEstado: {},
             componentesAt:     {},
             observaciones:     {},
-            mediciones:        {}
+            mediciones:        {},
+            ...(esReqRuta ? { requerimientoEquipos: [] } : {})
         };
         // Guardar local PRIMERO (UX rápido) y AWAIT el push remoto para
         // detectar fallos (red caída, RLS, tabla inexistente). Sin el await,
@@ -18021,7 +18318,7 @@ window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
     // captura de vibración + temperatura. Es el mismo modal que usa el
     // trabajador en su vista móvil — funciona también en desktop.
     if (estado === 'listo' && !yaListo) {
-        const r = RUTAS_VIBRACION_SEED[rutaIdx];
+        const r = obtenerRutaVibracion(rutaIdx, ej);
         const comp = r?.equipos?.[eqIdx]?.componentes?.[compIdx];
         const nombre = comp?.nombre || 'Componente';
         setTimeout(() => {
@@ -18042,12 +18339,12 @@ window.rutasMarcarKizeoComponente = function(rutaIdx, eqIdx, compIdx, notificado
 
 // Marca TODOS los componentes de un equipo con el mismo estado (atajo).
 window.rutasMarcarEquipo = function(rutaIdx, eqIdx, estado) {
-    const r = RUTAS_VIBRACION_SEED[rutaIdx];
+    const ej = getEjecucionActiva(rutaIdx);
+    if (!ej) return;
+    const r = obtenerRutaVibracion(rutaIdx, ej);
     const equipo = r?.equipos?.[eqIdx];
     const comps = Array.isArray(equipo?.componentes) ? equipo.componentes : [];
     if (!comps.length) return;
-    const ej = getEjecucionActiva(rutaIdx);
-    if (!ej) return;
     ej.componentesEstado = ej.componentesEstado || {};
     ej.componentesAt = ej.componentesAt || {};
     const now = new Date().toISOString();
@@ -18104,7 +18401,7 @@ window.rutasSetObservacion = function(rutaIdx, eqIdx, valor) {
 
 // Cuenta componentes de una ruta según su estado en la ejecución activa
 function rutasContarComponentes(rutaIdx, ej) {
-    const r = RUTAS_VIBRACION_SEED[rutaIdx];
+    const r = obtenerRutaVibracion(rutaIdx, ej);
     if (!r) return { total:0, listos:0, noEjec:0, pend:0 };
     let total = 0, listos = 0, noEjec = 0;
     (r.equipos || []).forEach((eq, eqIdx) => {
@@ -18129,7 +18426,7 @@ function rutasContarComponentes(rutaIdx, ej) {
 //      (ej: "MOTOR SOPLADOR..." → maestro componente="Motor").
 //   3. Si no hay match, fallback al primer equipo con esa UT.
 async function _pushMedicionesDeRutaACerrar(rutaIdx, ej) {
-    const r = RUTAS_VIBRACION_SEED[rutaIdx];
+    const r = obtenerRutaVibracion(rutaIdx, ej);
     if (!r || !ej?.mediciones) return { ok: 0, err: 0 };
     const fechaHoy = (ej.fechaCierre || new Date().toISOString().slice(0, 10));
     const tecnicosNombres = Array.isArray(ej.tecnicosNombres) && ej.tecnicosNombres.length
@@ -18145,11 +18442,15 @@ async function _pushMedicionesDeRutaACerrar(rutaIdx, ej) {
         const compRuta   = equipoRuta?.componentes?.[compIdx];
         if (!compRuta) continue;
 
+        const equipoDirecto = compRuta.equipo_id
+            ? (estado.equipos || []).find(e => String(e.id) === String(compRuta.equipo_id))
+            : null;
         const ut = String(compRuta.ubicacion_tecnica || '').trim().toUpperCase();
-        if (!ut) continue;
+        if (!ut && !equipoDirecto) continue;
 
-        // Todos los registros del maestro con esa UT
-        const candidatos = (estado.equipos || []).filter(e =>
+        // Todos los registros del maestro con esa UT, o el componente exacto
+        // seleccionado en la ruta flexible de requerimientos.
+        const candidatos = equipoDirecto ? [equipoDirecto] : (estado.equipos || []).filter(e =>
             String(e.ubicacion_tecnica || e.kks || '').trim().toUpperCase() === ut
         );
         if (!candidatos.length) continue;
@@ -18212,8 +18513,8 @@ async function _pushMedicionesDeRutaACerrar(rutaIdx, ej) {
 }
 
 window.rutasCerrarEjecucion = async function(idx) {
-    const r = RUTAS_VIBRACION_SEED[idx];
     const ej = getEjecucionActiva(idx);
+    const r = obtenerRutaVibracion(idx, ej);
     if (!ej || !r) return;
     const c = rutasContarComponentes(idx, ej);
     let resumen = `Listos: ${c.listos} · No ejecutados: ${c.noEjec}`;
@@ -18277,6 +18578,7 @@ window.rutasCerrarEjecucion = async function(idx) {
                 componentesAt: ej.componentesAt || {},
                 mediciones: ej.mediciones || {},
                 observaciones: ej.observaciones || {},
+                requerimientoEquipos: esRutaRequerimientos(idx, r) ? (r.equipos || []) : undefined,
                 estado: 'cerrada'
             });
             localStorage.setItem('planify_rutas_historial', JSON.stringify(hist));
