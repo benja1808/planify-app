@@ -199,6 +199,21 @@ const ALIAS_FILA_PLANILLA = {
     'VENTILADOR DILUCION AMON -4B HSA02AN102': 'VENTILADOR DILUCION AMONIACO 4B',
 };
 
+// Equipos de la ruta de Puerto cuyo reductor lleva 4 puntos de temperatura.
+// Debe calzar con EQUIPOS_REDUCTOR_4_PUNTOS de app.js.
+const EQUIPOS_REDUCTOR_4_PUNTOS = new Set([
+    'MECANISMO ELEVACION GRUA PANTOGRAFICA -1',
+    'MECANISMO CIERRE GRUA PANTOGRAFICA -1',
+    'MECANISMO ELEVACION GRUA PANTOGRAFICA -2',
+    'MECANISMO CIERRE GRUA PANTOGRAFICA -2',
+    'TRANSPORTADOR 9-1',
+    'TRANSPORTADOR 9-2',
+    'TRANSPORTADOR 9-3',
+    'CORREA TRANSPORTADORA C1',
+    'CORREA TRANSPORTADORA C2',
+    'CORREA TRANSPORTADORA C3'
+]);
+
 function encontrarFilaEnHoja(ws, nombreEquipo, filasUsadas = null) {
     const nombreBusqueda = ALIAS_FILA_PLANILLA[normStr(nombreEquipo)] || nombreEquipo;
     const target = normStr(nombreBusqueda);
@@ -369,6 +384,7 @@ async function generarPlanillaMoncon(body) {
         const esBbaAgua = /BOMBA\s+AGUA\s+ALIMENTACION/i.test(String(eq.nombre || ''));
         const esLlenadoSilo = /LLENADO\s+SILO|SILO\s+LLENADO/i.test(String(plantilla.tipo || ''))
             || /CORREA\s+(TRANSPORTADORA|TRIPPER)/i.test(String(eq.nombre || ''));
+        const esReductor4Puntos = EQUIPOS_REDUCTOR_4_PUNTOS.has(normStr(eq.nombre));
         comps.forEach((comp, compIdx) => {
             let fila = filaBase + compIdx;
             // Columnas de temperatura: por defecto el 1er componente usa T°1,T°2
@@ -377,6 +393,11 @@ async function generarPlanillaMoncon(body) {
             let colsTemp = compIdx === 0 ? [5, 6] : [7, 8];
             if (esLlenadoSilo) {
                 colsTemp = /REDUCTOR/i.test(String(comp.nombre || '')) ? [5, 6, 7, 8] : [5, 6];
+            }
+            // Reductores de 4 puntos (Puerto): la hoja solo tiene T°1..T°4, así
+            // que los 4 puntos van en las cuatro columnas de la fila del reductor.
+            if (esReductor4Puntos && /REDUCTOR/i.test(String(comp.nombre || ''))) {
+                colsTemp = [5, 6, 7, 8];
             }
             if (esBbaAgua) {
                 const n = normStr(comp.nombre);
