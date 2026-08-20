@@ -13,7 +13,7 @@
     <!-- FontAwesome para iconos -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Estilos locales -->
-    <link rel="stylesheet" href="styles.css?v=45">
+    <link rel="stylesheet" href="styles.css?v=46">
     <link rel="stylesheet" href="modules/seguimiento/seguimiento.css?v=5">
     <link rel="stylesheet" href="modules/avisos/avisos.css?v=3">
     
@@ -210,33 +210,39 @@
                 </button>
             </div>
             <div class="nav-links" id="sidebar">
-                <button id="btn-menu-close" class="nav-drawer-close" type="button" aria-label="Cerrar menu">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-                <button id="nav-mis-horas" style="display:none;">Mis Horas</button>
-                <button id="nav-control">Control</button>
-                <button id="nav-ito" style="display:none;">ITO Guacolda</button>
-                <button id="nav-dashboard" class="active">Diario</button>
-                <button id="nav-semanal">Semanal</button>
-                <button id="nav-rutas">Vibraciones</button>
-                <button id="nav-termografia">Termografía</button>
-                <button id="nav-tiristor-u5" style="display:none;">Tiristor</button>
-                <button id="nav-avisos">Avisos SAP</button>
-                <button id="nav-historial">Historial</button>
-                <button id="nav-equipos">Equipos</button>
-                <button id="nav-tiristores" style="display:none;">Tiristores</button>
-                <button id="nav-trabajadores">Trabajadores</button>
+                <div class="nav-drawer-head">
+                    <div class="nav-drawer-title">
+                        <span class="nav-drawer-mark"><i class="fa-solid fa-layer-group"></i></span>
+                        <span><strong>Navegación</strong><small>Elige un módulo</small></span>
+                    </div>
+                    <button id="btn-menu-close" class="nav-drawer-close" type="button" aria-label="Cerrar menu">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+                <button id="nav-mis-horas" style="display:none;"><i class="nav-item-icon fa-regular fa-clock"></i><span>Mis Horas</span></button>
+                <button id="nav-control"><i class="nav-item-icon fa-solid fa-sliders"></i><span>Control</span></button>
+                <button id="nav-ito" style="display:none;"><i class="nav-item-icon fa-solid fa-clipboard-check"></i><span>ITO Guacolda</span></button>
+                <button id="nav-dashboard" class="active"><i class="nav-item-icon fa-solid fa-chart-column"></i><span>Diario</span></button>
+                <button id="nav-semanal"><i class="nav-item-icon fa-solid fa-calendar-week"></i><span>Semanal</span></button>
+                <button id="nav-rutas"><i class="nav-item-icon fa-solid fa-wave-square"></i><span>Vibraciones</span></button>
+                <button id="nav-termografia"><i class="nav-item-icon fa-solid fa-temperature-half"></i><span>Termografía</span></button>
+                <button id="nav-tiristor-u5" style="display:none;"><i class="nav-item-icon fa-solid fa-bolt"></i><span>Tiristor</span></button>
+                <button id="nav-avisos"><i class="nav-item-icon fa-solid fa-bell"></i><span>Avisos SAP</span></button>
+                <button id="nav-historial"><i class="nav-item-icon fa-solid fa-clock-rotate-left"></i><span>Historial</span></button>
+                <button id="nav-equipos"><i class="nav-item-icon fa-solid fa-gears"></i><span>Equipos</span></button>
+                <button id="nav-tiristores" style="display:none;"><i class="nav-item-icon fa-solid fa-bolt-lightning"></i><span>Tiristores</span></button>
+                <button id="nav-trabajadores"><i class="nav-item-icon fa-solid fa-users"></i><span>Trabajadores</span></button>
                 <button id="nav-horas-extra-admin" style="display:none; position:relative;">
-                    Horas Extra
+                    <i class="nav-item-icon fa-solid fa-business-time"></i><span>Horas Extra</span>
                     <span id="badge-he-pendientes" style="display:none; position:absolute; top:-5px; right:-6px; background:#ef4444; color:white; border-radius:999px; font-size:0.62rem; padding:0.05rem 0.38rem; font-weight:700; min-width:16px; text-align:center; pointer-events:none;"></span>
                 </button>
                 <button id="nav-insumos" style="display:none; position:relative;">
-                    Insumos
+                    <i class="nav-item-icon fa-solid fa-box-open"></i><span>Insumos</span>
                     <span id="badge-insumos-pendientes" style="display:none; position:absolute; top:-5px; right:-6px; background:#ef4444; color:white; border-radius:999px; font-size:0.62rem; padding:0.05rem 0.38rem; font-weight:700; min-width:16px; text-align:center; pointer-events:none;"></span>
                 </button>
-                <button id="nav-perfil">Mi Perfil</button>
+                <button id="nav-perfil"><i class="nav-item-icon fa-solid fa-id-badge"></i><span>Mi Perfil</span></button>
                 <button id="btn-logout" title="Cerrar sesión" type="button" style="color: #b91c1c; border: 1px solid rgba(239,68,68,0.4); background:#fff5f5; margin-left: 0.5rem;">
-                    <i class="fa-solid fa-right-from-bracket"></i> Cerrar sesión
+                    <i class="nav-item-icon fa-solid fa-right-from-bracket"></i><span>Cerrar sesión</span>
                 </button>
             </div>
         </nav>
@@ -576,10 +582,10 @@
     <!-- Scripts locales modulares -->
     <script src="modules/seguimiento/seguimiento.js?v=6" defer></script>
     <script src="modules/avisos/avisos.js?v=8" defer></script>
-<script src="sala-reles-importadas.js?v=308" defer></script>
-<script src="app.js?v=326" defer></script>
+<script src="sala-reles-importadas.js?v=310" defer></script>
+<script src="app.js?v=328" defer></script>
     <script src="dailyNews.js?v=1" defer></script>
-    <script src="dashboardAnalytics.js?v=50" defer></script>
+    <script src="dashboardAnalytics.js?v=51" defer></script>
     <script src="generador_planillas.js?v=4" defer></script>
 
     <!-- Modal: Rechazo de Solicitud de Insumos -->

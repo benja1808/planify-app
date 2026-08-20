@@ -81,5 +81,27 @@ window.SALA_RELES_IMPORTADAS = {
             { panel: 'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (1) 03CBP00GH001', elementos: [{ elemento: 'RELE 3708X02', temperatura: '36,8' }, { elemento: 'RELE PS18X', temperatura: '42,5' }] },
             { panel: 'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (2) 03CBP00GH002', elementos: [{ elemento: 'RELE 731X03', temperatura: '43,5' }] }
         ]
+    },
+    U5: {
+        unidad: 'U5',
+        fecha: '29/07/2026',
+        ot: '',
+        generacion: '30',
+        tempAmb: '',
+        tecnicos: 'Ana Baez - Cristian Olivares',
+        observaciones: '-GEN CONTROL PANEL: GEN/TRANSF. ANORMAL OPERATION. UNIT AUX.TRANSF/OLTC ABNORMAL',
+        paneles: [
+            { panel: 'TURBINE PROTECTION INSTRUMENT 05CFA00GH001', elementos: [{ elemento: 'RELÉ 301-1X', temperatura: '44,3' }] },
+            { panel: 'TURBINE SUPERVISORY INSTRUMENT 05CFA00GH001', elementos: [{ elemento: 'RELÉ 06-4X', temperatura: '43,5' }, { elemento: 'RELÉ 402-1X', temperatura: '45,4' }] },
+            { panel: 'UNIT&BOILER PROTECTIOON CABINET (1) 05CAB00GH001', elementos: [{ elemento: 'RELÉ', temperatura: '33,4' }] },
+            { panel: 'UNIT&BOILER PROTECTIOON CABINET (2) 05CAB00GH002', elementos: [{ elemento: 'RELÉ 326 X12', temperatura: '41,2' }] },
+            { panel: 'INTERPOSING RELAY CABINET (1) 05CHM00GH001', elementos: [{ elemento: 'RELÉ 416X01', temperatura: '39,6' }, { elemento: 'RELÉ 418X03', temperatura: '34,9' }] },
+            { panel: 'INTERPOSING RELAY CABINET (2) 05CHM00GH002', elementos: [{ elemento: 'RELÉ 435X05', temperatura: '43,7' }] },
+            { panel: 'GENERADOR PROTECTION RELAY PANEL 05CHA00GH001', elementos: [{ elemento: 'MODULO ETHERNET', temperatura: '41,5' }] },
+            { panel: 'TRANSFORMER PROTECTION RELAY PANEL 05CHA00GH002', elementos: [{ elemento: 'MODULO ETHERNET', temperatura: '38,6' }] },
+            { panel: 'GENERATOR CONTROL PANEL 05CHC00GH001', elementos: [{ elemento: 'CONVERSOR AC-DC-1', temperatura: '36,2' }] },
+            { panel: 'SYSTEM CABINET ELECTRIC 05CHF00GH001', elementos: [{ elemento: 'RELE A-UF', temperatura: '47,5' }] },
+            { panel: 'AVR CUBICLE 05MKC01GK101', elementos: [{ elemento: 'CONTACTOR 30PSX1', temperatura: '80' }, { elemento: 'RELÉ 2 -D0-RYTI', temperatura: '55' }] }
+        ]
     }
 };

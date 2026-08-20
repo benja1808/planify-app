@@ -3796,6 +3796,7 @@ function _leerPanelSalaReles(scope) {
         ot: val('sr-ot'),
         generacion: val('sr-generacion'),
         tempAmb: val('sr-temp-amb'),
+        observaciones: val('sr-observaciones'),
         paneles
     };
 }
@@ -3816,6 +3817,11 @@ function _serializarSalaRelesData(data) {
             lines.push(`[Sala Reles] ${partes.join(' | ')}`);
         });
     });
+    // Una línea por observación: al releer se vuelven a unir con saltos.
+    String(data.observaciones || '').split(/\r?\n/).forEach(obs => {
+        const texto = obs.trim();
+        if (texto) lines.push(`[Sala Reles] Obs: ${texto}`);
+    });
     return lines.join('\n');
 }
 
@@ -3829,12 +3835,16 @@ function _parseSalaRelesAcciones(texto, item = null) {
         ot: item?.ot_numero || '',
         generacion: '',
         tempAmb: '',
+        observaciones: '',
         paneles: salaRelesPanelesPorUnidad(unidadNum).map(panel => ({ panel, elementos: [] }))
     };
     const byPanel = new Map(data.paneles.map(p => [p.panel, p]));
+    const observaciones = [];
     String(texto || '').split(/\r?\n/).forEach(line => {
         if (!/\[Sala Reles\]/i.test(line)) return;
         const grab = (re) => { const m = line.match(re); return m ? m[1].trim() : ''; };
+        const obs = grab(/Obs:\s*(.+)$/i);
+        if (obs) { observaciones.push(obs); return; }
         data.fecha = data.fecha || grab(/Fecha:\s*([^|]+)/i);
         data.generacion = data.generacion || grab(/Generacion:\s*([^|]+)/i).replace(/\s*MW$/i, '');
         data.tempAmb = data.tempAmb || grab(/Temp amb:\s*([^|]+)/i);
@@ -3850,6 +3860,7 @@ function _parseSalaRelesAcciones(texto, item = null) {
         }
         byPanel.get(panel).elementos.push({ elemento, temperatura });
     });
+    data.observaciones = observaciones.join('\n');
     return data;
 }
 
@@ -5031,6 +5042,18 @@ function esElementoVisibleUI(elemento) {
     return estilo.display !== 'none' && estilo.visibility !== 'hidden' && estilo.opacity !== '0';
 }
 
+// Operaciones masivas (aprobar todas, limpiar resueltas): cada item escribe en
+// Supabase y el realtime pediría un re-render por cada uno, dejando la vista
+// parpadeando en "Cargando…" mientras el lote todavía corre. Mientras el
+// contador esté arriba de 0 los cambios se acumulan y se pintan al final.
+let operacionesMasivasEnCurso = 0;
+function suspenderRenderRealtime() {
+    operacionesMasivasEnCurso += 1;
+}
+function reanudarRenderRealtime() {
+    operacionesMasivasEnCurso = Math.max(0, operacionesMasivasEnCurso - 1);
+}
+
 function hayUIBloqueandoRealtime() {
     const activeElement = document.activeElement;
     const tag = (activeElement?.tagName || '').toLowerCase();
@@ -5110,6 +5133,7 @@ function renderizarVistaActualPreservandoViewport() {
 
 function intentarAplicarRealtimePendiente() {
     if (!pendingRealtimeRender) return;
+    if (operacionesMasivasEnCurso > 0) return;
     if (document.hidden) {
         clearTimeout(realtimeResumeTimer);
         realtimeResumeTimer = null;
@@ -5130,6 +5154,13 @@ function intentarAplicarRealtimePendiente() {
 }
 
 function solicitarRenderRealtimeNoIntrusivo() {
+    // Lote en curso: se anota el cambio y se pinta una sola vez al terminar.
+    if (operacionesMasivasEnCurso > 0) {
+        pendingRealtimeRender = true;
+        clearTimeout(realtimeResumeTimer);
+        realtimeResumeTimer = null;
+        return;
+    }
     if (document.hidden) {
         pendingRealtimeRender = true;
         clearTimeout(realtimeResumeTimer);
@@ -5943,22 +5974,31 @@ async function renderInsumosView() {
         if (!confirm(`Se aprobarán ${ids.length} solicitud(es) pendiente(s) y se descontará el stock. ¿Continuar?`)) return;
         const boton = event.currentTarget;
         boton.disabled = true;
-        boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Aprobando...';
         let aprobadas = 0;
         const fallidas = [];
-        for (const id of ids) {
-            try {
-                await aprobarSolicitudInsumo(id);
-                aprobadas += 1;
-            } catch (error) {
-                console.warn('[insumos] no se pudo aprobar', id, error?.message || error);
-                const solicitud = obtenerSolicitudInsumoPorId(id);
-                fallidas.push(obtenerInsumoPorId(solicitud?.insumo_id)?.nombre || id);
+        // Sin esto el realtime redibuja la vista completa por cada aprobación y
+        // la pantalla se reinicia una y otra vez mientras el lote avanza.
+        suspenderRenderRealtime();
+        try {
+            for (const id of ids) {
+                boton.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Aprobando ${aprobadas + 1}/${ids.length}...`;
+                try {
+                    await aprobarSolicitudInsumo(id);
+                    aprobadas += 1;
+                } catch (error) {
+                    console.warn('[insumos] no se pudo aprobar', id, error?.message || error);
+                    const solicitud = obtenerSolicitudInsumoPorId(id);
+                    fallidas.push(obtenerInsumoPorId(solicitud?.insumo_id)?.nombre || id);
+                }
             }
+        } finally {
+            reanudarRenderRealtime();
         }
         if (fallidas.length) {
             alert(`Se aprobaron ${aprobadas} de ${ids.length}.\nNo se pudieron aprobar: ${fallidas.join(', ')}`);
         }
+        // Ya vamos a repintar nosotros: se descarta el render pendiente del realtime.
+        pendingRealtimeRender = false;
         vistaActual = 'insumos';
         renderizarVistaActual();
     });
@@ -5970,6 +6010,7 @@ async function renderInsumosView() {
             return;
         }
         if (!confirm(`Se eliminarán ${resueltas.length} solicitudes aprobadas/rechazadas. ¿Continuar?`)) return;
+        suspenderRenderRealtime();
         try {
             for (const s of resueltas) {
                 await revertirSolicitudAprobada(s);
@@ -5979,10 +6020,13 @@ async function renderInsumosView() {
                 }
             }
             await refrescarDatosInsumos();
+            pendingRealtimeRender = false;
             vistaActual = 'insumos';
             renderizarVistaActual();
         } catch (error) {
             alert(error?.message || 'No se pudieron limpiar las solicitudes.');
+        } finally {
+            reanudarRenderRealtime();
         }
     });
 
@@ -14200,24 +14244,24 @@ const RUTAS_VIBRACION_SEED = [{"nombre":"MP MM MONITOREO BOMBAS U1 15D","unidad"
 // requerir migración de la base de datos remota.
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Las plantillas MONCON de BOMBAS listan cada equipo como Motor (fila base) +
-// Bomba (fila siguiente) y el generador escribe por posición (filaBase+compIdx),
-// así que el orden de componentes del seed tiene que ser el mismo. Las 15D ya
-// se ordenaban; las 180D venían con la bomba primero y salían cruzadas tanto en
-// la app como en la planilla.
-const RUTAS_BOMBAS_MOTOR_PRIMERO = /BOMBAS\s+U\d\s+(?:15\s*D|180\s*D)/i;
+// Las plantillas MONCON listan cada equipo como Motor (fila base) + Bomba o
+// Compresor (fila siguiente) y el generador escribe por posición
+// (filaBase+compIdx), así que el orden de componentes del seed tiene que ser el
+// mismo. Las de BOMBAS 15D ya se ordenaban; las 180D y la de COMPRESORES venían
+// al revés y salían cruzadas tanto en la app como en la planilla.
+const RUTAS_MOTOR_PRIMERO = /BOMBAS\s+U\d\s+(?:15\s*D|180\s*D)|PLANTA\s+DE\s+AGUAS?\s+COMPRESORES/i;
 // Las 15D ya se ordenaban desde antes: sus ejecuciones se capturaron con el
-// orden bueno y NO hay que tocarlas. Solo las 180D cambian ahora de posición.
-const RUTAS_BOMBAS_ORDEN_NUEVO = /BOMBAS\s+U\d\s+180\s*D/i;
+// orden bueno y NO hay que tocarlas. Solo estas cambian ahora de posición.
+const RUTAS_ORDEN_NUEVO = /BOMBAS\s+U\d\s+180\s*D|PLANTA\s+DE\s+AGUAS?\s+COMPRESORES/i;
 
 // Devuelve los equipos cuyos componentes cambiaron de posición, para poder
 // migrar las claves `eqIdx.compIdx` de las ejecuciones ya capturadas.
-function ordenarMotorPrimeroBombas() {
+function ordenarMotorPrimero() {
     if (typeof RUTAS_VIBRACION_SEED === 'undefined') return [];
     const reordenados = [];
     RUTAS_VIBRACION_SEED.forEach((ruta, rutaIdx) => {
-        if (!RUTAS_BOMBAS_MOTOR_PRIMERO.test(String(ruta.nombre || ''))) return;
-        const migrable = RUTAS_BOMBAS_ORDEN_NUEVO.test(String(ruta.nombre || ''));
+        if (!RUTAS_MOTOR_PRIMERO.test(String(ruta.nombre || ''))) return;
+        const migrable = RUTAS_ORDEN_NUEVO.test(String(ruta.nombre || ''));
         (ruta.equipos || []).forEach((equipo, eqIdx) => {
             if (!Array.isArray(equipo.componentes) || equipo.componentes.length < 2) return;
             const primeroAntes = equipo.componentes[0];
@@ -14235,7 +14279,7 @@ function ordenarMotorPrimeroBombas() {
     });
     return reordenados;
 }
-const RUTAS_COMPONENTES_REORDENADOS = ordenarMotorPrimeroBombas();
+const RUTAS_COMPONENTES_REORDENADOS = ordenarMotorPrimero();
 
 // El avance y las mediciones se guardan por posición (`eqIdx.compIdx`), así que
 // al invertir Motor/Bomba hay que invertir también lo ya capturado o los valores
@@ -18954,6 +18998,8 @@ window.mostrarVista = function(vista) {
     renderizarVistaActual();
 };
 
+let cerrarMenuMovil = () => {};
+
 Object.keys(navConfig).forEach(id => {
     const btn = document.getElementById(id);
     if (btn) {
@@ -18969,6 +19015,7 @@ Object.keys(navConfig).forEach(id => {
                 vistaTermografiaEstado.registroId = null;
             }
             renderizarVistaActual();
+            cerrarMenuMovil();
         });
     }
 });
@@ -18987,7 +19034,7 @@ if (btnMenu && sidebar) {
         document.body.appendChild(navBackdrop);
     }
 
-    const closeMobileNav = () => {
+    cerrarMenuMovil = () => {
         sidebar.classList.remove('open');
         navBackdrop.classList.remove('show');
         btnMenu.setAttribute('aria-expanded', 'false');
@@ -19003,18 +19050,18 @@ if (btnMenu && sidebar) {
         document.body.style.overflow = nextState ? 'hidden' : '';
     });
 
-    navBackdrop.addEventListener('click', closeMobileNav);
+    navBackdrop.addEventListener('click', cerrarMenuMovil);
     document.getElementById('btn-menu-close')?.addEventListener('click', (e) => {
         e.stopPropagation();
-        closeMobileNav();
+        cerrarMenuMovil();
     });
 
     document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') closeMobileNav();
+        if (event.key === 'Escape') cerrarMenuMovil();
     });
 
     window.addEventListener('resize', () => {
-        if (window.innerWidth > 768) closeMobileNav();
+        if (window.innerWidth > 768) cerrarMenuMovil();
     });
 }
 
@@ -19165,6 +19212,22 @@ const SALA_RELES_PANELES = {
         'STATION TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH003',
         'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (1) 03CBP00GH001',
         'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (2) 03CBP00GH002'
+    ],
+    // U5 tiene su propia hoja de ruta: 11 paneles, sin los gabinetes comunes
+    // 3/4 ni el de hidrógeno, y con SYSTEM CABINET ELECTRIC en vez del panel
+    // de enclavamiento eléctrico. Debe calzar con SALA_RELES_PANELES de server.js.
+    5: [
+        'TURBINE PROTECTION INSTRUMENT 05CFA00GH001',
+        'TURBINE SUPERVISORY INSTRUMENT 05CFA00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (1) 05CAB00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (2) 05CAB00GH002',
+        'INTERPOSING RELAY CABINET (1) 05CHM00GH001',
+        'INTERPOSING RELAY CABINET (2) 05CHM00GH002',
+        'GENERADOR PROTECTION RELAY PANEL 05CHA00GH001',
+        'TRANSFORMER PROTECTION RELAY PANEL 05CHA00GH002',
+        'GENERATOR CONTROL PANEL 05CHC00GH001',
+        'SYSTEM CABINET ELECTRIC 05CHF00GH001',
+        'AVR CUBICLE 05MKC01GK101'
     ]
 };
 
@@ -19430,6 +19493,13 @@ function _buildPanelSalaReles(container, tareaCtx) {
             </div>
             <div class="sr-panel-list" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(360px,1fr)); gap:0.75rem;">
                 ${paneles.map(panelHtml).join('')}
+            </div>
+            <div style="margin-top:0.9rem;">
+                <label for="sr-observaciones" style="display:block; font-size:0.74rem; color:#92400e; font-weight:800; margin-bottom:0.2rem;">Observaciones</label>
+                <textarea id="sr-observaciones" class="form-control" rows="3"
+                    placeholder="Notas de la ruta: hallazgos, paneles sin acceso, alarmas. Una linea por observacion."
+                    style="font-size:0.86rem; padding:0.5rem 0.6rem; resize:vertical;">${escapeHtml(precarga?.observaciones || '')}</textarea>
+                <div style="font-size:0.72rem; color:#92400e; margin-top:0.2rem;">Va al pie de la planilla, en el bloque "Observaciones".</div>
             </div>
         </div>`;
 
@@ -24745,7 +24815,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-mobile-perfil':      ['trabajador'],
         'nav-mobile-insumos':     ['admin', 'trabajador'],
         'nav-mobile-rutas':       ['trabajador'],
-        'nav-mobile-menu':        [],
+        'nav-mobile-menu':        ['admin'],
         'nav-perfil':             ['trabajador'],
         'btn-copy-link':          ['admin'],
         'btn-logout':             ['admin', 'administrador', 'trabajador', 'visita', 'ito']
@@ -24753,15 +24823,16 @@ function accederApp(rol, trabajadorObj = null) {
     Object.entries(navRoles).forEach(([id, roles]) => {
         const el = document.getElementById(id);
         if (!el) return;
-        const visibleDisplay = id.startsWith('nav-mobile') ? 'inline-flex' : 'inline-block';
-        el.style.display = roles.includes(rol) ? visibleDisplay : 'none';
+        el.style.display = roles.includes(rol) ? 'inline-flex' : 'none';
     });
     const esBrandonTir = esTrabajadorBrandonTiristores();
     // "Tiristor" es por persona, no por rol: solo Brandon Mancilla lo ve.
     const navTirU5 = document.getElementById('nav-tiristor-u5');
     if (navTirU5) {
-        navTirU5.textContent = 'Tiristor';
-        navTirU5.style.display = esBrandonTir ? 'inline-block' : 'none';
+        const navTirLabel = navTirU5.querySelector('span');
+        if (navTirLabel) navTirLabel.textContent = 'Tiristor';
+        else navTirU5.textContent = 'Tiristor';
+        navTirU5.style.display = esBrandonTir ? 'inline-flex' : 'none';
     }
     actualizarVisibilidadModulosPredictivos();
     const mobileDock = document.getElementById('mobile-dock');

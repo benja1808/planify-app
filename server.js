@@ -197,6 +197,13 @@ const ALIAS_FILA_PLANILLA = {
     'VENTILADOR DILUCION -2 QEH08AN001 U1': 'VENTILADOR DILUCION AMONIACO 1B',
     'VENTILADOR DILUCION AMON -4A HSA02AN101': 'VENTILADOR DILUCION AMONIACO 4A',
     'VENTILADOR DILUCION AMON -4B HSA02AN102': 'VENTILADOR DILUCION AMONIACO 4B',
+    // Compresores de desaladora: el seed usa la UT (GBG20AN001 DESn) y la hoja
+    // el correlativo. Sin alias el matcher solo comparte "COMPRESOR VAPOR" y no
+    // llega al umbral, así que estos cuatro quedaban fuera de la planilla.
+    'COMPRESOR VAPOR GBG20AN001 DES8': 'COMPRESOR VAPOR DESALADORA -8',
+    'COMPRESOR VAPOR GBG20AN001 DES9': 'COMPRESOR VAPOR DESALADORA -9',
+    'COMPRESOR VAPOR GBG20AN001 DES10': 'COMPRESOR VAPOR DESALADORA -10',
+    'COMPRESOR VAPOR GBG20AN001 DES11': 'COMPRESOR VAPOR DESALADORA -11',
 };
 
 // Equipos de la ruta de Puerto cuyo reductor lleva 4 puntos de temperatura.
@@ -1000,6 +1007,20 @@ const SALA_RELES_PANELES = {
         'STATION TRANSFORMER PROTECTION RELAY PANEL 03CHA00GH003',
         'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (1) 03CBP00GH001',
         'UNIT 3/4 COMMON EQUIPMENT SIGNAL INTERFACE CABINET (2) 03CBP00GH002'
+    ],
+    // Debe calzar con SALA_RELES_PANELES de app.js.
+    5: [
+        'TURBINE PROTECTION INSTRUMENT 05CFA00GH001',
+        'TURBINE SUPERVISORY INSTRUMENT 05CFA00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (1) 05CAB00GH001',
+        'UNIT&BOILER PROTECTIOON CABINET (2) 05CAB00GH002',
+        'INTERPOSING RELAY CABINET (1) 05CHM00GH001',
+        'INTERPOSING RELAY CABINET (2) 05CHM00GH002',
+        'GENERADOR PROTECTION RELAY PANEL 05CHA00GH001',
+        'TRANSFORMER PROTECTION RELAY PANEL 05CHA00GH002',
+        'GENERATOR CONTROL PANEL 05CHC00GH001',
+        'SYSTEM CABINET ELECTRIC 05CHF00GH001',
+        'AVR CUBICLE 05MKC01GK101'
     ]
 };
 
@@ -1081,6 +1102,23 @@ async function generarPlanillaSalaReles(body) {
         ws.getCell(r, 1).alignment = { ...(ws.getCell(r, 1).alignment || {}), wrapText: true, vertical: 'middle' };
         ws.getCell(r, 5).alignment = { ...(ws.getCell(r, 5).alignment || {}), wrapText: true, vertical: 'middle' };
         ws.getCell(r, 10).alignment = { ...(ws.getCell(r, 10).alignment || {}), horizontal: 'center', vertical: 'middle' };
+    }
+
+    // Observaciones: tras el insert/splice el encabezado (2 filas combinadas)
+    // queda justo debajo de los datos, y el texto va en las filas siguientes,
+    // una por línea. Se reescriben todas para no dejar restos de la plantilla.
+    const obsHeaderRow = dataStart + filas.length;
+    const primeraObs = obsHeaderRow + 2;
+    const lineasObs = String(body?.observaciones || '')
+        .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const filasObsDisponibles = Math.max(0, ws.rowCount - primeraObs + 1);
+    if (lineasObs.length > filasObsDisponibles && filasObsDisponibles > 0) {
+        // Lo que no cabe se junta en la última fila para no perder texto.
+        const sobrante = lineasObs.splice(filasObsDisponibles - 1);
+        lineasObs.push(sobrante.join(' · '));
+    }
+    for (let r = primeraObs; r <= ws.rowCount; r++) {
+        ws.getCell(r, 1).value = lineasObs[r - primeraObs] || '';
     }
 
     ws.getCell('C1').value = body?.fecha || '';
