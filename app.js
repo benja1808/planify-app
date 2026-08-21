@@ -19037,6 +19037,7 @@ if (btnMenu && sidebar) {
     cerrarMenuMovil = () => {
         sidebar.classList.remove('open');
         navBackdrop.classList.remove('show');
+        document.body.classList.remove('nav-menu-open');
         btnMenu.setAttribute('aria-expanded', 'false');
         document.body.style.overflow = '';
     };
@@ -19046,6 +19047,7 @@ if (btnMenu && sidebar) {
         const nextState = !sidebar.classList.contains('open');
         sidebar.classList.toggle('open', nextState);
         navBackdrop.classList.toggle('show', nextState);
+        document.body.classList.toggle('nav-menu-open', nextState);
         btnMenu.setAttribute('aria-expanded', nextState ? 'true' : 'false');
         document.body.style.overflow = nextState ? 'hidden' : '';
     });

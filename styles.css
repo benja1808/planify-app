@@ -1205,6 +1205,26 @@ h3 {
     }
 }
 
+/* Keep the drawer above its backdrop. The navbar creates a stacking context,
+   so the drawer's own z-index alone cannot escape it on iOS Safari. */
+@media (max-width: 768px) {
+    body.nav-menu-open .navbar {
+        z-index: 9600;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    body.nav-menu-open .nav-backdrop {
+        z-index: 9400;
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
+    body.nav-menu-open .nav-links {
+        z-index: 9700;
+    }
+}
+
 /* Dashboard Layout GRID */
 .dashboard-grid {
     display: grid;
