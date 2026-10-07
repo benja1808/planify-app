@@ -1,5 +1,6 @@
-const url = 'https://fygvulgffhxrimaeyoep.supabase.co/rest/v1/trabajadores';
-const key = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
+const url = `${SUPABASE_URL}/rest/v1/trabajadores`;
+const key = SUPABASE_KEY;
 
 const datos = [
     {

@@ -201,7 +201,7 @@ function htmlSelectorTecnicosModulo(modulo) {
     const meta = MODULOS_PREDICTIVOS[modulo];
     const inhabilitados = obtenerTrabajadoresInhabilitados();
     const trabajadores = (estado.trabajadores || [])
-        .filter(t => t.disponible !== false && !inhabilitados.has(t.id))
+        .filter(t => !trabajadorEstaInhabilitado(t))
         .slice()
         .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
     const total = trabajadores.filter(t => trabajadorAsignadoModulo(t, modulo)).length;
@@ -471,21 +471,28 @@ function normalizarClaveExcel(valor) {
         .toUpperCase();
 }
 
-// Lista persistente (localStorage) de trabajadores inhabilitados (vacaciones,
-// licencia, ausencia prolongada). No requiere columna en la DB; los IDs se
-// guardan en el dispositivo.
-const PLANIFY_INHABILITADOS_KEY = 'planify_trabajadores_inhabilitados';
-function obtenerTrabajadoresInhabilitados() {
-    try {
-        const raw = localStorage.getItem(PLANIFY_INHABILITADOS_KEY);
-        const arr = raw ? JSON.parse(raw) : [];
-        return new Set(Array.isArray(arr) ? arr : []);
-    } catch (e) { return new Set(); }
+// La habilitación manual vive en su propia columna; el antiguo set local
+// mezclaba salidas/check-in con inhabilitaciones y se conserva solo como legado.
+function trabajadorEstaInhabilitado(trabajador) {
+    return trabajador?.inhabilitado === true;
 }
-function guardarTrabajadoresInhabilitados(set) {
-    try {
-        localStorage.setItem(PLANIFY_INHABILITADOS_KEY, JSON.stringify([...set]));
-    } catch (e) { /* noop */ }
+function obtenerTrabajadoresInhabilitados() {
+    return new Set((estado.trabajadores || []).filter(trabajadorEstaInhabilitado).map(t => t.id));
+}
+async function actualizarInhabilitacionTrabajador(id, inhabilitado) {
+    if (!esRolGestion()) throw new Error('No tienes permiso para cambiar la habilitación.');
+    if (!navigator.onLine || !supabaseClient) throw new Error('Conéctate para cambiar la habilitación del trabajador.');
+    const payload = {
+        inhabilitado: !!inhabilitado,
+        inhabilitado_actualizado_en: new Date().toISOString(),
+        inhabilitado_por: estado.usuarioActual === 'administrador' ? 'Administrador' : 'Planificador'
+    };
+    const { data, error } = await supabaseClient.from('trabajadores').update(payload).eq('id', id).select('*').single();
+    if (error) throw error;
+    if (!data) throw new Error('No se pudo actualizar el trabajador.');
+    estado.trabajadores = estado.trabajadores.map(t => t.id === id ? { ...t, ...data } : t);
+    await window.localDB?.trabajadores.upsert(data).catch(() => {});
+    return data;
 }
 
 // Formatea YYYY-MM-DD → "DD-MM-YYYY" sin desplazamiento por timezone.
@@ -1631,18 +1638,8 @@ async function inicializarDatos() {
 
         estado.trabajadores = (trabajadores || []).map(t => ({
             ...t,
-            disponible: _checkinVigente(t)
+            disponible: t.disponible === true
         }));
-        // Sincronizar inhabilitados desde Supabase (columna `disponible`: false =
-        // inhabilitado) al set local, para que persistan entre dispositivos.
-        try {
-            const localSet = obtenerTrabajadoresInhabilitados();
-            (trabajadores || []).forEach(t => {
-                if (t.disponible === false) localSet.add(t.id);
-                else localSet.delete(t.id);
-            });
-            guardarTrabajadoresInhabilitados(localSet);
-        } catch (e) { /* noop */ }
         estado.tareas = (tareas || []).map(t => ({
             id: t.id, tipo: t.tipo,
             liderId: t.lider_id, liderNombre: t.lider_nombre,
@@ -1713,9 +1710,8 @@ async function inicializarDatos() {
             if (estado.historialMediciones.length) window.localDB.mediciones.bulk(estado.historialMediciones).catch(() => {});
         }
 
-        // (Eliminado) Reset automático del check-in a las 20:00. La columna
-        // `disponible` ahora significa HABILITADO (no check-in diario), así que
-        // ese reset inhabilitaba a TODO el personal cada noche. Se quita.
+        // No se aplica reset horario automático. La asistencia y la
+        // inhabilitación manual se mantienen independientes.
 
         // Suscribirse a cambios en tiempo real
         configurarRealtime();
@@ -1737,7 +1733,7 @@ async function inicializarDatos() {
                 ]);
                 estado.trabajadores = (trabajadores || []).map(t => ({
                     ...t,
-                    disponible: _checkinVigente(t)
+                    disponible: t.disponible === true
                 }));
                 estado.tareas             = (tareas || []).map(t => ({
                     id: t.id, tipo: t.tipo,
@@ -1781,10 +1777,8 @@ async function inicializarDatos() {
 // Verifica si el check-in de un trabajador sigue vigente (mismo día)
 // No bloquea por hora — el reset de las 20:00 ocurre una sola vez y permite turnos de noche
 function _checkinVigente(t) {
-    // Modalidad de check-in eliminada. La columna `disponible` se reutiliza como
-    // flag de HABILITADO: false = inhabilitado (vacaciones/licencia). Así las
-    // inhabilitaciones persisten en Supabase y se sincronizan entre dispositivos.
-    return t.disponible !== false;
+    // Asistencia: independiente de la habilitación manual.
+    return t.disponible === true;
 }
 
 function configurarRealtime() {
@@ -1952,12 +1946,15 @@ function configurarRealtime() {
 }
 
 async function updateTrabajadorDisponibilidad(id, disponible) {
-    const payload = { disponible, ocupado: false };
+    const payload = { disponible };
     if (disponible) payload.checkin_fecha = new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
     await _db.update('trabajadores', id, payload);
 }
 
 async function asignarTarea(tipo, liderId, ayudantesIds, estadoTarea = 'en_curso', otNumero = null, estadoEjecucion = 'activo', fechaExpiracion = null, equipoId = null, tiposSeleccionados = [], componentesSeleccionados = [], ubicacion = null, espacioConfinado = false, vigiaId = null, subtitulo = null, fechaInicioPermiso = null) {
+    const seleccionados = [liderId, ...(ayudantesIds || []), vigiaId].filter(Boolean);
+    const bloqueados = estado.trabajadores.filter(t => seleccionados.includes(t.id) && trabajadorEstaInhabilitado(t));
+    if (bloqueados.length) throw new Error(`No se puede asignar personal inhabilitado: ${bloqueados.map(t => t.nombre).join(', ')}.`);
     const lider = estado.trabajadores.find(t => t.id === liderId);
     const ayudantesNombres = ayudantesIds.map(id => {
         const t = estado.trabajadores.find(x => x.id === id);
@@ -2337,7 +2334,7 @@ async function guardarTareaFinalizada({
     _olvidarTransicionLocalTarea(id);
     estado.tareas = estado.tareas.filter(t => t.id !== id);
     estado.trabajadores = estado.trabajadores.map(w =>
-        idsALiberar.includes(w.id) ? { ...w, ocupado: false, disponible: true } : w
+        idsALiberar.includes(w.id) ? { ...w, ocupado: false } : w
     );
     estado.historialTareas = [registroHistorial, ...estado.historialTareas];
     renderizarVistaActual();
@@ -2345,7 +2342,7 @@ async function guardarTareaFinalizada({
     // Persistir tareas y trabajadores (offline-safe)
     await Promise.all([
         _db.delete('tareas', id),
-        ...idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false, disponible: true }))
+        ...idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false }))
     ]);
 
     // Historial: guardar local siempre; online con fallback de columnas opcionales
@@ -2644,14 +2641,14 @@ async function guardarTareaNoEjecutada({ id, liderId, ayudantesIdsStr, motivo })
     _olvidarTransicionLocalTarea(id);
     estado.tareas = estado.tareas.filter(t => t.id !== id);
     estado.trabajadores = estado.trabajadores.map(w =>
-        idsALiberar.includes(w.id) ? { ...w, ocupado: false, disponible: true } : w
+        idsALiberar.includes(w.id) ? { ...w, ocupado: false } : w
     );
     estado.historialTareas = [registroHistorial, ...estado.historialTareas];
     renderizarVistaActual();
 
     await Promise.all([
         _db.delete('tareas', id),
-        ...idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false, disponible: true }))
+        ...idsALiberar.map(wid => _db.update('trabajadores', wid, { ocupado: false }))
     ]);
 
     if (window.localDB) await window.localDB.historial.upsert(registroHistorial).catch(() => {});
@@ -4531,7 +4528,7 @@ async function actualizarConfiguracionInsumo(insumoId, patch = {}) {
     return nuevo;
 }
 
-async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '') {
+async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '', tipoMovimiento = null) {
     const insumo = obtenerInsumoPorId(insumoId);
     if (!insumo) throw new Error('Insumo no encontrado.');
     const antes = enteroSeguro(insumo.stock_actual, 0);
@@ -4545,7 +4542,7 @@ async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '') {
     const movimiento = normalizarMovimientoInventario({
         id: crypto.randomUUID(),
         insumo_id: insumoId,
-        tipo: delta > 0 ? 'entrada' : 'ajuste',
+        tipo: tipoMovimiento || (delta > 0 ? 'entrada' : 'ajuste'),
         cantidad: Math.abs(delta),
         creado_por: nombreAprobadorActual(),
         motivo: motivo || (delta > 0 ? 'Ingreso manual' : 'Ajuste manual'),
@@ -4566,7 +4563,8 @@ async function registrarMovimientoManual(insumoId, tipo, cantidad, motivo = '') 
     const antes = enteroSeguro(insumo.stock_actual, 0);
     const signo = (tipo === 'entrada') ? 1 : -1;
     const despues = antes + signo * qty;
-    return ajustarStockInsumo(insumoId, despues, motivo || (tipo === 'entrada' ? 'Ingreso' : 'Salida manual'));
+    if (despues < 0) throw new Error(`No hay stock suficiente (disponible: ${antes}).`);
+    return ajustarStockInsumo(insumoId, despues, motivo || (tipo === 'entrada' ? 'Ingreso' : 'Salida manual'), tipo === 'entrada' ? 'entrada' : 'salida');
 }
 
 async function eliminarInsumoCatalogo(insumoId) {
@@ -4908,7 +4906,7 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
             })));
         }
         if (trabajadoresRes.status === 'fulfilled' && trabajadoresRes.value?.data) {
-            estado.trabajadores = (trabajadoresRes.value.data || []).map(t => ({ ...t, disponible: _checkinVigente(t) }));
+            estado.trabajadores = (trabajadoresRes.value.data || []).map(t => ({ ...t, disponible: t.disponible === true }));
         }
         if (insumosRes.status === 'fulfilled' && insumosRes.value?.data) {
             estado.insumos = insumosRes.value.data || [];
@@ -6102,6 +6100,16 @@ async function renderInsumosView() {
                         <input id="inv-ed-inicial" type="number" min="0" step="1" class="form-control" value="${insumo.stock_inicial}">
                     </div>
                 </div>
+                <div class="inv-form-row">
+                    <div class="form-group">
+                        <label for="inv-ed-retiro">Retirar stock (disp. ${enteroSeguro(insumo.stock_actual, 0)})</label>
+                        <input id="inv-ed-retiro" type="number" min="0" max="${Math.max(0, enteroSeguro(insumo.stock_actual, 0))}" step="1" class="form-control" placeholder="Cantidad a sacar">
+                    </div>
+                    <div class="form-group">
+                        <label for="inv-ed-retiro-motivo">Motivo del retiro</label>
+                        <input id="inv-ed-retiro-motivo" type="text" class="form-control" placeholder="Retiro directo administrador">
+                    </div>
+                </div>
                 <div class="form-group">
                     <label for="inv-ed-ubic">Ubicacion</label>
                     <input id="inv-ed-ubic" type="text" class="form-control" value="${escHtml(insumo.ubicacion)}" placeholder="Ej: Bodega B - Estante 3">
@@ -6114,6 +6122,10 @@ async function renderInsumosView() {
             onConfirm: async () => {
                 const nombre = String(document.getElementById('inv-ed-nombre')?.value || '').trim();
                 if (!nombre) throw new Error('El nombre es obligatorio.');
+                const retiro = enteroSeguro(document.getElementById('inv-ed-retiro')?.value, 0);
+                const disponible = enteroSeguro(insumo.stock_actual, 0);
+                if (retiro < 0) throw new Error('La cantidad a retirar no puede ser negativa.');
+                if (retiro > disponible) throw new Error(`No hay stock suficiente para retirar ${retiro} (disponible: ${disponible}).`);
                 await actualizarConfiguracionInsumo(insumoId, {
                     nombre,
                     marca: String(document.getElementById('inv-ed-marca')?.value || '').trim(),
@@ -6123,6 +6135,10 @@ async function renderInsumosView() {
                     ubicacion: String(document.getElementById('inv-ed-ubic')?.value || '').trim(),
                     observaciones: String(document.getElementById('inv-ed-obs')?.value || '').trim()
                 });
+                if (retiro > 0) {
+                    const motivoRetiro = String(document.getElementById('inv-ed-retiro-motivo')?.value || '').trim() || 'Retiro directo administrador';
+                    await registrarMovimientoManual(insumoId, 'salida', retiro, motivoRetiro);
+                }
             }
         });
     };
@@ -6693,7 +6709,8 @@ async function restaurarSesionPersistida() {
     return false;
 }
 
-window.cerrarSesionPlanify = function() {
+window.cerrarSesionPlanify = async function() {
+    if (window.MaintenanceCloud) await window.MaintenanceCloud.signOut().catch(() => {});
     _volverAlLogin();
 };
 
@@ -6757,6 +6774,26 @@ async function aprobarHorasExtra(heId) {
     } else {
         await window.syncQueue?.add('horas_extra', 'UPDATE', { id: heId, ...updates });
     }
+}
+
+// Aprobar el conjunto visible sin sobrescribir solicitudes ya resueltas.
+async function aprobarLoteHorasExtra(ids) {
+    if (!esRolGestion()) throw new Error('No tienes permiso para aprobar horas extra.');
+    if (!navigator.onLine || !supabaseClient) throw new Error('Conéctate a internet para aprobar todas las solicitudes.');
+    const unicos = [...new Set(ids)];
+    if (!unicos.length) return [];
+    const updates = {
+        estado: 'aprobado',
+        aprobado_por: estado.usuarioActual === 'administrador' ? 'Administrador' : 'Planificador',
+        fecha_aprobacion: new Date().toISOString(),
+        motivo_rechazo: null
+    };
+    const { data, error } = await supabaseClient.from('horas_extra')
+        .update(updates).in('id', unicos).eq('estado', 'pendiente').select('*');
+    if (error) throw error;
+    const aprobadas = data || [];
+    await window.localDB?.horas_extra.bulk(aprobadas.map(r => ({ ...r, synced: true }))).catch(() => {});
+    return aprobadas;
 }
 
 // ── HORAS EXTRA: rechazar registro ───────────────────────────────────────────
@@ -6897,7 +6934,7 @@ async function actualizarBadgeRutasTrabajador() {
     if (window.supabaseClient) {
         try { await refrescarRutasEjecucionesDesdeSupabase(); } catch (e) {}
     }
-    const ejs = getRutasEjecuciones() || {};
+    const ejs = getTodasEjecucionesRutas();
     const _esTecnico = (ej) =>
         (Array.isArray(ej.tecnicosIds) && ej.tecnicosIds.includes(trabajadorId)) ||
         ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId;
@@ -7379,14 +7416,14 @@ window.mostrarCalendarioHorasExtra = function(trabajadorId, registros) {
     modal.id = 'modal-he-calendario';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;';
     modal.innerHTML = `
-        <div style="background:#fff;border-radius:16px;padding:1.5rem;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+        <div class="he-calendar-dialog" role="dialog" aria-modal="true" aria-labelledby="cal-titulo" style="background:#fff;border-radius:16px;padding:1.5rem;max-width:380px;width:100%;box-shadow:0 20px 50px rgba(0,0,0,0.2);">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
-                <button id="cal-prev" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8592;</button>
+                <button id="cal-prev" type="button" aria-label="Mes anterior" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8592;</button>
                 <div style="text-align:center;">
                     <div id="cal-titulo" style="font-weight:700;font-size:1rem;"></div>
                     <div id="cal-total-mes" style="font-size:0.75rem;color:var(--primary-color);margin-top:0.1rem;"></div>
                 </div>
-                <button id="cal-next" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8594;</button>
+                <button id="cal-next" type="button" aria-label="Mes siguiente" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-muted);padding:0.2rem 0.5rem;">&#8594;</button>
             </div>
             <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;"></div>
             <button id="cal-cerrar" style="width:100%;margin-top:1.2rem;padding:0.65rem;border-radius:10px;border:1px solid #e5e7eb;background:transparent;color:var(--text-muted);cursor:pointer;font-size:0.88rem;">Cerrar</button>
@@ -7402,15 +7439,7 @@ window.mostrarCalendarioHorasExtra = function(trabajadorId, registros) {
 };
 
 // COMPONENTE: Vista Trabajadores (2 tabs: Equipo Disponible | Equipo Trabajando)
-// ── Ocultar duplicados de la vista ────────────────────────────────────────
-// En la base conviven el equipo NORMAL/canónico (kks "GUA#…" o ruta "R.VENT")
-// y duplicados creados por rutas de monitoreo/lubricación (kks "2893-…").
-// Cuando ambos comparten unidad + código funcional KKS (ej. "HLB10-AN101"),
-// ocultamos el "2893-…" para que en la lista quede solo el equipo normal.
-// Es SOLO un filtro de visualización: no se borra nada de la base de datos.
-// El equipo NORMAL/canónico se reconoce por su kks "GUA#…" (catálogo real).
-// Ojo: NO se puede usar la ruta (ej. "R.VENT.6KV") porque los duplicados de
-// monitoreo comparten esa misma ruta; solo el kks distingue normal vs duplicado.
+// Agrupar componentes por ubicación técnica sin ocultar sus IDs ni lecturas.
 function _equipoEsCanonico(e) {
     return /GUA\d/i.test(e.kks || '');
 }
@@ -7427,33 +7456,35 @@ function _unidadEquipoDedup(e) {
     let m = s.match(/2893-(\d)/); if (m) return 'U' + m[1];
     m = String(e.kks || '').match(/GUA(\d)/i); if (m) return 'U' + m[1];
     m = String(e.ubicacion || '').match(/UNIDAD\s*([1-5])/i); if (m) return 'U' + m[1];
+    m = String(e.ubicacion || '').match(/^U\s*([1-5])$/i); if (m) return 'U' + m[1];
     return '?';
 }
-let _setDuplicadosOcultos = null;
-let _setDuplicadosFirma = -1;
-function _obtenerDuplicadosOcultos() {
-    const eqs = estado.equipos || [];
-    if (_setDuplicadosOcultos && _setDuplicadosFirma === eqs.length) return _setDuplicadosOcultos;
-    const canonKeys = new Set();
-    for (const e of eqs) {
-        if (_equipoEsCanonico(e)) {
-            const fc = _codigoFuncionalKKS(e);
-            if (fc) canonKeys.add(_unidadEquipoDedup(e) + '|' + fc);
-        }
-    }
-    const ocultos = new Set();
-    for (const e of eqs) {
-        if (_equipoEsCanonico(e)) continue;
-        const fc = _codigoFuncionalKKS(e);
-        if (fc && canonKeys.has(_unidadEquipoDedup(e) + '|' + fc)) ocultos.add(String(e.id));
-    }
-    _setDuplicadosOcultos = ocultos;
-    _setDuplicadosFirma = eqs.length;
-    return ocultos;
+function _ubicacionTecnicaFicha(e) {
+    const kks = String(e.kks || '').trim().toUpperCase();
+    // Conservar unidad Y sector: GUA3-5HLB10 equivale a 2893-35-HLB10.
+    const m = kks.match(/^(?:GUA([0-9])-([0-9])|2893-([0-9])([0-9])-)([A-Z]{2,4}[0-9]{2})-?([A-Z]{2}[0-9]{3})(.*)$/);
+    if (!m) return null;
+    return { base: `${m[1] || m[3]}${m[2] || m[4]}|${m[5]}-${m[6]}`, parte: m[7].replace(/^-+/, '') };
+}
+function _claveActivoFicha(e) {
+    const ut = _ubicacionTecnicaFicha(e);
+    if (ut) return 'ut|' + ut.base;
+    const nombre = String(e.activo || '').trim().toLowerCase();
+    const unidad = _unidadEquipoDedup(e);
+    if (unidad !== '?' && /^ventilador tiro forzado(?: vtf)?(?: u[1-5])?$/.test(nombre)) return 'vtf|' + unidad;
+    // Sin código verificable, conservar el agrupamiento por nombre y ubicación.
+    return nombre + '__' + String(e.ubicacion || '').trim().toLowerCase();
+}
+function _componenteDedup(e) {
+    const nombre = String(e.componente || '').trim().toLowerCase();
+    if (/\bmotor\b/.test(nombre)) return 'motor';
+    if (/^ventilador(?:\s|$)/.test(nombre)) return 'ventilador';
+    return nombre;
 }
 function filtrarEquiposDuplicados(lista) {
-    const ocultos = _obtenerDuplicadosOcultos();
-    return (lista || []).filter(e => !ocultos.has(String(e.id)));
+    // Un código padre compartido no demuestra que dos registros sean duplicados.
+    // Mantener cada ID accesible: puede tener mediciones propias o ser otra parte.
+    return lista || [];
 }
 
 function renderEquiposView() {
@@ -7470,7 +7501,7 @@ function renderEquiposView() {
     // Con 300+ equipos esto evita recorrer/normalizar todo en cada tecleo.
     const gruposMap = new Map();
     equiposRaw.forEach(eq => {
-        const key = `${String(eq.activo || '').trim().toLowerCase()}__${String(eq.ubicacion || '').trim().toLowerCase()}`;
+        const key = _claveActivoFicha(eq);
         if (!gruposMap.has(key)) gruposMap.set(key, []);
         gruposMap.get(key).push(eq);
     });
@@ -7478,6 +7509,7 @@ function renderEquiposView() {
     const grupos = [...gruposMap.values()]
         .map(comps => {
             const rep = [...comps].sort((a, b) =>
+                Number(_equipoEsCanonico(b)) - Number(_equipoEsCanonico(a)) ||
                 (orderCrit[String(a.criticidad||'').toUpperCase()] ?? 9) -
                 (orderCrit[String(b.criticidad||'').toUpperCase()] ?? 9)
             )[0];
@@ -8838,6 +8870,7 @@ async function renderHorasExtraAdminView() {
     let filtroTrabajador = '';
     let filtroMes = '';
     let textoBusqueda = '';
+    let aprobandoTodas = false;
 
     const getStatusHtml = (estado, motivoRechazo = '') => {
         const base = estado === 'aprobado'
@@ -8867,6 +8900,14 @@ async function renderHorasExtraAdminView() {
     const renderTabla = () => {
         const tabla = document.getElementById('he-admin-tabla-body');
         const filtrados = getFiltrados();
+        const btnTodas = document.getElementById('btn-he-aprobar-todas');
+        const pendientesVisibles = filtrados.filter(r => r.estado === 'pendiente').length;
+        if (btnTodas) {
+            btnTodas.disabled = aprobandoTodas || pendientesVisibles === 0;
+            btnTodas.innerHTML = aprobandoTodas
+                ? '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Aprobando...'
+                : `<i class="fa-solid fa-check-double" aria-hidden="true"></i> Aprobar todas (${pendientesVisibles})`;
+        }
         const baseMetricas = filtroTrabajador
             ? enriched.filter(r => r.trabajador_id === filtroTrabajador)
             : enriched;
@@ -9018,10 +9059,16 @@ async function renderHorasExtraAdminView() {
                         <label for="he-filtro-mes">Mes</label>
                         <input type="month" id="he-filtro-mes" class="form-control">
                     </div>
+                    <div class="he-bulk-actions">
+                    <button type="button" id="btn-he-aprobar-todas" class="btn btn-outline" style="border-color:#bbf7d0;color:#15803d;background:#f0fdf4;" title="Aprobar las solicitudes pendientes que coinciden con los filtros">
+                        <i class="fa-solid fa-check-double" aria-hidden="true"></i> Aprobar todas
+                    </button>
                     <button id="btn-he-eliminar-todo" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
                         <i class="fa-solid fa-trash-can"></i> Eliminar todas
                     </button>
+                    </div>
                 </div>
+                <p id="he-bulk-status" role="status" aria-live="polite" style="margin:.75rem 0 0;color:var(--text-muted);font-size:.85rem;">Aprobar todas se aplica a las pendientes de los filtros actuales.</p>
             </section>
 
             <section class="panel" style="padding:0;">
@@ -9059,6 +9106,31 @@ async function renderHorasExtraAdminView() {
     document.getElementById('he-busqueda')?.addEventListener('input', (event) => {
         textoBusqueda = event.target.value || '';
         renderTabla();
+    });
+
+    document.getElementById('btn-he-aprobar-todas')?.addEventListener('click', async () => {
+        if (aprobandoTodas) return;
+        const pendientes = getFiltrados().filter(r => r.estado === 'pendiente');
+        if (!pendientes.length) return;
+        aprobandoTodas = true;
+        renderTabla();
+        const status = document.getElementById('he-bulk-status');
+        status.textContent = `Aprobando ${pendientes.length} solicitud(es)...`;
+        try {
+            const aprobadas = await aprobarLoteHorasExtra(pendientes.map(r => r.id));
+            for (const registro of aprobadas) {
+                const idx = enriched.findIndex(r => r.id === registro.id);
+                if (idx >= 0) enriched[idx] = { ...enriched[idx], ...registro };
+            }
+            const sinActualizar = pendientes.length - aprobadas.length;
+            status.textContent = `${aprobadas.length} solicitud(es) aprobada(s).${sinActualizar ? ` ${sinActualizar} no se actualizaron; recarga para consultar su estado actual.` : ''}`;
+            await actualizarBadgeHE();
+        } catch (error) {
+            status.textContent = `No se pudo completar la aprobación: ${error.message || 'vuelve a intentarlo.'}`;
+        } finally {
+            aprobandoTodas = false;
+            renderTabla();
+        }
     });
 
     window._heAprobar = async (id) => {
@@ -9157,7 +9229,7 @@ function renderTrabajadoresView() {
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t => [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)));
     const inhabilitadosSet = obtenerTrabajadoresInhabilitados();
-    const esInhab = (t) => inhabilitadosSet.has(t.id) || t.disponible === false;
+    const esInhab = (t) => trabajadorEstaInhabilitado(t);
     const trabActivos = estado.trabajadores.filter(t => !esInhab(t));
     const ocupados    = trabActivos.filter(t => idsEnTarea.has(t.id));
     const disponibles = trabActivos.filter(t => !idsEnTarea.has(t.id));
@@ -9224,7 +9296,7 @@ function renderTrabajadoresView() {
             ? `${principal.tipo || 'Trabajo activo'}${principal.otNumero || principal.ot_numero ? ` · OT ${(principal.otNumero || principal.ot_numero)}` : ''}`
             : (estadoTipo === 'ausente'
                 ? 'Aun no registra check-in hoy.'
-                : `Disponible con ${(trabajador.habilidades || []).length} habilidad(es) cargadas.`);
+                : estadoTipo === 'inhabilitado' ? 'Inhabilitación manual. No se asignará a nuevos trabajos.' : `Disponible con ${(trabajador.habilidades || []).length} habilidad(es) cargadas.`);
         const searchText = normalizar([
             trabajador.nombre,
             trabajador.puesto,
@@ -9249,6 +9321,7 @@ function renderTrabajadoresView() {
                 </div>
                 <div class="crew-card-meta">
                     <span><i class="fa-solid fa-user-gear"></i> ${rolPrincipal}</span>
+                    <span><i class="fa-regular fa-clock"></i> Jornada: ${trabajador.disponible === true ? 'disponibilidad registrada' : 'sin disponibilidad registrada'}</span>
                     <span><i class="fa-solid fa-layer-group"></i> ${(trabajador.habilidades || []).length} habilidad(es)</span>
                     ${principal ? `<span><i class="fa-solid fa-briefcase"></i> ${tareas.length} tarea(s) activa(s)</span>` : ''}
                 </div>
@@ -9317,7 +9390,7 @@ function renderTrabajadoresView() {
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-user-slash" style="color:#dc2626;"></i> Inhabilitados</span>
                         <div class="crew-kpi-value">${inhabilitados.length}</div>
-                        <div class="crew-kpi-meta">Vacaciones / licencia</div>
+                        <div class="crew-kpi-meta">Solo inhabilitación manual</div>
                     </article>
                     <article class="crew-kpi-card">
                         <span class="crew-kpi-label"><i class="fa-solid fa-star"></i> Habilidad dominante</span>
@@ -9665,6 +9738,7 @@ function renderTrabajadoresView() {
             const nuevoTrabajador = {
                 id: crypto.randomUUID(),
                 ...payloadTrabajador,
+                inhabilitado: false,
                 disponible: false,
                 ocupado: false,
                 puede_aprobar_insumos: false
@@ -9695,33 +9769,11 @@ function renderTrabajadoresView() {
         }
     });
 
-    // Persiste el estado en Supabase usando la columna `disponible`
-    // (false = inhabilitado). Así se sincroniza entre dispositivos.
-    const _pushInhabilitadoSupabase = async (trabajadorId, inhabilitado) => {
-        if (!window.supabaseClient) return;
-        try {
-            const { error } = await window.supabaseClient
-                .from('trabajadores')
-                .update({ disponible: !inhabilitado })
-                .eq('id', trabajadorId);
-            if (error) console.warn('[trabajadores] sync inhabilitado:', error.message);
-        } catch (e) { /* offline o falla → queda solo local */ }
-    };
-    const inhabilitarTrabajador = async (trabajadorId) => {
-        const set = obtenerTrabajadoresInhabilitados();
-        set.add(trabajadorId);
-        guardarTrabajadoresInhabilitados(set);
-        const t = estado.trabajadores.find(x => x.id === trabajadorId);
-        if (t) { t.disponible = false; mostrarToastTrabajadores(`${t.nombre} fue marcado como inhabilitado.`); }
-        _pushInhabilitadoSupabase(trabajadorId, true);
-    };
-    const rehabilitarTrabajador = async (trabajadorId) => {
-        const set = obtenerTrabajadoresInhabilitados();
-        set.delete(trabajadorId);
-        guardarTrabajadoresInhabilitados(set);
-        const t = estado.trabajadores.find(x => x.id === trabajadorId);
-        if (t) { t.disponible = true; mostrarToastTrabajadores(`${t.nombre} vuelve a estar habilitado.`); }
-        _pushInhabilitadoSupabase(trabajadorId, false);
+    const cambiarHabilitacion = async (trabajadorId, inhabilitado) => {
+        const trabajador = await actualizarInhabilitacionTrabajador(trabajadorId, inhabilitado);
+        mostrarToastTrabajadores(inhabilitado
+            ? `${trabajador.nombre} fue marcado como inhabilitado.`
+            : `${trabajador.nombre} vuelve a estar habilitado.`);
     };
 
     const eliminarTrabajador = async (trabajadorId) => {
@@ -9755,23 +9807,22 @@ function renderTrabajadoresView() {
     document.querySelectorAll('[data-worker-delete]').forEach((button) => {
         button.addEventListener('click', () => eliminarTrabajador(button.dataset.workerDelete));
     });
-    document.querySelectorAll('[data-worker-inhabilitar]').forEach((button) => {
-        button.addEventListener('click', () => {
-            const id = button.dataset.workerInhabilitar;
-            const t = estado.trabajadores.find(x => x.id === id);
-            if (!t) return;
-            if (!confirm(`¿Inhabilitar a ${t.nombre}?\nDejará de aparecer al asignar líder o técnicos hasta que lo vuelvas a habilitar (Vacaciones, licencia, ausencia prolongada, etc.).`)) return;
-            inhabilitarTrabajador(id);
-            renderTrabajadoresView();
+    for (const [selector, datasetKey, valor] of [
+        ['[data-worker-inhabilitar]', 'workerInhabilitar', true],
+        ['[data-worker-rehabilitar]', 'workerRehabilitar', false]
+    ]) {
+        document.querySelectorAll(selector).forEach(button => {
+            button.addEventListener('click', async () => {
+                button.disabled = true;
+                try {
+                    await cambiarHabilitacion(button.dataset[datasetKey], valor);
+                    renderTrabajadoresView();
+                } catch (error) {
+                    mostrarToastTrabajadores(error.message || 'No se pudo cambiar la habilitación.', 'danger');
+                } finally { button.disabled = false; }
+            });
         });
-    });
-    document.querySelectorAll('[data-worker-rehabilitar]').forEach((button) => {
-        button.addEventListener('click', () => {
-            const id = button.dataset.workerRehabilitar;
-            rehabilitarTrabajador(id);
-            renderTrabajadoresView();
-        });
-    });
+    }
 }
 
 async function renderMisHorasView() {
@@ -10578,13 +10629,13 @@ function injectPlanifyEnhancementStyles() {
 .planify-ficha-tab-btn.active{background:#fff7ed;color:#9a3412;box-shadow:inset 0 0 0 1px #fed7aa}
 .planify-ficha-body{flex:0 0 auto;overflow:visible;padding:1.2rem;background:#f8fafc}
 .planify-ficha-grid{display:grid;grid-template-columns:minmax(0,2.2fr) minmax(280px,.78fr);gap:1rem}
-.planify-ficha-stack{display:grid;gap:1rem}
+.planify-ficha-stack{display:grid;align-content:start;gap:1rem}
 .planify-ficha-card{background:#fff;border:1px solid #e5e7eb;border-radius:18px;padding:1rem;box-shadow:0 12px 28px rgba(15,23,42,.04)}
 .planify-ficha-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:.8rem;margin-bottom:.85rem}
 .planify-ficha-card-head h3{margin:0;font-size:1rem;font-weight:800;color:#0f172a}
 .planify-ficha-card-head span{font-size:.8rem;color:#64748b;line-height:1.45}
-.planify-ficha-subgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem;margin-bottom:.9rem}
-.planify-ficha-mini{padding:.82rem .85rem;border-radius:16px;background:#f8fafc;border:1px solid #e2e8f0}
+.planify-ficha-subgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));align-content:start;gap:.6rem;margin-bottom:0}
+.planify-ficha-mini{padding:.6rem .7rem;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0}
 .planify-ficha-mini.is-normal{background:linear-gradient(135deg,rgba(236,253,245,.88),#fff);border-color:rgba(16,185,129,.18)}
 .planify-ficha-mini.is-watch{background:linear-gradient(135deg,rgba(255,247,237,.92),#fff);border-color:rgba(245,158,11,.2)}
 .planify-ficha-mini.is-critical{background:linear-gradient(135deg,rgba(254,242,242,.95),#fff);border-color:rgba(239,68,68,.2)}
@@ -11625,7 +11676,7 @@ function renderControlView() {
 function renderDashboardView() {
     setTimeout(() => autoCerrarTareasVibracionConRutasCerradas({ refrescar: true }), 0);
     // Todos los trabajadores son asignables — los ocupados/sin check-in van automáticamente a cola
-    const trabajadoresValidados = estado.trabajadores;
+    const trabajadoresValidados = estado.trabajadores.filter(t => !trabajadorEstaInhabilitado(t));
     // Incluye activas + en cola (programada_semana con personal ya asignado)
     const tareasDiarias = _tareasDiariasOrdenadas();
     // Calcular posición en cola para cada tarea
@@ -13738,7 +13789,7 @@ window.abrirBulkAsignarSemanal = function(ids) {
     document.getElementById('modal-bulk-asignar')?.remove();
 
     const trabajadoresActivos = (estado.trabajadores || [])
-        .filter(t => t.activo !== false)
+        .filter(t => t.activo !== false && !trabajadorEstaInhabilitado(t))
         .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
 
     // Resumen de unidades/tipos para que el planificador vea qué está agrupando
@@ -14116,7 +14167,7 @@ function _abrirModalIniciar(id, cambiarADashboard) {
 
     // ── LÍDER Y AYUDANTES ─────────────────────────────────────────────────────
     const inhabilitadosSetModal = obtenerTrabajadoresInhabilitados();
-    const todos = estado.trabajadores.filter(t => t.disponible && !inhabilitadosSetModal.has(t.id));
+    const todos = estado.trabajadores.filter(t => !trabajadorEstaInhabilitado(t));
     const tareasActivas = estado.tareas.filter(t => t.estadoTarea === 'en_curso');
     const idsEnTarea = new Set(tareasActivas.flatMap(t =>
         [t.liderId, ...(t.ayudantesIds || [])].filter(Boolean)
@@ -14295,8 +14346,10 @@ function migrarEjecucionesOrdenComponentes() {
         porRuta.get(rutaIdx).push(eqIdx);
     });
     const todas = getRutasEjecuciones();
-    porRuta.forEach((eqIdxs, rutaIdx) => {
-        const ej = todas[rutaIdx];
+    getTodasEjecucionesRutas().forEach(ej => {
+        const rutaIdx = ej.rutaIdx;
+        const eqIdxs = porRuta.get(rutaIdx);
+        if (!eqIdxs) return;
         const marca = ej?.observaciones?.[RUTAS_MARCA_ORDEN];
         if (!ej || marca === RUTAS_MARCA_ORDEN_VALOR) return;
         // 'motor-primero' = ya se invirtieron las claves, solo falta renumerar
@@ -14346,7 +14399,7 @@ function migrarEjecucionPuertoEquipoDuplicado() {
     const rutaIdx = RUTAS_VIBRACION_SEED.findIndex(r => /CONDICIONES\s+PUERTO/i.test(String(r?.nombre || '')));
     if (rutaIdx < 0) return;
     const todas = getRutasEjecuciones();
-    const ej = todas[rutaIdx];
+    getEjecucionesDeRuta(rutaIdx).forEach(ej => {
     if (!ej || ej.observaciones?.[RUTAS_MARCA_PUERTO_DUP] === 'ok') return;
     ['componentesEstado', 'componentesAt', 'mediciones', 'observaciones'].forEach(nombreMapa => {
         const mapa = ej[nombreMapa];
@@ -14365,6 +14418,7 @@ function migrarEjecucionPuertoEquipoDuplicado() {
     ej.observaciones[RUTAS_MARCA_PUERTO_DUP] = 'ok';
     setEjecucionActiva(rutaIdx, ej);
     console.log(`[rutas] ejecución de la ruta #${rutaIdx}: avance corrido tras eliminar la elevación duplicada`);
+    });
 }
 // Las llamadas iniciales van más abajo: necesitan las constantes de la ruta de
 // Requerimientos, que se declaran después de este bloque.
@@ -14438,46 +14492,77 @@ const vistaRutasEstado = {
 
 // ── Persistencia localStorage ─────────────────────────────────────────────
 const RUTAS_EJECUCIONES_KEY = 'planify_rutas_ejecuciones';
-function getRutasEjecuciones() {
-    try {
-        const raw = localStorage.getItem(RUTAS_EJECUCIONES_KEY);
-        return raw ? JSON.parse(raw) : {};
-    } catch (e) { return {}; }
-}
+function getRutasEjecuciones() { return window.RouteExecutionStore.projection(); }
+function hidratarEjecucionDiaria(ej) { return window.VibDailyCore ? window.VibDailyCore.hydrate(ej, id => window.RouteExecutionStore.get(id)) : ej; }
+function getTodasEjecucionesRutas() { return window.RouteExecutionStore.all().map(hidratarEjecucionDiaria); }
+function getEjecucionesDeRuta(idx) { return window.RouteExecutionStore.list(idx).map(hidratarEjecucionDiaria); }
 function saveRutasEjecuciones(data) {
-    try { localStorage.setItem(RUTAS_EJECUCIONES_KEY, JSON.stringify(data)); }
-    catch (e) { /* noop */ }
+    Object.entries(data).forEach(([idx, ej]) => { if (ej) window.RouteExecutionStore.put(idx, ej, { dirty: false }); });
 }
-function getEjecucionActiva(rutaIdx) {
-    const all = getRutasEjecuciones();
-    return all[rutaIdx] || null;
+function getEjecucionActiva(rutaIdx, id = null) {
+    const ej = id ? window.RouteExecutionStore.get(id) : window.RouteExecutionStore.selected(rutaIdx);
+    return ej && ej.rutaIdx === Number(rutaIdx) ? hidratarEjecucionDiaria(ej) : null;
 }
 function setEjecucionActiva(rutaIdx, ejecucion, opts = {}) {
-    if (ejecucion && esRutaRequerimientos(rutaIdx)) {
-        normalizarEjecucionRequerimientos(ejecucion);
+    if (ejecucion && !opts.skipLinks && window.VibDailyCore) {
+        const previous = ejecucion.__dailyBaseline || hidratarEjecucionDiaria(window.RouteExecutionStore.get(ejecucion.id));
+        for (const linked of window.VibDailyCore.changes(ejecucion, previous, id => window.RouteExecutionStore.get(id))) {
+            setEjecucionActiva(linked.rutaIdx, linked, { skipLinks: true });
+        }
     }
-    const all = getRutasEjecuciones();
-    if (ejecucion === null) delete all[rutaIdx];
-    else all[rutaIdx] = ejecucion;
-    saveRutasEjecuciones(all);
-    // Empujamos al backend en segundo plano: si falla, queda guardado local
-    // y el próximo set lo reintentará. No bloqueamos la UI. El caller puede
-    // pedir skipPush=true para hacer él mismo un await externo.
-    if (ejecucion && window.supabaseClient && !opts.skipPush) {
-        _pushEjecucionASupabase(rutaIdx, ejecucion).catch(err => {
-            console.warn('[rutas] sync supabase falló:', err?.message || err);
+    if (ejecucion && esRutaRequerimientos(rutaIdx)) normalizarEjecucionRequerimientos(ejecucion);
+    if (ejecucion === null) {
+        const id = opts.id || getEjecucionActiva(rutaIdx)?.id;
+        if (id) window.RouteExecutionStore.remove(id);
+        return;
+    }
+    const saved = window.RouteExecutionStore.put(rutaIdx, ejecucion, { choose: !!opts.choose });
+    Object.assign(ejecucion, saved);
+    if (!opts.skipLinks && Number(rutaIdx) !== -2 && window.VibDailyCore) {
+        // Keep a snapshot for daily plans even after their source route is closed.
+        window.RouteExecutionStore.list(-2).filter(e => window.VibDailyCore.links(e).some(l => l.id === saved.id)).forEach(e => {
+            setEjecucionActiva(-2, hidratarEjecucionDiaria(e), { skipLinks: true });
         });
     }
-    // Refrescar el badge del trabajador si está conectado (también lo verá
-    // sin abrir "Mis Rutas") — fire & forget.
-    if (estado.usuarioActual === 'trabajador') actualizarBadgeRutasTrabajador?.();
+    if (window.supabaseClient && !opts.skipPush) {
+        _pushEjecucionASupabase(rutaIdx, saved).catch(err => console.warn('[rutas] Pendiente de sincronizar:', err?.message || err));
+    }
+}
+function seleccionarEjecucionRuta(idx, id) {
+    return window.RouteExecutionStore.select(idx, id);
+}
+window.rutasSeleccionarEjecucion = function(idx, id) {
+    if (!seleccionarEjecucionRuta(idx, id)) return;
+    renderRutasView();
+};
+function htmlEjecucionesRuta(idx, ej, isAdmin) {
+    const lista = getEjecucionesDeRuta(idx);
+    if (!lista.length) return '';
+    return `<section class="panel rutas-ot-panel"><div class="rutas-ot-heading"><div><h2>Ejecuciones abiertas <span>${lista.length}</span></h2><p>${window.PlanifyVibDiaria?.isPlan(idx) ? 'Cada jornada conserva sus equipos y mediciones por separado.' : 'Cada OT conserva su avance. Puedes trabajar en cualquiera sin cerrar las otras.'}</p></div>${isAdmin ? `<button type="button" class="btn btn-primary" onclick="window.rutasIniciarEjecucion(${idx})"><i class="fa-solid fa-plus"></i> ${window.PlanifyVibDiaria?.isPlan(idx) ? 'Nueva planificación' : 'Abrir otra OT'}</button>` : ''}</div><div class="rutas-ot-list">${lista.map(item => {
+        const c = rutasContarComponentes(idx, item);
+        const pct = c.total ? Math.round(c.listos / c.total * 100) : 0;
+        return `<button type="button" class="rutas-ot-option ${item.id === ej?.id ? 'is-selected' : ''}" aria-pressed="${item.id === ej?.id}" onclick="window.rutasSeleccionarEjecucion(${idx}, '${item.id}')"><strong>${window.PlanifyVibDiaria?.isPlan(idx) ? escapeHtml(window.PlanifyVibDiaria.title(item)) : `OT ${escapeHtml(item.ot || 'Sin asignar')}`}</strong><span>${pct}% · ${c.listos}/${c.total} componentes</span><small>${escapeHtml((item.tecnicosNombres?.length ? item.tecnicosNombres : [item.liderNombre,item.ayudanteNombre]).filter(Boolean).join(', '))}</small>${item._dirty ? '<small>Sincronización pendiente</small>' : ''}</button>`;
+    }).join('')}</div></section>`;
 }
 
 // ── Sync con Supabase: tabla rutas_ejecuciones ───────────────────────────
 // La ejecución persiste con un `id` (UUID de Supabase). El localStorage es
-// cache: una sola activa por ruta_idx. Si el `id` ya existe → UPDATE, si no
-// → INSERT y guardamos el id en el cache local para futuros updates.
+// cache: cada ejecución tiene su propio UUID y selección por pestaña.
 async function _pushEjecucionASupabase(rutaIdx, ej) {
+    if (!ej?.id) return;
+    if (!navigator.onLine || !window.supabaseClient) throw new Error('Sin conexión: el avance queda pendiente de sincronizar.');
+    // Serializar por UUID: una OT no bloquea a otra y un envío antiguo no pisa al nuevo.
+    const queues = window._rutasPushQueues || (window._rutasPushQueues = new Map());
+    const previous = queues.get(ej.id) || Promise.resolve();
+    const next = previous.catch(() => {}).then(async () => {
+        const latest = window.RouteExecutionStore.get(ej.id);
+        if (!latest || !latest._dirty) return;
+        await _enviarEjecucionASupabase(rutaIdx, latest);
+    });
+    queues.set(ej.id, next);
+    try { await next; } finally { if (queues.get(ej.id) === next) queues.delete(ej.id); }
+}
+async function _enviarEjecucionASupabase(rutaIdx, ej) {
     if (!window.supabaseClient || !ej) return;
     if (esRutaRequerimientos(rutaIdx)) normalizarEjecucionRequerimientos(ej);
     const r = obtenerRutaVibracion(rutaIdx, ej);
@@ -14521,50 +14606,48 @@ async function _pushEjecucionASupabase(rutaIdx, ej) {
     const _esErrorColumnaFaltante = (err) =>
         err && (err.code === '42703' || /column .*(tecnicos_ids|tecnicos_nombres).* does not exist/i.test(err.message || ''));
 
-    if (ej.id) {
-        let { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id);
+    if (!ej._new) {
+        let { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id).eq('estado', 'activa').select('id').single();
         if (error && _esErrorColumnaFaltante(error)) {
             console.warn('[rutas] tecnicos_ids no existe todavía — push sin ellos. Corre el SQL de migración.');
-            ({ error } = await window.supabaseClient.from('rutas_ejecuciones').update(_stripTecnicos(payload)).eq('id', ej.id));
+            ({ error } = await window.supabaseClient.from('rutas_ejecuciones').update(_stripTecnicos(payload)).eq('id', ej.id).eq('estado', 'activa').select('id').single());
         }
         if (error) throw error;
     } else {
-        let { data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([payload]).select('id').single();
+        let { data, error } = await window.supabaseClient.from('rutas_ejecuciones').upsert([{ ...payload, id: ej.id }], { onConflict: 'id' }).select('id').single();
         if (error && _esErrorColumnaFaltante(error)) {
             console.warn('[rutas] tecnicos_ids no existe todavía — insert sin ellos. Corre el SQL de migración.');
-            ({ data, error } = await window.supabaseClient.from('rutas_ejecuciones').insert([_stripTecnicos(payload)]).select('id').single());
+            ({ data, error } = await window.supabaseClient.from('rutas_ejecuciones').upsert([{ ..._stripTecnicos(payload), id: ej.id }], { onConflict: 'id' }).select('id').single());
         }
         if (error) throw error;
-        if (data?.id) {
-            const all = getRutasEjecuciones();
-            if (all[rutaIdx]) {
-                all[rutaIdx].id = data.id;
-                saveRutasEjecuciones(all);
-            }
-        }
     }
+    window.RouteExecutionStore.acknowledged(ej.id, ej._revision);
 }
 
 // Trae todas las ejecuciones ACTIVAS desde Supabase y refresca el cache local.
 // Se llama al boot y al entrar a vistas de Rutas o "Mis Rutas" del trabajador.
 async function refrescarRutasEjecucionesDesdeSupabase() {
-    if (!window.supabaseClient) return getRutasEjecuciones();
+    if (window._rutasRefreshPromise) return window._rutasRefreshPromise;
+    const pending = _refrescarTodasEjecuciones();
+    window._rutasRefreshPromise = pending;
+    try { return await pending; } finally { if (window._rutasRefreshPromise === pending) window._rutasRefreshPromise = null; }
+}
+async function _refrescarTodasEjecuciones() {
+    if (!window.supabaseClient || !navigator.onLine) return getRutasEjecuciones();
     try {
-        const { data, error } = await window.supabaseClient
-            .from('rutas_ejecuciones')
-            .select('*')
-            .eq('estado', 'activa')
-            .order('created_at', { ascending: false });
-        if (error) {
-            // 42P01 = relation does not exist (tabla no creada todavía)
-            if (error.code === '42P01') console.warn('[rutas] tabla rutas_ejecuciones no existe — corre el SQL');
-            else console.warn('[rutas] refresh falló:', error.message);
-            return getRutasEjecuciones();
+        await Promise.allSettled(getTodasEjecucionesRutas().filter(e => e._dirty).map(e => _pushEjecucionASupabase(e.rutaIdx, e)));
+        const snapshot = Object.fromEntries(getTodasEjecucionesRutas().map(e => [e.id, e._revision]));
+        const data = [];
+        for (let offset = 0; ; offset += 500) {
+            const { data: page, error } = await window.supabaseClient.from('rutas_ejecuciones')
+                .select('*').eq('estado', 'activa').order('id').range(offset, offset + 499);
+            if (error) throw error;
+            data.push(...(page || []));
+            if (!page || page.length < 500) break;
         }
-        // Una activa por ruta_idx (la más reciente). Mapeamos a la forma local.
-        const porIdx = {};
+        // Conservar todas las OT, sin colapsarlas por ruta.
+        const remotas = [];
         for (const row of data || []) {
-            if (porIdx[row.ruta_idx]) continue; // ya tenemos la más reciente
             // Si la fila trae tecnicos_ids (formato nuevo), lo usamos.
             // Si no, lo armamos desde lider/ayudante (compat retro).
             const tecnicosIds = Array.isArray(row.tecnicos_ids) && row.tecnicos_ids.length
@@ -14574,7 +14657,8 @@ async function refrescarRutasEjecucionesDesdeSupabase() {
                 ? row.tecnicos_nombres.filter(Boolean)
                 : [row.lider_nombre, row.ayudante_nombre].filter(Boolean);
 
-            porIdx[row.ruta_idx] = {
+            const mapped = {
+                rutaIdx: row.ruta_idx,
                 id: row.id,
                 ot: row.ot,
                 fechaInicio: row.fecha_inicio,
@@ -14591,10 +14675,11 @@ async function refrescarRutasEjecucionesDesdeSupabase() {
                 estado: row.estado
             };
             if (esRutaRequerimientos(row.ruta_idx)) {
-                normalizarEjecucionRequerimientos(porIdx[row.ruta_idx]);
+                normalizarEjecucionRequerimientos(mapped);
             }
+            remotas.push(mapped);
         }
-        saveRutasEjecuciones(porIdx);
+        window.RouteExecutionStore.merge(remotas, snapshot);
         // Lo que baja de Supabase puede venir con el orden viejo de componentes
         // (Bomba antes que Motor); lo dejamos alineado con el seed actual.
         migrarEjecucionesOrdenComponentes();
@@ -15022,7 +15107,7 @@ function labelFrecuencia(frec) {
 }
 
 function esRutaRequerimientos(idx, ruta = null) {
-    return Number(idx) === RUTA_REQUERIMIENTOS_IDX || ruta?.esRequerimientos === true;
+    return Number(idx) === RUTA_REQUERIMIENTOS_IDX || window.PlanifyVibDiaria?.is(idx) || ruta?.esRequerimientos === true;
 }
 
 function _reqEquiposDesdeFuente(fuente) {
@@ -15036,6 +15121,8 @@ function _reqEquiposDesdeFuente(fuente) {
 function _normalizarEquipoRequerimiento(eq) {
     const componentes = (Array.isArray(eq?.componentes) ? eq.componentes : [])
         .map((comp, idx) => ({
+            disponible: comp?.disponible !== false,
+            observacionOperaciones: comp?.observacionOperaciones || '',
             nombre: comp?.nombre || comp?.componente || `Componente ${idx + 1}`,
             ubicacion_tecnica: comp?.ubicacion_tecnica || comp?.kks || '',
             equipo_id: comp?.equipo_id || comp?.id || null,
@@ -15043,6 +15130,10 @@ function _normalizarEquipoRequerimiento(eq) {
         }));
     return {
         id: eq?.id || crypto.randomUUID(),
+        ot: eq?.ot || '',
+        enlace: eq?.enlace || null,
+        rutaSugerida: eq?.rutaSugerida ?? null,
+        entregaFuente: eq?.entregaFuente || '',
         nombre: eq?.nombre || eq?.activo || 'Equipo requerido',
         unidad: eq?.unidad || eq?.ubicacion || 'REQ',
         ubicacion_tecnica: eq?.ubicacion_tecnica || eq?.kks || '',
@@ -15068,7 +15159,7 @@ function normalizarEjecucionRequerimientos(ej) {
 function obtenerRutaVibracion(idx, fuente = null) {
     if (esRutaRequerimientos(idx)) {
         return {
-            ...RUTA_REQUERIMIENTOS_BASE,
+            ...(window.PlanifyVibDiaria?.definition(idx) || RUTA_REQUERIMIENTOS_BASE),
             equipos: _normalizarEquiposRequerimiento(_reqEquiposDesdeFuente(fuente))
         };
     }
@@ -15096,18 +15187,19 @@ function catalogoRutasVibracion() {
 // La idx del detalle se persiste en localStorage para sobrevivir un F5.
 let _trabajadorRutaIdxActiva = null;
 const _KEY_TRAB_RUTA_IDX = 'planify_trab_ruta_idx';
-try { const v = localStorage.getItem(_KEY_TRAB_RUTA_IDX); if (v !== null && v !== '') _trabajadorRutaIdxActiva = Number(v); } catch (e) {}
+try { const v = sessionStorage.getItem(_KEY_TRAB_RUTA_IDX); if (v !== null && v !== '') _trabajadorRutaIdxActiva = Number(v); } catch (e) {}
 
-window.abrirTrabajadorRutaDetalle = function(rutaIdx) {
+window.abrirTrabajadorRutaDetalle = function(rutaIdx, ejecucionId) {
+    if (ejecucionId && !seleccionarEjecucionRuta(rutaIdx, ejecucionId)) return;
     _trabajadorRutaIdxActiva = Number(rutaIdx);
-    try { localStorage.setItem(_KEY_TRAB_RUTA_IDX, String(rutaIdx)); } catch (e) {}
+    try { sessionStorage.setItem(_KEY_TRAB_RUTA_IDX, String(rutaIdx)); } catch (e) {}
     vistaActual = 'trabajador-ruta-detalle';
     renderizarVistaActual();
 };
 
 window.volverAMisRutas = function() {
     _trabajadorRutaIdxActiva = null;
-    try { localStorage.removeItem(_KEY_TRAB_RUTA_IDX); } catch (e) {}
+    try { sessionStorage.removeItem(_KEY_TRAB_RUTA_IDX); } catch (e) {}
     vistaActual = 'trabajador-rutas';
     renderizarVistaActual();
 };
@@ -15155,8 +15247,8 @@ function renderTrabajadorRutasView() {
         const esTecnico = (ej) =>
             (Array.isArray(ej.tecnicosIds) && ej.tecnicosIds.includes(trabajadorId)) ||
             ej.liderId === trabajadorId || ej.ayudanteId === trabajadorId;
-        const misRutas = Object.entries(ejecuciones || {})
-            .map(([idxStr, ej]) => ({ idx: Number(idxStr), ej }))
+        const misRutas = getTodasEjecucionesRutas()
+            .map(ej => ({ idx: ej.rutaIdx, ej }))
             .filter(({ ej }) =>
                 ej && ej.estado !== 'cerrada' && esTecnico(ej)
             );
@@ -15198,7 +15290,7 @@ function renderTrabajadorRutasView() {
             const unidadColor = colorUnidad(r.unidad);
             const pctColor = pct >= 100 ? '#16a34a' : pct >= 50 ? unidadColor : '#475569';
             return `
-                <article class="trab-ruta-card" data-trab-ruta-idx="${idx}" style="background:#fff; border:1px solid #e5e7eb; border-left:4px solid ${unidadColor}; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.6rem; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.04);">
+                <article class="trab-ruta-card" data-trab-ruta-idx="${idx}" data-ejecucion-id="${ej.id}" style="background:#fff; border:1px solid #e5e7eb; border-left:4px solid ${unidadColor}; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.6rem; cursor:pointer; box-shadow:0 2px 8px rgba(15,23,42,0.04);">
                     <div style="display:flex; align-items:center; gap:0.7rem; margin-bottom:0.55rem;">
                         <span style="background:${unidadColor}; color:#fff; font-size:0.68rem; font-weight:800; padding:0.18rem 0.5rem; border-radius:6px; flex-shrink:0;">${escapeHtml(r.unidad || '—')}</span>
                         <h3 style="margin:0; font-size:0.95rem; color:#0f172a; line-height:1.25; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.nombre)}</h3>
@@ -15209,7 +15301,7 @@ function renderTrabajadorRutasView() {
                         <div style="height:100%; width:${stats.total ? (stats.noEjec/stats.total)*100 : 0}%; background:#dc2626;"></div>
                     </div>
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; color:#64748b;">
-                        <span><i class="fa-solid fa-hashtag" style="color:#94a3b8;"></i> ${escapeHtml(ej.ot || '—')}${compañero ? ` · con ${escapeHtml(compañero)}` : ''}</span>
+                        <span><i class="fa-solid fa-hashtag" style="color:#94a3b8;"></i> ${window.PlanifyVibDiaria?.isPlan(ej.rutaIdx) ? escapeHtml(window.PlanifyVibDiaria.title(ej)) : escapeHtml(ej.ot || '—')}${compañero ? ` · con ${escapeHtml(compañero)}` : ''}</span>
                         <span style="color:#FF6900; font-weight:700;">${stats.listos}/${stats.total} <i class="fa-solid fa-chevron-right" style="font-size:0.65rem;"></i></span>
                     </div>
                 </article>
@@ -15219,7 +15311,7 @@ function renderTrabajadorRutasView() {
         cont.querySelectorAll('[data-trab-ruta-idx]').forEach(el => {
             el.addEventListener('click', () => {
                 const idx = Number(el.dataset.trabRutaIdx);
-                window.abrirTrabajadorRutaDetalle(idx);
+                window.abrirTrabajadorRutaDetalle(idx, el.dataset.ejecucionId);
             });
         });
 
@@ -15329,20 +15421,37 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
     document.getElementById('modal-captura-medicion-movil')?.remove();
     const ej = getEjecucionActiva(rutaIdx);
     if (!ej) return;
+    if (Number(rutaIdx) === -2) {
+        const dailyEquipment = obtenerRutaVibracion(rutaIdx, ej)?.equipos?.[eqIdx];
+        if (dailyEquipment?.componentes?.[compIdx]?.disponible === false || window.VibDailyImport?.closedLink(dailyEquipment)) return;
+    }
     const key = `${eqIdx}.${compIdx}`;
     const prev = ej.mediciones?.[key] || {};
 
     // Puntos de temperatura del componente. Normalmente 2 por componente,
     // numerados de forma global dentro del equipo (comp 0 → 1,2 · comp 1 → 3,4).
     // Algunos equipos (BBA Agua Alim. U1/U2) tienen un componente con 4 puntos.
-    const eqActual = (typeof RUTAS_VIBRACION_SEED !== 'undefined')
-        ? RUTAS_VIBRACION_SEED[rutaIdx]?.equipos?.[eqIdx] : null;
-    const puntosTemp = puntosTempDeComponente(eqActual, compIdx);
+    const eqActual = obtenerRutaVibracion(rutaIdx, ej)?.equipos?.[eqIdx] || null;
+    let captureRouteIdx = rutaIdx, captureEqIdx = eqIdx, captureCompIdx = compIdx, captureEquipment = eqActual;
+    if (Number(rutaIdx) === -2 && window.VibDailyCore) {
+        const originIdx = eqActual?.enlace?.rutaIdx ?? eqActual?.rutaSugerida;
+        if (originIdx != null) {
+            const origin = eqActual.enlace ? window.RouteExecutionStore.get(eqActual.enlace.ejecucionId) : null;
+            const route = obtenerRutaVibracion(originIdx, origin);
+            try {
+                const keys = window.VibDailyCore.mapping(eqActual, route);
+                [captureEqIdx, captureCompIdx] = keys[compIdx].split('.').map(Number);
+                captureRouteIdx = originIdx;
+                captureEquipment = route.equipos[captureEqIdx];
+            } catch (_) { /* Ambiguous matches keep the daily component context. */ }
+        }
+    }
+    const puntosTemp = puntosTempDeComponente(captureEquipment, captureCompIdx);
 
     // Apertura de lampos: solo en rutas de ventiladores. Es opcional y
     // compartido a nivel de equipo (cualquier componente del mismo equipo
     // muestra el mismo valor preview).
-    const mostrarApertura = rutaEsDeVentiladores(rutaIdx);
+    const mostrarApertura = rutaEsDeVentiladores(captureRouteIdx);
     let prevApertura = '';
     if (mostrarApertura && ej.mediciones) {
         if (prev.apertura) prevApertura = String(prev.apertura);
@@ -15361,7 +15470,7 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
     // Presiones BBA Agua Alimentación: 4 valores opcionales por equipo
     // (interna, balance, salida, succión). Mismo patrón de prefill que
     // apertura — se sincronizan entre componentes del mismo equipo.
-    const mostrarPresiones = equipoEsBbaAguaAlim(rutaIdx, eqIdx);
+    const mostrarPresiones = equipoEsBbaAguaAlim(captureRouteIdx, captureEqIdx);
     let prevPresiones = { int: '', balance: '', salida: '', succion: '' };
     if (mostrarPresiones && ej.mediciones) {
         const fuente = (prev.presiones && typeof prev.presiones === 'object') ? prev.presiones : null;
@@ -15648,7 +15757,7 @@ window.abrirCapturaMedicionMovil = function(rutaIdx, eqIdx, compIdx, compNombre,
         }
         const presionesTodasVacias = presionesValor && !presionesValor.int && !presionesValor.balance && !presionesValor.salida && !presionesValor.succion;
 
-        const ejCur = getEjecucionActiva(rutaIdx);
+        const ejCur = getEjecucionActiva(rutaIdx, ej.id);
         if (!ejCur) return cerrar(false);
         ejCur.mediciones = ejCur.mediciones || {};
         // Si hay datos previos para esa key, mergeamos para no perder lo no editado
@@ -15756,7 +15865,7 @@ function renderTrabajadorRutaDetalle() {
     // Equipos expandidos: arrancamos con el PRIMERO con componentes pendientes
     // y mantenemos el estado del usuario en localStorage por ruta. Esto reduce
     // el scroll a una pantalla y el trabajador trabaja un equipo a la vez.
-    const EXP_KEY = `planify_trab_eq_exp_${idx}`;
+    const EXP_KEY = `planify_trab_eq_exp_${idx}_${ej.id}`;
     let expandidos = new Set();
     try {
         const raw = localStorage.getItem(EXP_KEY);
@@ -15776,7 +15885,7 @@ function renderTrabajadorRutaDetalle() {
 
     // Helper que devuelve SIEMPRE la ejecución más reciente del cache local
     // (no se queda con el snapshot del render inicial).
-    const ejFresca = () => getEjecucionActiva(idx) || ej;
+    const ejFresca = () => getEjecucionActiva(idx, ej.id) || ej;
 
     // ── HEADER renderer ──────────────────────────────────────────────────
     const renderEquipoHeader = (eq, eqIdx) => {
@@ -15784,7 +15893,7 @@ function renderTrabajadorRutaDetalle() {
         const comps = eq.componentes || [];
         const listos = comps.filter((_, ci) => ejActual.componentesEstado?.[`${eqIdx}.${ci}`] === 'listo').length;
         const noEjec = comps.filter((_, ci) => ejActual.componentesEstado?.[`${eqIdx}.${ci}`] === 'no-ejecutado').length;
-        const total = comps.length;
+        const total = comps.filter(c => Number(idx) !== -2 || c.disponible !== false).length;
         const completo = listos + noEjec === total && total > 0;
         const isOpen = expandidos.has(eqIdx);
         const pctEq = total ? Math.round((listos / total) * 100) : 0;
@@ -15815,7 +15924,10 @@ function renderTrabajadorRutaDetalle() {
         const comps = eq.componentes || [];
         return `
             <div class="trab-eq-body" style="border-top:1px solid #f1f5f9;">
+                ${window.VibDailyImport?.equipmentBadge(ejActual,eq,eqIdx) || ''}
                 ${comps.map((c, ci) => {
+                    if (Number(idx) === -2 && c.disponible === false) return window.VibDailyImport.unavailable(c);
+                    if (Number(idx) === -2 && window.VibDailyImport?.closedLink(eq)) return window.VibDailyImport.closedComponent(c,ejActual.mediciones?.[`${eqIdx}.${ci}`]);
                     const k = `${eqIdx}.${ci}`;
                     const st = ejActual.componentesEstado?.[k] || '';
                     const obs = ejActual.observaciones?.[k] || '';
@@ -15833,6 +15945,7 @@ function renderTrabajadorRutaDetalle() {
 
                         <div style="font-weight:600; color:#0f172a; font-size:0.88rem; line-height:1.3;">
                             ${escapeHtml(c.nombre || '—')}
+                            ${c.observacionOperaciones ? `<p class="vib-operations-note">Operaciones: ${escapeHtml(c.observacionOperaciones)}</p>` : ''}
                         </div>
                         ${c.ubicacion_tecnica ? `<div style="font-family:ui-monospace,monospace; font-size:0.68rem; color:#94a3b8; margin-top:0.1rem;">${escapeHtml(c.ubicacion_tecnica)}</div>` : ''}
 
@@ -15935,7 +16048,7 @@ function renderTrabajadorRutaDetalle() {
                     <div style="flex:1; min-width:0;">
                         <div style="display:flex; align-items:center; gap:0.4rem;">
                             <span style="background:${unidadColor}; color:#fff; font-size:0.62rem; font-weight:800; padding:0.12rem 0.4rem; border-radius:5px; flex-shrink:0;">${escapeHtml(r.unidad || '—')}</span>
-                            <span style="font-size:0.7rem; color:#64748b; flex-shrink:0;">OT ${escapeHtml(ej.ot || '—')}</span>
+                            <span style="font-size:0.7rem; color:#64748b; flex-shrink:0;">${window.PlanifyVibDiaria?.isPlan(ej.rutaIdx) ? escapeHtml(window.PlanifyVibDiaria.title(ej)) : `OT ${escapeHtml(ej.ot || '—')}`}</span>
                         </div>
                         <h1 style="margin:0.15rem 0 0; font-size:0.92rem; color:#0f172a; line-height:1.2; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(r.nombre)}</h1>
                     </div>
@@ -15983,7 +16096,7 @@ function renderTrabajadorRutaDetalle() {
 
     // ── Helpers locales para actualizar progreso sin re-render completo ────
     const refrescarProgreso = () => {
-        const ejActual = getEjecucionActiva(idx);
+        const ejActual = getEjecucionActiva(idx, ej.id);
         const st = rutasContarComponentes(idx, ejActual);
         const pctNuevo = st.total ? Math.round((st.listos / st.total) * 100) : 0;
         const bar1 = document.getElementById('trab-progress-bar-listos');
@@ -16022,7 +16135,8 @@ function renderTrabajadorRutaDetalle() {
     };
 
     const marcar = (eqIdx, compIdx, marca) => {
-        const ejCur = getEjecucionActiva(idx) || ej;
+        const ejCur = getEjecucionActiva(idx, ej.id);
+        if (!ejCur) return;
         ejCur.componentesEstado = ejCur.componentesEstado || {};
         ejCur.componentesAt = ejCur.componentesAt || {};
         const k = `${eqIdx}.${compIdx}`;
@@ -16101,7 +16215,7 @@ function renderTrabajadorRutaDetalle() {
             const obs = item.querySelector('.trab-comp-obs');
             if (obs) {
                 obs.addEventListener('blur', () => {
-                    const ejCur = getEjecucionActiva(idx);
+                    const ejCur = getEjecucionActiva(idx, ej.id);
                     if (!ejCur) return;
                     ejCur.observaciones = ejCur.observaciones || {};
                     const k = `${eqIdx}.${compIdx}`;
@@ -16137,7 +16251,7 @@ function renderTrabajadorRutaDetalle() {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sincronizando...';
         try {
-            const ejCur = getEjecucionActiva(idx);
+            const ejCur = getEjecucionActiva(idx, ej.id);
             await _pushEjecucionASupabase(idx, ejCur);
             btn.innerHTML = '<i class="fa-solid fa-check"></i> Sincronizado';
             setTimeout(() => {
@@ -16172,12 +16286,15 @@ function renderItoView() {
 
     const todasRutas = typeof RUTAS_VIBRACION_SEED !== 'undefined' ? RUTAS_VIBRACION_SEED : [];
     const totalRutas = todasRutas.length;
+    const ejecucionesTodas = getTodasEjecucionesRutas();
     // Para que el % cuadre con la vista del planificador (Control), solo
     // contamos componentes de rutas ACTIVAS. Si se incluyen las 45 rutas
     // del catálogo, el avance se diluye con rutas que ni se han iniciado.
     let totalCompTodas = 0, totalCompListos = 0, totalCompNoEjec = 0;
-    todasRutas.forEach((r, idx) => {
-        const ej = ejecuciones[idx];
+    ejecucionesTodas.forEach(ej => {
+        const idx = ej.rutaIdx;
+        const r = obtenerRutaVibracion(idx, ej);
+        if (!r) return;
         if (!ej) return;  // solo rutas con ejecución activa
         const cnt = rutasContarComponentes(idx, ej);
         totalCompTodas += cnt.total;
@@ -16185,14 +16302,16 @@ function renderItoView() {
         totalCompNoEjec += cnt.noEjec;
     });
     const pctGlobal = totalCompTodas ? Math.round((totalCompListos / totalCompTodas) * 100) : 0;
-    const rutasActivas = Object.keys(ejecuciones).length;
+    const rutasActivas = ejecucionesTodas.length;
     const rutasCerradas = historialRutas.length;
 
     // Avance por unidad — solo cuenta rutas con ejecución activa, mismo
     // criterio que el avance global para que los % cuadren entre vistas.
     const unidadesMap = new Map(); // unidad -> { total, listos, noEjec }
-    todasRutas.forEach((r, idx) => {
-        const ej = ejecuciones[idx];
+    ejecucionesTodas.forEach(ej => {
+        const idx = ej.rutaIdx;
+        const r = obtenerRutaVibracion(idx, ej);
+        if (!r) return;
         if (!ej) return;
         const u = r.unidad || 'Otros';
         if (!unidadesMap.has(u)) unidadesMap.set(u, { total: 0, listos: 0, noEjec: 0 });
@@ -16214,8 +16333,10 @@ function renderItoView() {
 
     // Avance por ruta (solo las que tienen ejecucion activa o ya cerrada)
     const rutasAvance = [];
-    todasRutas.forEach((r, idx) => {
-        const ej = ejecuciones[idx];
+    ejecucionesTodas.forEach(ej => {
+        const idx = ej.rutaIdx;
+        const r = obtenerRutaVibracion(idx, ej);
+        if (!r) return;
         const cnt = rutasContarComponentes(idx, ej);
         const comps = cnt.total;
         const listos = cnt.listos, noEjec = cnt.noEjec;
@@ -16386,16 +16507,21 @@ function renderRutasView() {
     // Guardamos un flag para que el re-render no dispare otro refresh.
     if (window.supabaseClient && !_rutasRefrescoEnVuelo) {
         _rutasRefrescoEnVuelo = true;
-        const cacheAntes = JSON.stringify(getRutasEjecuciones());
+        const cacheAntes = JSON.stringify(getTodasEjecucionesRutas());
         refrescarRutasEjecucionesDesdeSupabase().then(nuevas => {
             _rutasRefrescoEnVuelo = false;
-            if (vistaActual === 'rutas' && JSON.stringify(nuevas) !== cacheAntes) {
+            if (vistaActual === 'rutas' && JSON.stringify(getTodasEjecucionesRutas()) !== cacheAntes) {
                 renderRutasView();
             }
         }).catch(() => { _rutasRefrescoEnVuelo = false; });
     }
     if (!vistaRutasEstado.seccionActiva) {
         renderVibracionesHub();
+        return;
+    }
+
+    if (vistaRutasEstado.seccionActiva === 'diaria' && vistaRutasEstado.rutaActivaIdx === null) {
+        window.PlanifyVibDiaria.render();
         return;
     }
 
@@ -16419,7 +16545,7 @@ function renderVibracionesHub() {
         const r = esRutaRequerimientos(ruta.idx) ? obtenerRutaVibracion(ruta.idx, ejecuciones[ruta.idx]) : ruta;
         return acc + ((r.equipos || []).length);
     }, 0);
-    const enCurso = Object.keys(ejecuciones).length;
+    const enCurso = getTodasEjecucionesRutas().filter(e => !window.PlanifyVibDiaria?.is(e.rutaIdx)).length;
     let nFinalizadas = 0;
     try { nFinalizadas = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]').length; } catch (e) {}
 
@@ -16430,7 +16556,7 @@ function renderVibracionesHub() {
                     <div>
                         <div style="font-size:0.78rem; font-weight:800; color:#9a3412; text-transform:uppercase; letter-spacing:0.05em;">Programa predictivo</div>
                         <h1 style="margin:0.25rem 0 0.35rem 0; color:#0f172a;"><i class="fa-solid fa-wave-square" style="color:#FF6900;"></i> Vibraciones</h1>
-                        <p style="color:#64748b; margin:0;">Elige si quieres ejecutar rutas de medicion o revisar el historial de rutas finalizadas.</p>
+                        <p style="color:#64748b; margin:0;">Organiza rutas, mediciones diarias y trabajos adicionales, o consulta el historial.</p>
                     </div>
                     <div style="display:flex; gap:0.5rem; flex-wrap:wrap; align-items:flex-start;">
                         <span class="dashboard-hero-badge" style="background:#fff; border:1px solid rgba(0,0,0,0.06);"><i class="fa-solid fa-route" style="color:#FF6900;"></i> ${totalRutas} rutas</span>
@@ -16442,13 +16568,17 @@ function renderVibracionesHub() {
 
             ${htmlSelectorTecnicosModulo('vibraciones')}
 
-            <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:0.9rem;">
+            <section style="display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)); gap:0.9rem;">
                 <button type="button" onclick="window.vibracionesAbrir('rutas')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(249,115,22,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#fff7ed; color:#FF6900; margin-bottom:0.75rem;"><i class="fa-solid fa-route"></i></span>
                     <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Rutas VIB <span style="background:#ffedd5; color:#c2410c; font-size:0.74rem; font-weight:800; padding:0.1rem 0.5rem; border-radius:999px; margin-left:0.3rem;">${enCurso}</span></h2>
                     <p style="margin:0; color:#64748b; font-size:0.9rem;">Ejecuta rutas, marca equipos medidos y guarda puntos de medicion por parte del equipo.</p>
                 </button>
 
+                <button type="button" onclick="window.vibracionesAbrir('diaria')" class="panel vib-daily-option" style="text-align:left;cursor:pointer;padding:1.1rem;">
+                    <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
+                    <h2>VIB diaria</h2><p>Trabajos adicionales con OT y planificación de los equipos de cada jornada.</p><span>Organizar el día <b aria-hidden="true">→</b></span>
+                </button>
                 <button type="button" onclick="window.vibracionesAbrir('historial')" class="panel" style="text-align:left; cursor:pointer; padding:1.1rem; border:1px solid rgba(14,165,233,0.24); background:#fff; transition:transform 160ms, box-shadow 160ms;">
                     <span style="display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px; border-radius:12px; background:#eff6ff; color:#0ea5e9; margin-bottom:0.75rem;"><i class="fa-solid fa-chart-line"></i></span>
                     <h2 style="margin:0 0 0.35rem 0; color:#0f172a; font-size:1.08rem;">Historial de rutas <span style="background:#e0f2fe; color:#0369a1; font-size:0.74rem; font-weight:800; padding:0.1rem 0.5rem; border-radius:999px; margin-left:0.3rem;">${nFinalizadas}</span></h2>
@@ -17444,7 +17574,7 @@ function renderRutasLista() {
             if (vistaRutasEstado.filtroFrecuencia && r.frecuencia !== vistaRutasEstado.filtroFrecuencia) return false;
             if (vistaRutasEstado.busqueda) {
                 const q = vistaRutasEstado.busqueda.toLowerCase();
-                if (!textoBusquedaRuta(r).includes(q)) return false;
+                if (!(textoBusquedaRuta(r) + ' ' + getEjecucionesDeRuta(r.idx).map(e => e.ot).join(' ')).toLowerCase().includes(q)) return false;
             }
             return true;
         });
@@ -17454,7 +17584,7 @@ function renderRutasLista() {
         const ruta = esRutaRequerimientos(r.idx) ? obtenerRutaVibracion(r.idx, ejecuciones[r.idx]) : r;
         return acc + ((ruta.equipos || []).length);
     }, 0);
-    const enProgreso = Object.keys(ejecuciones).length;
+    const enProgreso = getTodasEjecucionesRutas().filter(e => !window.PlanifyVibDiaria?.is(e.rutaIdx)).length;
 
     const renderCard = (r) => {
         const ej = ejecuciones[r.idx];
@@ -17469,10 +17599,10 @@ function renderRutasLista() {
         const tieneEjecucion = !!ej;
 
         return `<article class="rutas-card" data-ruta-idx="${r.idx}"
-            data-ruta-search="${escapeHtml(textoBusquedaRuta(r))}"
+            data-ruta-search="${escapeHtml(textoBusquedaRuta(r) + " " + getEjecucionesDeRuta(r.idx).map(e => e.ot).join(" "))}"
             onclick="window.rutasAbrirDetalle(${r.idx})"
             style="cursor:pointer; background:#fff; border:1px solid #e5e7eb; border-radius:14px; padding:1rem 1.1rem; box-shadow:0 1px 3px rgba(15,23,42,0.04);">
-            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
+            <div class="rutas-ot-count">${getEjecucionesDeRuta(r.idx).length} OT abiertas</div><div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.45rem; flex-wrap:wrap;">
                 <span style="background:${color}; color:#fff; font-size:0.74rem; font-weight:800; padding:0.25rem 0.6rem; border-radius:999px;">${r.unidad}</span>
                 <span style="background:#f1f5f9; color:#475569; font-size:0.74rem; font-weight:600; padding:0.25rem 0.6rem; border-radius:999px;">${labelFrecuencia(r.frecuencia)}</span>
                 ${tieneEjecucion ? `<span style="background:#dbeafe; color:#1e40af; font-size:0.7rem; font-weight:700; padding:0.2rem 0.55rem; border-radius:999px;"><i class="fa-solid fa-circle-play"></i> En progreso</span>` : ''}
@@ -17484,7 +17614,7 @@ function renderRutasLista() {
             ${tieneEjecucion ? `
                 <div style="margin-top:0.45rem;">
                     <div style="display:flex; justify-content:space-between; font-size:0.74rem; color:#64748b; margin-bottom:0.2rem;">
-                        <span><i class="fa-solid fa-hashtag"></i> OT ${escapeHtml(ej.ot || '—')}</span>
+                        <span><i class="fa-solid fa-hashtag"></i> ${window.PlanifyVibDiaria?.isPlan(ej.rutaIdx) ? escapeHtml(window.PlanifyVibDiaria.title(ej)) : `OT ${escapeHtml(ej.ot || '—')}`}</span>
                         <span><strong style="color:${color};">${completados}/${total}</strong> (${pct}%)</span>
                     </div>
                     <div style="height:8px; background:#f1f5f9; border-radius:999px; overflow:hidden;">
@@ -17610,6 +17740,8 @@ function renderRutasDetalle(idx) {
     const color = colorUnidad(r.unidad);
 
     const renderComponente = (eq, eqIdx, comp, compIdx) => {
+        if (comp.disponible === false && Number(idx) === -2) return window.VibDailyImport.unavailable(comp);
+        if (Number(idx) === -2 && window.VibDailyImport?.closedLink(eq)) return window.VibDailyImport.closedComponent(comp,ej.mediciones?.[`${eqIdx}.${compIdx}`]);
         const k = rutasCompKey(eqIdx, compIdx);
         const est = estados[k];
         const done = est === 'listo';
@@ -17752,15 +17884,16 @@ function renderRutasDetalle(idx) {
             if (st === 'listo') listosEq++;
             else if (st === 'no-ejecutado') noEjecEq++;
         });
-        const totalEq = comps.length;
+        const totalEq = comps.filter(c => Number(idx) !== -2 || c.disponible !== false).length;
         const pendEq = totalEq - listosEq - noEjecEq;
         const equipoCompleto = listosEq === totalEq;
-        const sinTocar = listosEq === 0 && noEjecEq === 0;
+        const sinTocar = totalEq > 0 && listosEq === 0 && noEjecEq === 0 && !(Number(idx) === -2 && window.VibDailyImport?.closedLink(eq));
         return `<article class="ruta-equipo" style="border:1px solid ${equipoCompleto ? '#bbf7d0' : '#e5e7eb'}; background:#fff; border-radius:12px; padding:0.85rem 1rem; margin-bottom:0.7rem;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:0.6rem; flex-wrap:wrap; margin-bottom:0.5rem;">
                 <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; min-width:0;">
                     <i class="fa-solid fa-gears" style="color:#64748b;"></i>
                     <span style="font-weight:800; color:#0f172a; font-size:0.95rem;">${escapeHtml(eq.nombre)}</span>
+                    ${window.VibDailyImport?.equipmentBadge(ej,eq,eqIdx) || ''}
                     <span style="font-size:0.72rem; color:#64748b;">${totalEq} comp.</span>
                 </div>
                 ${ej ? `
@@ -17782,7 +17915,7 @@ function renderRutasDetalle(idx) {
                 <div style="height:100%; width:${totalEq ? (noEjecEq/totalEq)*100 : 0}%; background:#dc2626;"></div>
             </div>
             <div>
-                ${comps.map((c, ci) => renderComponente(eq, eqIdx, c, ci)).join('')}
+                ${comps.map((c, ci) => `${c.disponible !== false && c.observacionOperaciones ? `<p class="vib-operations-note">Operaciones: ${escapeHtml(c.observacionOperaciones)}</p>` : ''}${renderComponente(eq, eqIdx, c, ci)}`).join('')}
             </div>
         </article>`;
     };
@@ -17803,6 +17936,7 @@ function renderRutasDetalle(idx) {
                 <p style="color:#64748b; margin:0;">${total} equipo${total !== 1 ? 's' : ''} en esta ruta.</p>
             </section>
 
+            ${htmlEjecucionesRuta(idx, ej, isAdmin)}
             ${ej ? `
                 <section class="panel" style="margin-bottom:1.1rem; padding:1rem 1.1rem;">
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:0.7rem; flex-wrap:wrap; margin-bottom:0.5rem;">
@@ -17812,7 +17946,7 @@ function renderRutasDetalle(idx) {
                                 <span style="display:inline-flex; align-items:center; gap:0.25rem; background:#dcfce7; color:#15803d; padding:0.1rem 0.5rem; border-radius:999px; font-size:0.62rem;"><i class="fa-solid fa-cloud-arrow-up"></i> Guardado automático</span>
                             </div>
                             <div style="font-size:1rem; font-weight:700; color:#0f172a; margin-top:0.15rem;">
-                                <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> OT ${escapeHtml(ej.ot || '—')}
+                                <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> ${window.PlanifyVibDiaria?.isPlan(ej.rutaIdx) ? escapeHtml(window.PlanifyVibDiaria.title(ej)) : `OT ${escapeHtml(ej.ot || '—')}`}
                             </div>
                             <div style="font-size:0.78rem; color:#64748b; margin-top:0.15rem;">
                                 Iniciada el ${ej.fechaInicio || '—'}
@@ -17832,13 +17966,14 @@ function renderRutasDetalle(idx) {
                         <button onclick="window.rutasGuardarEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#16a34a; color:#15803d; background:#f0fdf4;" title="Guardar manual — confirma que tu avance está respaldado (igual se guarda solo a cada cambio)">
                             <i class="fa-solid fa-floppy-disk"></i> Guardar
                         </button>
+                        ${Number(idx) === -2 && isAdmin ? `<button class="btn btn-outline" type="button" onclick="VibDailyImport.importPdf('${ej.id}')">Importar entrega PDF</button>` : ''}
                         ${esReqRuta && isAdmin ? `
                             <button onclick="window.rutasRequerimientosAgregarEquipo(${idx})" class="btn btn-primary" style="font-size:0.85rem;" title="Agregar equipos y componentes a esta ruta flexible">
                                 <i class="fa-solid fa-plus"></i> Agregar equipo
                             </button>
-                            <button onclick="window.rutasEditarOtEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#bfdbfe; color:#1d4ed8; background:#eff6ff;" title="Agregar o cambiar la OT de esta ruta">
+                            ${Number(idx) !== -2 ? `<button onclick="window.rutasEditarOtEjecucion(${idx})" class="btn btn-outline" style="font-size:0.85rem; border-color:#bfdbfe; color:#1d4ed8; background:#eff6ff;" title="Agregar o cambiar la OT de esta ruta">
                                 <i class="fa-solid fa-hashtag"></i> Editar OT
-                            </button>
+                            </button>` : ''}
                         ` : ''}
                         ${isAdmin ? `
                             <button onclick="window.rutasCerrarEjecucion(${idx})" class="btn btn-success" style="font-size:0.85rem;" title="Cerrar la ejecución y archivarla en Rutas cerradas">
@@ -17874,12 +18009,14 @@ function renderRutasDetalle(idx) {
 }
 
 // ── Acciones expuestas en window ──────────────────────────────────────────
-window.rutasAbrirDetalle = function(idx) {
+window.rutasAbrirDetalle = function(idx, ejecucionId) {
+    if (ejecucionId && !seleccionarEjecucionRuta(idx, ejecucionId)) return;
     invalidarIndiceEquipos(); // refrescar match cada vez que entras a un detalle
     // Navegación completa: permite entrar al detalle desde cualquier vista
     // (p.ej. al clickear una ruta en el panel de Control), no solo desde Rutas.
     vistaActual = 'rutas';
-    vistaRutasEstado.seccionActiva = 'rutas';
+    vistaRutasEstado.seccionActiva = window.PlanifyVibDiaria?.is(idx) ? 'diaria' : 'rutas';
+    if (window.PlanifyVibDiaria?.is(idx)) window.PlanifyVibDiaria.open(idx);
     vistaRutasEstado.rutaActivaIdx = idx;
     renderizarVistaActual();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -17934,14 +18071,14 @@ window.rutasEditarOtEjecucion = function(idx) {
     const nueva = prompt('Numero de OT para esta ruta (puede quedar vacio):', String(ej.ot || ''));
     if (nueva === null) return;
     ej.ot = String(nueva || '').trim().toUpperCase();
-    setEjecucionActiva(idx, ej);
+    try { setEjecucionActiva(idx, ej); } catch (error) { alert(error.message); return; }
     renderRutasView();
 };
 
 window.rutasRequerimientosAgregarEquipo = function(idx) {
     if (!esRutaRequerimientos(idx)) return;
     const ej = getEjecucionActiva(idx);
-    if (!ej) { alert('Primero inicia la ruta Requerimientos.'); return; }
+    if (!ej) { alert('Primero crea una ejecución para agregar equipos.'); return; }
     normalizarEjecucionRequerimientos(ej);
     document.getElementById('modal-req-ruta-equipos')?.remove();
 
@@ -17959,7 +18096,7 @@ window.rutasRequerimientosAgregarEquipo = function(idx) {
       <div style="background:#fff; border-radius:16px; width:100%; max-width:760px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 30px 70px rgba(15,23,42,0.35); overflow:hidden;">
         <div style="padding:1rem 1.2rem; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; gap:0.8rem; align-items:flex-start;">
           <div>
-            <div style="font-size:0.72rem; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.06em;">Ruta Requerimientos</div>
+            <div style="font-size:0.72rem; font-weight:800; color:#0ea5e9; text-transform:uppercase; letter-spacing:0.06em;">${escapeHtml(obtenerRutaVibracion(idx, ej)?.nombre || 'Equipos')}</div>
             <h2 style="margin:0.25rem 0 0; font-size:1.08rem; color:#0f172a;">Agregar equipos y componentes</h2>
             <p style="margin:0.25rem 0 0; font-size:0.82rem; color:#64748b;">Solo los componentes seleccionados cuentan para el porcentaje.</p>
           </div>
@@ -18078,7 +18215,8 @@ window.rutasRequerimientosAgregarEquipo = function(idx) {
 };
 
 window.rutasAbrirCapturaEquipo = function(idx, eqIdx) {
-    const ruta = obtenerRutaVibracion(idx, getEjecucionActiva(idx));
+    const capturaId = getEjecucionActiva(idx)?.id;
+    const ruta = obtenerRutaVibracion(idx, getEjecucionActiva(idx, capturaId));
     const equipoRuta = ruta?.equipos?.[eqIdx];
     if (!ruta || !equipoRuta) return;
 
@@ -18279,7 +18417,7 @@ window.rutasAbrirCapturaEquipo = function(idx, eqIdx) {
                     observaciones: observacion
                 });
 
-                const ej = getEjecucionActiva(idx);
+                const ej = getEjecucionActiva(idx, capturaId);
                 if (ej) {
                     ej.mediciones = ej.mediciones || {};
                     const registros = Array.isArray(ej.mediciones[eqIdx]) ? ej.mediciones[eqIdx] : [];
@@ -18301,7 +18439,7 @@ window.rutasAbrirCapturaEquipo = function(idx, eqIdx) {
 
                 mostrarToastNotificacion('Medición guardada', `${parteNombre}: ${vibracion} mm/s · ${temperatura} °C`, { type: 'success', duration: 2600 });
                 renderRutasView();
-                const ejActualizado = getEjecucionActiva(idx);
+                const ejActualizado = getEjecucionActiva(idx, capturaId);
                 const totalRegistros = Array.isArray(ejActualizado?.mediciones?.[eqIdx]) ? ejActualizado.mediciones[eqIdx].length : 1;
                 renderContinuar({ parteNombre, vibracion, temperatura, totalRegistros });
             } catch (error) {
@@ -18321,7 +18459,8 @@ window.rutasVolver = function() {
     renderRutasView();
 };
 window.vibracionesAbrir = function(seccion) {
-    vistaRutasEstado.seccionActiva = seccion === 'historial' ? 'historial' : 'rutas';
+    if (seccion === 'diaria') window.PlanifyVibDiaria.reset();
+    vistaRutasEstado.seccionActiva = ['historial', 'diaria'].includes(seccion) ? seccion : 'rutas';
     vistaRutasEstado.rutaActivaIdx = null;
     renderRutasView();
 };
@@ -18330,16 +18469,21 @@ window.vibracionesVolver = function() {
     vistaRutasEstado.rutaActivaIdx = null;
     renderRutasView();
 };
-window.rutasIniciarEjecucion = function(idx) {
+window.rutasIniciarEjecucion = function(idx, opciones = {}) {
+    if (!esRolGestion()) return;
     const r = obtenerRutaVibracion(idx);
     if (!r) return;
     const esReqRuta = esRutaRequerimientos(idx, r);
+    const esPlanDiario = !!window.PlanifyVibDiaria?.isPlan(idx);
+    const esAdicional = window.PlanifyVibDiaria?.is(idx) && !esPlanDiario;
+    const otOpcional = esPlanDiario || (esReqRuta && !esAdicional);
+    const fechaJornada = opciones.fecha || window.PlanifyVibDiaria?.date();
 
     // Quitar modal previo si existe (idempotente)
     document.getElementById('modal-iniciar-ruta')?.remove();
 
     const trabajadoresActivos = (estado.trabajadores || [])
-        .filter(t => t.activo !== false)
+        .filter(t => t.activo !== false && !trabajadorEstaInhabilitado(t))
         .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
 
     const overlay = document.createElement('div');
@@ -18360,11 +18504,12 @@ window.rutasIniciarEjecucion = function(idx) {
         </div>
 
         <div style="padding:1rem 1.3rem; display:flex; flex-direction:column; gap:0.9rem;">
-          <div>
+          ${esPlanDiario ? '<p style="color:#64748b;font-size:.85rem;">Las OT se asignan después con el botón + OT de cada equipo.</p>' : ''}
+          <div style="${esPlanDiario ? 'display:none' : ''}">
             <label style="display:block; font-size:0.8rem; font-weight:700; color:#334155; margin-bottom:0.35rem;">
-              <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> Número de OT ${esReqRuta ? '(opcional)' : '(obligatorio)'}
+              <i class="fa-solid fa-hashtag" style="color:#FF6900;"></i> Número de OT ${otOpcional ? '(opcional)' : '(obligatorio)'}
             </label>
-            <input id="iniciar-ruta-ot" type="text" class="form-control" placeholder="${esReqRuta ? 'Puedes dejarla en blanco y agregarla despues' : 'Ej: 12345678'}" style="width:100%; text-transform:uppercase;">
+            <input id="iniciar-ruta-ot" type="text" class="form-control" placeholder="${otOpcional ? 'Puedes agregarla después' : 'Ej: 12345678'}" style="width:100%; text-transform:uppercase;">
           </div>
 
           <div>
@@ -18387,7 +18532,7 @@ window.rutasIniciarEjecucion = function(idx) {
 
           <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:0.6rem 0.8rem; font-size:0.8rem; color:#1e40af;">
             <i class="fa-solid fa-circle-info"></i>
-            Ambos verán esta ruta en su celular dentro de <strong>"Rutas"</strong> y podrán tickear los componentes en terreno.
+            ${esPlanDiario ? `Jornada: <strong>${escapeHtml(formatearFechaCortaDia(fechaJornada))}</strong>. ` : ''}Ambos verán este trabajo en su celular dentro de <strong>"Rutas"</strong> y podrán tickear los componentes en terreno.
           </div>
 
           <p id="iniciar-ruta-error" style="display:none; color:#dc2626; font-size:0.85rem; margin:0;"></p>
@@ -18431,6 +18576,7 @@ window.rutasIniciarEjecucion = function(idx) {
     checks.forEach(cb => cb.addEventListener('change', refrescarEstado));
     refrescarEstado();
 
+    let nuevaId = null;
     const cerrar = () => overlay.remove();
     overlay.querySelector('#iniciar-ruta-cerrar').addEventListener('click', cerrar);
     overlay.querySelector('#iniciar-ruta-cancelar').addEventListener('click', cerrar);
@@ -18442,7 +18588,8 @@ window.rutasIniciarEjecucion = function(idx) {
         const showErr = (m) => { errEl.textContent = m; errEl.style.display = 'block'; };
         errEl.style.display = 'none';
 
-        if (!ot && !esReqRuta) return showErr('El número de OT es obligatorio.');
+        if (!ot && !otOpcional) return showErr('El número de OT es obligatorio.');
+        if (getEjecucionesDeRuta(idx).some(e => e.id !== nuevaId && (!esPlanDiario || (e.componentesEstado?.__vibDiaria?.fecha || e.fechaInicio) === fechaJornada) && String(e.ot || '').trim().toUpperCase() === ot)) return showErr(esPlanDiario ? 'Ya hay una planificación para esta jornada. Importa el archivo en ese plan para agregar equipos.' : 'Esa OT ya está abierta en esta ruta. Selecciónala para continuar.');
         if (seleccionados.length !== 2) return showErr('Selecciona exactamente 2 técnicos.');
 
         // Para compatibilidad con el resto del sistema (DB columns + filtros
@@ -18457,24 +18604,28 @@ window.rutasIniciarEjecucion = function(idx) {
         btn.disabled = true;
         btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Iniciando...';
 
+        nuevaId = nuevaId || window.RouteExecutionStore.newId();
         const ejecucionNueva = {
+            ...(window.RouteExecutionStore.get(nuevaId) || {}),
+            id: nuevaId,
+            _new: window.RouteExecutionStore.get(nuevaId)?._new ?? true,
             ot,
-            fechaInicio: new Date().toISOString().slice(0, 10),
+            fechaInicio: esPlanDiario ? fechaJornada : new Date().toISOString().slice(0, 10),
             estado: 'activa',
             liderId,       liderNombre:    lider?.nombre || '',
             ayudanteId,    ayudanteNombre: ayudante?.nombre || '',
-            componentesEstado: {},
+            componentesEstado: esPlanDiario ? { __vibDiaria: { fecha: fechaJornada, archivo: opciones.archivo || '' } } : {},
             componentesAt:     {},
             observaciones:     {},
             mediciones:        {},
-            ...(esReqRuta ? { requerimientoEquipos: [] } : {})
+            ...(esReqRuta ? { requerimientoEquipos: opciones.equipos || [] } : {})
         };
         // Guardar local PRIMERO (UX rápido) y AWAIT el push remoto para
         // detectar fallos (red caída, RLS, tabla inexistente). Sin el await,
         // el planificador creería que asignó pero el trabajador no lo vería.
         // skipPush=true evita el push fire-and-forget para no duplicar inserts.
-        setEjecucionActiva(idx, ejecucionNueva, { skipPush: true });
         try {
+            setEjecucionActiva(idx, ejecucionNueva, { skipPush: true, choose: true });
             if (window.supabaseClient) {
                 await _pushEjecucionASupabase(idx, ejecucionNueva);
             }
@@ -18485,7 +18636,12 @@ window.rutasIniciarEjecucion = function(idx) {
             return;
         }
         cerrar();
+        if (window.PlanifyVibDiaria?.is(idx)) {
+            vistaRutasEstado.rutaActivaIdx = idx;
+            vistaRutasEstado.seccionActiva = 'diaria';
+        }
         renderRutasView();
+        if (window.PlanifyVibDiaria?.is(idx) && !opciones.equipos?.length) window.rutasRequerimientosAgregarEquipo(idx);
     });
 };
 
@@ -18519,6 +18675,10 @@ function rutasSetKizeoComponente(rutaIdx, eqIdx, compIdx, notificado) {
 window.rutasMarcarComponente = function(rutaIdx, eqIdx, compIdx, estado) {
     const ej = getEjecucionActiva(rutaIdx);
     if (!ej) return;
+    if (Number(rutaIdx) === -2) {
+        const dailyEquipment = obtenerRutaVibracion(rutaIdx, ej)?.equipos?.[eqIdx];
+        if (dailyEquipment?.componentes?.[compIdx]?.disponible === false || window.VibDailyImport?.closedLink(dailyEquipment)) return;
+    }
     ej.componentesEstado = ej.componentesEstado || {};
     ej.componentesAt = ej.componentesAt || {};
     const k = rutasCompKey(eqIdx, compIdx);
@@ -18562,11 +18722,12 @@ window.rutasMarcarEquipo = function(rutaIdx, eqIdx, estado) {
     const r = obtenerRutaVibracion(rutaIdx, ej);
     const equipo = r?.equipos?.[eqIdx];
     const comps = Array.isArray(equipo?.componentes) ? equipo.componentes : [];
-    if (!comps.length) return;
+    if (!comps.length || (Number(rutaIdx) === -2 && window.VibDailyImport?.closedLink(equipo))) return;
     ej.componentesEstado = ej.componentesEstado || {};
     ej.componentesAt = ej.componentesAt || {};
     const now = new Date().toISOString();
-    comps.forEach((_, compIdx) => {
+    comps.forEach((comp, compIdx) => {
+        if (Number(rutaIdx) === -2 && comp.disponible === false) return;
         const k = rutasCompKey(eqIdx, compIdx);
         if (estado === 'pendiente' || !estado) {
             delete ej.componentesEstado[k];
@@ -18623,7 +18784,8 @@ function rutasContarComponentes(rutaIdx, ej) {
     if (!r) return { total:0, listos:0, noEjec:0, pend:0 };
     let total = 0, listos = 0, noEjec = 0;
     (r.equipos || []).forEach((eq, eqIdx) => {
-        (eq.componentes || []).forEach((_, compIdx) => {
+        (eq.componentes || []).forEach((comp, compIdx) => {
+            if (Number(rutaIdx) === -2 && comp.disponible === false) return;
             total++;
             const st = ej?.componentesEstado?.[rutasCompKey(eqIdx, compIdx)];
             if (st === 'listo') listos++;
@@ -18659,6 +18821,8 @@ async function _pushMedicionesDeRutaACerrar(rutaIdx, ej) {
         const equipoRuta = r.equipos?.[eqIdx];
         const compRuta   = equipoRuta?.componentes?.[compIdx];
         if (!compRuta) continue;
+        // A linked component is published to the measurement history by its source route only.
+        if (Number(rutaIdx) === -2 && (equipoRuta.enlace || compRuta.disponible === false)) continue;
 
         const equipoDirecto = compRuta.equipo_id
             ? (estado.equipos || []).find(e => String(e.id) === String(compRuta.equipo_id))
@@ -18734,6 +18898,7 @@ window.rutasCerrarEjecucion = async function(idx) {
     const ej = getEjecucionActiva(idx);
     const r = obtenerRutaVibracion(idx, ej);
     if (!ej || !r) return;
+    if (!navigator.onLine || !window.supabaseClient) { alert('Conéctate para cerrar esta OT. Tu avance queda guardado.'); return; }
     const c = rutasContarComponentes(idx, ej);
     let resumen = `Listos: ${c.listos} · No ejecutados: ${c.noEjec}`;
     if (c.pend > 0) resumen += ` · Sin marcar: ${c.pend}`;
@@ -18763,6 +18928,8 @@ window.rutasCerrarEjecucion = async function(idx) {
             console.log(`[rutas] Mediciones empujadas: ${pushResult.ok} ok · ${pushResult.err} errores`);
         }
 
+        if (pushResult.err) throw new Error('No se pudieron guardar todas las mediciones. La OT sigue abierta.');
+        await _marcarEjecucionFinalizada(idx, 'cerrada', ej);
         if (msgEl) msgEl.textContent = 'Archivando en historial…';
         try {
             const histRaw = localStorage.getItem('planify_rutas_historial');
@@ -18803,52 +18970,35 @@ window.rutasCerrarEjecucion = async function(idx) {
         } catch (e) { /* noop */ }
 
         if (msgEl) msgEl.textContent = 'Sincronizando…';
-        await _marcarEjecucionFinalizada(idx, 'cerrada');
-        setEjecucionActiva(idx, null, { skipPush: true });
-        await autoCerrarTareasVibracionConRutasCerradas({ soloOt: ej.ot });
+        setEjecucionActiva(idx, null, { skipPush: true, id: ej.id });
+        if (ej.ot) await autoCerrarTareasVibracionConRutasCerradas({ soloOt: ej.ot });
+    } catch (error) {
+        alert(error.message || 'No se pudo cerrar la OT.');
     } finally {
         overlay.style.display = 'none';
     }
     renderRutasView();
 };
 window.rutasCancelarEjecucion = async function(idx) {
-    if (!confirm('¿Cancelar la ejecución actual?\nSe perderá el avance registrado.')) return;
-    // Igual que cerrar: primero marcamos en Supabase para que el refresh
-    // no la resucite desde la base de datos.
-    await _marcarEjecucionFinalizada(idx, 'cancelada');
-    setEjecucionActiva(idx, null);
-    renderRutasView();
+    const ej = getEjecucionActiva(idx);
+    if (!ej || !confirm(`¿Cancelar la OT ${ej.ot}? Las otras ejecuciones seguirán abiertas.`)) return;
+    try {
+        await _marcarEjecucionFinalizada(idx, 'cancelada', ej);
+        setEjecucionActiva(idx, null, { id: ej.id });
+        renderRutasView();
+    } catch (error) { alert(error.message || 'No se pudo cancelar la OT.'); }
 };
 
-// Marca la ejecución activa en Supabase como cerrada o cancelada para que
-// el filtro `estado='activa'` ya no la incluya en el próximo refresh.
-async function _marcarEjecucionFinalizada(idx, nuevoEstado) {
-    const ej = getEjecucionActiva(idx);
-    if (!ej || !window.supabaseClient) return;
-    const fechaCierre = new Date().toISOString().slice(0, 10);
-    // Si tenemos id (la ejecución se sincronizó con Supabase) → UPDATE
-    if (ej.id) {
-        try {
-            const { error } = await window.supabaseClient
-                .from('rutas_ejecuciones')
-                .update({ estado: nuevoEstado, fecha_cierre: fechaCierre })
-                .eq('id', ej.id);
-            if (error) console.warn('[rutas] no se pudo marcar finalizada:', error.message);
-        } catch (e) { console.warn('[rutas] excepción marcar finalizada:', e.message); }
-        return;
-    }
-    // Fallback: ejecución sin id (creada offline / sync nunca ocurrió).
-    // Borramos por ruta_idx + ot para no dejar basura.
-    if (ej.ot) {
-        try {
-            await window.supabaseClient
-                .from('rutas_ejecuciones')
-                .update({ estado: nuevoEstado, fecha_cierre: fechaCierre })
-                .eq('ruta_idx', idx).eq('ot', ej.ot).eq('estado', 'activa');
-        } catch (e) { /* noop */ }
-    }
+async function _marcarEjecucionFinalizada(idx, nuevoEstado, ej = getEjecucionActiva(idx)) {
+    if (!ej) throw new Error('La ejecución ya no está disponible.');
+    if (!navigator.onLine || !window.supabaseClient) throw new Error('Conéctate para cerrar o cancelar esta OT. Tu avance queda guardado.');
+    if (window.VibDailyCore) setEjecucionActiva(idx, ej, { skipPush: true });
+    await _pushEjecucionASupabase(idx, ej);
+    const { error } = await window.supabaseClient.from('rutas_ejecuciones')
+        .update({ estado: nuevoEstado, fecha_cierre: new Date().toISOString().slice(0, 10) })
+        .eq('id', ej.id).eq('estado', 'activa').select('id').single();
+    if (error) throw error;
 }
-
 
 // --- SISTEMA DE NAVEGACIÓN Y RENDER ---
 
@@ -18863,6 +19013,7 @@ const navConfig = {
     'nav-avisos': 'avisos-sap',
     'nav-historial': 'historial',
     'nav-equipos': 'equipos',
+    'nav-mantenimiento': 'mantenimiento',
     'nav-tiristores': 'tiristores',
     'nav-tiristor-u5': 'tiristor-u5',
     'nav-trabajadores': 'trabajadores',
@@ -18931,6 +19082,14 @@ function renderizarVistaActual() {
             break;
         case 'equipos':
             renderEquiposView();
+            break;
+        case 'mantenimiento':
+            if (estado.usuarioActual === 'admin' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
+                window.MaintenanceCloud.configure(supabaseUrl, supabaseKey);
+                window.PlanifyMantenimiento.render(mainContent, estado.equipos.map(e => ({ ...e, unidad: e.unidad || _unidadEquipoDedup(e) })));
+            } else {
+                mainContent.textContent = 'Mantenimiento está disponible para el planificador en localhost.';
+            }
             break;
         case 'tiristores':
             renderTiristoresView();
@@ -20711,7 +20870,6 @@ window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
     const equipo = estado.equipos.find(e => String(e.id) === String(eqId));
     if (!equipo) return;
 
-    const normalizarSelector = (value) => String(value || '').trim().toLowerCase();
     const jsString = (value) => String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
     // Usar la ubicacion de la tarea si fue pasada, si no la del equipo
@@ -20719,8 +20877,7 @@ window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
     // Buscar todos los componentes del mismo activo y misma ubicacion
     const componentes = (estado.equipos || [])
         .filter(e =>
-            normalizarSelector(e.activo) === normalizarSelector(equipo.activo) &&
-            normalizarSelector(e.ubicacion) === normalizarSelector(ubicFiltro)
+            _claveActivoFicha(e) === _claveActivoFicha({ ...equipo, ubicacion: ubicFiltro })
         )
         .sort((a, b) =>
             String(a.componente || a.kks || '').localeCompare(String(b.componente || b.kks || ''), 'es', { numeric: true })
@@ -20755,7 +20912,7 @@ window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
                     onmouseover="this.style.borderColor='#FF6900';this.style.background='#fff7f0'"
                     onmouseout="this.style.borderColor='${actual ? '#fdba74' : '#e2e8f0'}';this.style.background='${actual ? '#fff7f0' : '#f8fafc'}'">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF6900" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
-                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.componente || 'Sin componente')}</span>
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.componente || c.activo || 'Sin componente')}</span>
                     ${actual ? `<span style="font-size:0.68rem;color:#9a3412;background:#ffedd5;border-radius:999px;padding:0.12rem 0.45rem;font-weight:800;">Actual</span>` : ''}
                     ${c.kks ? `<span style="margin-left:auto;font-size:0.75rem;color:#94a3b8;font-weight:400;white-space:nowrap;">${escapeHtml(c.kks)}</span>` : ''}
                 </button>`;
@@ -20768,14 +20925,17 @@ window.elegirComponenteYAbrirFicha = function(eqId, ubicacionForzada) {
 
 // Modal con todos los equipos de una unidad
 window.abrirVistaUnidad = function(ubicacion) {
-    // Agrupar equipos por nombre (activo), ignorar duplicados por componente
-    const equiposDeLaUnidad = estado.equipos.filter(e => e.ubicacion === ubicacion);
+    const unidad = _unidadEquipoDedup({ ubicacion });
+    const equiposDeLaUnidad = estado.equipos.filter(e => unidad !== '?'
+        ? _unidadEquipoDedup(e) === unidad : e.ubicacion === ubicacion);
     const grupos = {};
     equiposDeLaUnidad.forEach(e => {
-        if (!grupos[e.activo]) grupos[e.activo] = [];
-        grupos[e.activo].push(e);
+        const key = _claveActivoFicha(e);
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(e);
     });
-    const nombresUnicos = Object.keys(grupos).sort();
+    Object.values(grupos).forEach(comps => comps.sort((a, b) => Number(_equipoEsCanonico(b)) - Number(_equipoEsCanonico(a))));
+    const nombresUnicos = Object.keys(grupos).sort((a, b) => String(grupos[a][0].activo).localeCompare(String(grupos[b][0].activo), 'es'));
 
     let existente = document.getElementById('modal-vista-unidad');
     if (existente) existente.remove();
@@ -20803,7 +20963,7 @@ window.abrirVistaUnidad = function(ubicacion) {
                         onmouseover="this.style.borderColor='#FF6900';this.style.background='#fff7f0'"
                         onmouseout="this.style.borderColor='#e2e8f0';this.style.background='#f8fafc'">
                         <div style="flex:1;min-width:0;">
-                            <div style="font-weight:600;font-size:0.9rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${nombre}</div>
+                            <div style="font-weight:600;font-size:0.9rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(primerEq.activo)}</div>
                             ${primerEq.kks ? `<div style="font-size:0.75rem;color:#94a3b8;margin-top:1px;">${primerEq.kks}</div>` : ''}
                         </div>
                         ${primerEq.criticidad ? `<span style="font-size:0.7rem;font-weight:700;color:${critColor};background:${critColor}18;border-radius:6px;padding:2px 7px;flex-shrink:0;">Crit. ${primerEq.criticidad}</span>` : ''}
@@ -21298,7 +21458,7 @@ function _tecnicosRutaPorEquipoFicha(equipo) {
         out.push({ fecha: fechaClaveFicha(ej.fechaCierre || ej.fechaInicio || ''), tecnicos });
     };
     const activas = (typeof getRutasEjecuciones === 'function') ? getRutasEjecuciones() : {};
-    Object.entries(activas || {}).forEach(([idx, ej]) => procesar(ej, Number(idx)));
+    getTodasEjecucionesRutas().forEach(ej => procesar(ej, ej.rutaIdx));
     let hist = [];
     try { hist = JSON.parse(localStorage.getItem('planify_rutas_historial') || '[]'); } catch (e) {}
     (hist || []).forEach(h => procesar(h, h.rutaIdx));
@@ -22824,7 +22984,7 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
     const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     const termos = medicionesEquipo.filter(m => m.tipo === 'termografia').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     const lubs = medicionesEquipo.filter(m => m.tipo === 'lubricacion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    const siblingEquipos = estado.equipos.filter(item => item.activo === equipo.activo && item.ubicacion === equipo.ubicacion);
+    const siblingEquipos = estado.equipos.filter(item => _claveActivoFicha(item) === _claveActivoFicha(equipo));
     const siblingIds = new Set(siblingEquipos.map(item => String(item.id)));
     const vibSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'vibracion');
     const termoSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'termografia');
@@ -23000,7 +23160,7 @@ function renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRela
     const vibs = medicionesEquipo.filter(m => m.tipo === 'vibracion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     const termos = medicionesEquipo.filter(m => m.tipo === 'termografia').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
     const lubs = medicionesEquipo.filter(m => m.tipo === 'lubricacion').sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-    const siblingEquipos = estado.equipos.filter(item => item.activo === equipo.activo && item.ubicacion === equipo.ubicacion);
+    const siblingEquipos = estado.equipos.filter(item => _claveActivoFicha(item) === _claveActivoFicha(equipo));
     const siblingIds = new Set(siblingEquipos.map(item => String(item.id)));
     const vibSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'vibracion');
     const termoSummary = obtenerResumenMedicionesFicha(medicionesEquipo, 'termografia');
@@ -23237,7 +23397,7 @@ window.abrirFichaTecnica = async function(equipoId) {
     if (!modal) return;
 
     const siblingEquipos = estado.equipos.filter(item =>
-        item.activo === equipo.activo && item.ubicacion === equipo.ubicacion
+        _claveActivoFicha(item) === _claveActivoFicha(equipo)
     );
     const siblingIds = siblingEquipos.length
         ? siblingEquipos.map(item => item.id)
@@ -23298,20 +23458,8 @@ window.abrirFichaTecnica = async function(equipoId) {
 
     let medicionesEquipo = medicionesGrupo.filter(med => String(getMedEquipoId(med)) === String(equipo.id));
 
-    if (!medicionesEquipo.length && equipo.componente) {
-        medicionesEquipo = medicionesGrupo.filter(med =>
-            normalize(med.componente || med.punto_medicion) === normalize(equipo.componente)
-        );
-    }
-
-    if (!medicionesEquipo.length) {
-        medicionesEquipo = medicionesGrupo.filter(med => {
-            const equipoAsociado = estado.equipos.find(item => String(item.id) === String(getMedEquipoId(med)));
-            return equipoAsociado &&
-                equipoAsociado.activo === equipo.activo &&
-                equipoAsociado.ubicacion === equipo.ubicacion;
-        });
-    }
+    // Una ficha sin lecturas propias debe quedar sin datos. Nunca tomar las de
+    // otra pieza del grupo por tener el mismo nombre de componente.
 
     const tareasRelacionadas = getTareasRelacionadasFicha(equipo, siblingIds);
     renderListasFicha(equipo, medicionesEquipo, medicionesGrupo, tareasRelacionadas, fuenteMediciones);
@@ -24661,10 +24809,27 @@ document.getElementById('btn-login-visita')?.addEventListener('click', () => acc
 document.getElementById('btn-submit-pin')?.addEventListener('click', validarPin);
 pinInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') validarPin(); });
 
-function validarPin() {
+async function validarPin() {
     const pin = pinInput?.value || '';
-    const pines = { 'administrador': '1808', 'ito': '2011', 'admin': '2025' };
-    const pinEsperado = pines[pinLoginTarget] || '2025';
+    if (['127.0.0.1','localhost','[::1]'].includes(location.hostname) && ['admin','administrador'].includes(pinLoginTarget)) {
+        const button = document.getElementById('btn-submit-pin');
+        if (button?.disabled) return;
+        if (button) button.disabled = true;
+        try {
+            await window.MaintenanceCloud.signIn(pinLoginTarget, pin);
+            accederApp(pinLoginTarget);
+            pinModal.style.display = 'none';
+            if (pinInput) pinInput.value = '';
+            pinLoginTarget = 'admin';
+        } catch(error) {
+            const err = document.getElementById('pin-error');
+            if (err) { err.textContent = error.message; err.style.display = 'block'; }
+            if (pinInput) { pinInput.value = ''; pinInput.focus(); }
+        } finally { if (button) button.disabled = false; }
+        return;
+    }
+    // Planner/admin credentials are validated only by the server.
+    const pinEsperado = pinLoginTarget === 'ito' ? '2011' : null;
     if (pin === pinEsperado) {
         accederApp(pinLoginTarget);
         pinModal.style.display = 'none';
@@ -24801,6 +24966,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-control':            ['admin', 'administrador'],
         'nav-dashboard':          ['admin', 'trabajador'],
         'nav-equipos':            ['admin', 'administrador', 'trabajador', 'ito'],
+        'nav-mantenimiento':      ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? ['admin'] : [],
         'nav-tiristores':         ['visita'],
         'nav-semanal':            ['admin'],
         'nav-rutas':              ['admin', 'administrador', 'trabajador'],
@@ -24886,7 +25052,7 @@ function accederApp(rol, trabajadorObj = null) {
     try {
             const vistaGuardada = localStorage.getItem('planify_vista');
             if (vistaGuardada) {
-                const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','horas_extra_admin','insumos','perfil','mis_horas'];
+                const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','mantenimiento','horas_extra_admin','insumos','perfil','mis_horas'];
                 const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
                 const permitidoTrabajador = esBrandonTir
                     ? ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle']

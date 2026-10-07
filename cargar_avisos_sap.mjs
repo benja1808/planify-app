@@ -1,3 +1,4 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 // Carga inicial de avisos desde Avisos NAVARRETO00C.xlsx a Supabase.
 // Usar UNA vez después de aplicar la migración SQL. Idempotente:
 // los duplicados por nro_notificacion se descartan (on_conflict_do_nothing
@@ -6,8 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import XLSX from 'xlsx';
 
 const sb = createClient(
-    'https://fygvulgffhxrimaeyoep.supabase.co',
-    'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF'
+    SUPABASE_URL,
+    SUPABASE_KEY
 );
 
 const EXCEL_PATH = 'C:/Users/benja/Downloads/Avisos NAVARRETO00C.xlsx';

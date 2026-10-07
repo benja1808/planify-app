@@ -1,0 +1,6524 @@
+[
+  [
+    "U5|LCB01-AP101",
+    [
+      {
+        "id": "00a4ab70-9f25-460c-a6ea-4679a04c6d48",
+        "activo": "Bba. Agua Condensado 5A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-2LCB01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA LCB01AP101"
+      },
+      {
+        "id": "780380ce-4eae-47c6-a32c-dc544780f48a",
+        "activo": "BOMBA AGUA CONDENSADA -5A",
+        "ubicacion": "U5",
+        "kks": "2893-52-LCB01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      }
+    ]
+  ],
+  [
+    "U2|LAC01-AP101",
+    [
+      {
+        "id": "021f2d1d-9803-451d-bf2d-2237cf2e7b30",
+        "activo": "BOMBA LUBRICACION AUXILIAR B.A.A 2A",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP101-KP02",
+        "componente": "BOMBA LUBRICACION AUXILIAR",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "495e4571-0819-4596-818e-e1ab06003b1d",
+        "activo": "BOMBA AGUA ALIMENTACION -2A",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "828f1f67-86ad-481f-970c-7b32f0c4d366",
+        "activo": "Bba Agua Alimentación A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-2LAC01-AP101",
+        "componente": "Amplificador",
+        "denominacion_ut": "AMPLIFICADOR REVOLUCIONES"
+      },
+      {
+        "id": "edc2efda-4fa6-4e5d-84c8-1cfe558faa03",
+        "activo": "Bba Agua Alimentación A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-2LAC01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA G1-AA.07P11AM"
+      }
+    ]
+  ],
+  [
+    "U1|HFB04-AF101",
+    [
+      {
+        "id": "026e0aca-b4d7-4708-b3af-92aa08c1d387",
+        "activo": "DESCANSOS ALIMENTADOR DE CARBON -D",
+        "ubicacion": "U1",
+        "kks": "2893-14-HFB04-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1S"
+      },
+      {
+        "id": "2580f7ea-ea51-466b-a669-5407b86b35d0",
+        "activo": "Alimentador de Carbon 1D",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB04-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -D"
+      },
+      {
+        "id": "bbd53efe-7cad-457d-9929-1df2eaa20249",
+        "activo": "Alimentador de Carbon 1D",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB04-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|ECA09-AF001",
+    [
+      {
+        "id": "02ee6db9-2826-4d50-9f6a-4df6542b0084",
+        "activo": "CORREA TRANSPORTADORA C11",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA09-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "18d545ef-23d4-4c40-beed-61d523fcc052",
+        "activo": "Correa FSC11",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA09-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|LAC01-AP103",
+    [
+      {
+        "id": "0329108e-f7e2-4e61-b66a-fc08dbc1c5a9",
+        "activo": "BOMBA AGUA ALIMENTACION -5C",
+        "ubicacion": "U5",
+        "kks": "2893-52-LAC01-AP103--M03",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      },
+      {
+        "id": "e53f8a77-1bcb-4da4-8ad4-5337c4124947",
+        "activo": "Bba Agua Alimentación C",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-2LAC01-AP103",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA LAC02AP103"
+      }
+    ]
+  ],
+  [
+    "U3|LCB01-AP101",
+    [
+      {
+        "id": "032e2bbe-fb40-4120-ad3c-1389dc5cf749",
+        "activo": "MOTOR BOMBA LCB01AP101-M01",
+        "ubicacion": "U3",
+        "kks": "2893-32-LCB01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "f1fbdd33-a759-4669-a12b-ede6b2462324",
+        "activo": "BOMBA AGUA CONDENSADA -3A",
+        "ubicacion": "U3",
+        "kks": "2893-32-LCB01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      }
+    ]
+  ],
+  [
+    "U2|HFB01-AF101",
+    [
+      {
+        "id": "03882a3b-b358-4679-b682-96d06dc00821",
+        "activo": "DESCANSOS",
+        "ubicacion": "U2",
+        "kks": "2893-24-HFB01-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1S"
+      },
+      {
+        "id": "62981c66-a405-41c1-a6f0-c517e459d82a",
+        "activo": "Alimentador de Carbon 2A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB01-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -A"
+      },
+      {
+        "id": "d923e13b-3632-462a-8a56-0bdb15fd00de",
+        "activo": "Alimentador de Carbon 2A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|EAA02-AU003",
+    [
+      {
+        "id": "03e47e27-da33-465e-a2ce-a58bb4c606a4",
+        "activo": "MECANISMO GIRO -A GRUA 1",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA02-AU003--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      },
+      {
+        "id": "1726e15d-a0dc-47c8-9ee6-bc3ce84fd046",
+        "activo": "Moto-Reductor Giro A Grúa 1",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA02-AU003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR PLANETARIO -A"
+      },
+      {
+        "id": "35062875-5d31-4cb9-ad6a-59a6f9cb0917",
+        "activo": "Moto-Reductor Giro B Grúa 1",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA02-AU003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR PLANETARIO -B"
+      },
+      {
+        "id": "790c206b-9ac9-45b1-b808-1f9692b89bc0",
+        "activo": "MECANISMO GIRO -B GRUA 1",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA02-AU003--M02",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U5|HRA05-AP101",
+    [
+      {
+        "id": "04570a5a-8d57-40ed-abba-ec63aa2001c1",
+        "activo": "MOTOR BOMBA",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA05-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      },
+      {
+        "id": "60f55f05-4503-4d81-ab54-96386c9b6a53",
+        "activo": "Bomba Recirculadora A FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HRA05-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U4|LAC01-AP101",
+    [
+      {
+        "id": "04cac89a-7eb2-4222-9d32-bf83a5e9628e",
+        "activo": "BOMBA AGUA ALIMENTACION -4A",
+        "ubicacion": "U4",
+        "kks": "2893-42-LAC01-AP101-MU01",
+        "componente": "DESCANSO MOTOR RADIAL -1",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      },
+      {
+        "id": "1dd87078-b540-43da-8373-c4e5efed6a06",
+        "activo": "BOMBA LUBRICACION -A (B.A.A 4A)",
+        "ubicacion": "U4",
+        "kks": "2893-42-LAC01-AP101-KP02",
+        "componente": "BOMBA LUBRICACION -A LAC02AP301",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      },
+      {
+        "id": "aee79fe2-0f35-4826-a2b4-5acb319ffd51",
+        "activo": "BOMBA LUBRICACION -B (B.A.A 4A)",
+        "ubicacion": "U4",
+        "kks": "2893-42-LAC01-AP101-KP03",
+        "componente": "BOMBA LUBRICACION -B LAC02AP201",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U2|ETA02-AF101",
+    [
+      {
+        "id": "051cb95f-be03-408e-b1ed-84f3e86292a2",
+        "activo": "Correa 1 de Escorias U2",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-6ETA02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR DE VELOCIDAD"
+      },
+      {
+        "id": "53f5aa29-f0a3-4bf0-bb02-c10e7dba0040",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA U2",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA02-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U2  180 D"
+      },
+      {
+        "id": "ea031789-ef2d-4086-a48c-59d25a3bb7d0",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA02-AF101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      }
+    ]
+  ],
+  [
+    "U0|ECA08-AF001",
+    [
+      {
+        "id": "05b4a656-0ff9-45ec-9c09-a075c3ce1bc3",
+        "activo": "Correa FSC10",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA08-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "fea8341f-d047-4bde-a7ea-da9862438146",
+        "activo": "CORREA TRANSPORTADORA C10",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA08-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      }
+    ]
+  ],
+  [
+    "U4|PAC01-AP101",
+    [
+      {
+        "id": "06174ec7-1d85-4220-83e3-c527d688d97c",
+        "activo": "Bba. Circulación PPLL 4A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAC01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP101"
+      },
+      {
+        "id": "7fd39a52-126c-40d9-9458-361fdc796bab",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -4A",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAC01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U3|HFB02-AF101",
+    [
+      {
+        "id": "0638b6c0-5099-47cf-b4dd-c994a272805b",
+        "activo": "Alimentador de Carbón 3B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB02-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -B"
+      },
+      {
+        "id": "d5f390e5-bd18-47f5-9a33-185f7906f6df",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB02-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "f65341e1-0bce-44db-9f9a-9ab5e1ebb45f",
+        "activo": "Alimentador de Carbón 3B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U1|LAC01-AP101",
+    [
+      {
+        "id": "0693e0ab-5291-4555-86a1-e376cdc2e7b2",
+        "activo": "Bba Agua Alimentación A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA G1-AA.07P11A"
+      },
+      {
+        "id": "1978c5a7-5f16-4d7d-9007-99d54778be01",
+        "activo": "BOMBA LUBRICACION PRINCIPAL B.A.A 1A",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP101-KP03",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "74733e14-f76a-4932-869e-d2f214113856",
+        "activo": "BOMBA AGUA ALIMENTACION -1A",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP101-MG01",
+        "componente": "Amplificador",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "8b70056a-bed6-4df1-861a-4aad9e5d7c88",
+        "activo": "Bba Agua Alimentación A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA G1-AA.07P11AM"
+      }
+    ]
+  ],
+  [
+    "U0|ECA02-AF003",
+    [
+      {
+        "id": "073ff71c-f3a6-45c2-a0fe-7099d011a5e0",
+        "activo": "Correa FSC4/5",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA02-AF003",
+        "componente": "Pulley",
+        "denominacion_ut": "DESCANSOS"
+      },
+      {
+        "id": "881dd5de-53c2-49bb-8f41-220881f13820",
+        "activo": "Correa FSC4/5",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA02-AF003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "e70f11f9-6708-4306-be10-941525088c4a",
+        "activo": "CORREA TRANSPORTADORA C4/5",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA02-AF003--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      }
+    ]
+  ],
+  [
+    "U4|PAD01-AP102",
+    [
+      {
+        "id": "075281b3-85c9-408a-9d9a-c7f73ca3d3ab",
+        "activo": "Bba Aux.B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAD01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP602"
+      },
+      {
+        "id": "68211761-81ba-4687-b839-beacc9b6e4d6",
+        "activo": "BOMBA CIRCULACION AUXILIAR -4B",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAD01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U5|HLB51-AN101",
+    [
+      {
+        "id": "07d180d8-3826-496e-a392-4135cd7d503a",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -5B",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB51-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "f39a3d9c-ca9c-4c85-9e64-f10df19c8bac",
+        "activo": "Ventilador detector de llamas B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB51-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U5|HRA02-AM103",
+    [
+      {
+        "id": "0842ef06-0cd6-4f70-86cc-ba940809aa8b",
+        "activo": "AGITADOR -C ESTANQUE DE ABSORBER",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM103",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      },
+      {
+        "id": "a3b2183e-224f-4be1-b015-88958ecfea54",
+        "activo": "MOTOR AGITADOR",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      }
+    ]
+  ],
+  [
+    "U5|ETA01-AT101",
+    [
+      {
+        "id": "088564e3-bdd4-43de-83a7-17f6b5055cf9",
+        "activo": "EJE MOTRIZ LADO LIBRE",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU04",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "12b1fb47-81b7-45bb-ad1d-6690885e5fe5",
+        "activo": "CADENA SUMERGIDA",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "3ba09d20-c9a1-4a07-9ac2-53250826783e",
+        "activo": "EJE MOTRIZ LADO TRANSMISION",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU05",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "4ccc8b89-7024-4961-a650-32da61b1105d",
+        "activo": "EJE GUIA SUPERIOR",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "9fee7b1f-9e95-49f5-871b-c56bd341dce9",
+        "activo": "EJE TENSOR",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU06",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "aebf31e5-23ab-44ed-b881-4bbced045514",
+        "activo": "EJE MOTRIZ",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU03",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "b15d4a19-8820-4a68-b5aa-a232f216a5a2",
+        "activo": "EJE GUIA INFERIOR",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "e883bbad-9ea7-4a89-aefb-84e14d2c90fa",
+        "activo": "CADENA SUMERGIDA U5",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U5  180 D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AP111",
+    [
+      {
+        "id": "08e8396f-6d4f-45cf-9449-510ab1d03ca1",
+        "activo": "BOMBA SALMUERA GBG35AP001 DES11",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB04-AP111--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "6ecda888-0113-4276-86ef-1918a48050a3",
+        "activo": "Bomba Salmuera Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AP111",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA SALMUERA GBG35AP001"
+      }
+    ]
+  ],
+  [
+    "U3|HFB04-AF101",
+    [
+      {
+        "id": "091aff87-d8c5-4d7c-845d-63b1a0dfcc3d",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB04-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "7aa0c6da-cb22-4e38-ac49-1b23e3d2365d",
+        "activo": "Alimentador de Carbón 3D",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB04-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "939052d2-6927-4d02-9ac8-c53dc7089f4b",
+        "activo": "Alimentador de Carbón 3D",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB04-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -D"
+      }
+    ]
+  ],
+  [
+    "U0|GAF13-AP102",
+    [
+      {
+        "id": "094e28db-20af-4177-9230-852d40f49383",
+        "activo": "BOMBA BOOSTER -B DESALADORA 5",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAF13-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "75845221-4339-45d1-aadd-ded5f9e000b9",
+        "activo": "MOTOR BOMBA BOOSTER -B 04PAC01AP702-M01",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAF13-AP102--M01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "98f075cb-c5b1-4ae3-a4e5-91ff156e2fce",
+        "activo": "Bomba Booster Alimentación B U4",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAF13-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U2|PGH01-AP101",
+    [
+      {
+        "id": "09857c24-ab9f-4f74-9054-3a0be3b898d2",
+        "activo": "Bba Enfriamiento A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PGH01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.10P11A"
+      },
+      {
+        "id": "7b14b865-793b-498a-9c00-18ea96dafe41",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -2A",
+        "ubicacion": "U2",
+        "kks": "2893-23-PGH01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2  90 D"
+      }
+    ]
+  ],
+  [
+    "U4|HFB04-AF101",
+    [
+      {
+        "id": "09cc172f-8967-45be-a92d-41b76cdc60dc",
+        "activo": "Alimentador de Carbon 4D",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB04-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "6614f6dd-2471-4d20-9fc0-5c2c165fc148",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-44-HFB04-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1S"
+      },
+      {
+        "id": "b0d6b349-583f-471a-a4ae-7ee6a4497b7d",
+        "activo": "Alimentador de Carbon 4D",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB04-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -D"
+      }
+    ]
+  ],
+  [
+    "U4|ETA01-AT101",
+    [
+      {
+        "id": "09feae69-fb87-4c8a-9bb8-3bb2157d3044",
+        "activo": "EJE GUIA INFERIOR",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "0d363b57-f749-4ee7-80de-b69c1771a8ec",
+        "activo": "EJE MOTRIZ LADO TRANSMISION",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU05",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "3739bb30-a979-4c7d-9b23-df7ee8076652",
+        "activo": "CADENA SUMERGIDA",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "388b660c-4201-45f1-bb92-ccda66dc211b",
+        "activo": "EJE MOTRIZ",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU03",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "4c24c8d0-c633-4113-8040-927008f45d1b",
+        "activo": "REDUCTOR",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "6dd6142b-d78d-4101-a539-1e0f5ad41f38",
+        "activo": "EJE GUIA SUPERIOR",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "9715c958-2c97-479e-a940-0b2afabd8644",
+        "activo": "EJE TENSOR",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU06",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "de386b69-f2b9-4d22-8aaf-531fbaef85fd",
+        "activo": "CADENA SUMERGIDA U4",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U4  180 D"
+      },
+      {
+        "id": "e2f17f85-b49d-43e4-8e50-631284aca58e",
+        "activo": "EJE MOTRIZ LADO LIBRE",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AT101-MU04",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      }
+    ]
+  ],
+  [
+    "U5|PAC01-AP102",
+    [
+      {
+        "id": "0a15ced7-3e58-4c8f-b38a-7019a44cfd4c",
+        "activo": "DESCANSOS PAC01HB102",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAC01-AP102-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "3680f5ce-80ec-42e5-ad77-479e0022e5de",
+        "activo": "Bba. Circulación PPLL 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PAC01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA PAC01AP102-M01"
+      },
+      {
+        "id": "8fa655d2-79bf-4893-9160-9af610035992",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -5B",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA06-AP102",
+    [
+      {
+        "id": "0b426a4a-1316-4964-908d-b274866c5a3e",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "2f874a01-07ce-4f0f-98d3-06541743d039",
+        "activo": "BOMBA DE VACIO DESALADORA -6 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U1|HFB02-AF101",
+    [
+      {
+        "id": "0bd9a1de-cf94-4244-9902-4141d5a21119",
+        "activo": "Alimentador de Carbon 1B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "93c77d94-9383-4c8f-96b3-1012e242cac7",
+        "activo": "DESCANSOS ALIMENTADOR DE CARBON -B",
+        "ubicacion": "U1",
+        "kks": "2893-14-HFB02-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1S"
+      },
+      {
+        "id": "ff957b72-0164-4e00-8aa6-62b18a6d2ca3",
+        "activo": "Alimentador de Carbon 1B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB02-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -B"
+      }
+    ]
+  ],
+  [
+    "U0|GAD33-AP105",
+    [
+      {
+        "id": "0c9471ce-1dc3-492d-861a-daea282de8a7",
+        "activo": "MOTOR GBB01AP201-M01",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAD33-AP105--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      },
+      {
+        "id": "ea3f3683-92cb-4328-9081-2411d8a3a3d4",
+        "activo": "Bomba Make Up A FGD U3-U4",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAD33-AP105",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U0|ECA05-AF001",
+    [
+      {
+        "id": "0d37cca4-999b-4d51-a67e-c0aae1546c3a",
+        "activo": "CORREA TRANSPORTADORA C8",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA05-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "cbde3ccc-5ab4-4f77-9766-18fc8827ac71",
+        "activo": "Correa FSC8",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA05-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|HRA02-AM101",
+    [
+      {
+        "id": "0e28b370-3b14-4259-a3dc-67e0038fe1de",
+        "activo": "AGITADOR -A ESTANQUE DE ABSORBER",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM101",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      },
+      {
+        "id": "ca77a710-4156-4e05-b639-b3fa14d0b157",
+        "activo": "MOTOR AGITADOR",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      }
+    ]
+  ],
+  [
+    "U5|HNC01-AN101",
+    [
+      {
+        "id": "0e596e7f-8442-4a8e-8165-6028988afc0a",
+        "activo": "LAMPO ENTRADA VTI",
+        "ubicacion": "U5",
+        "kks": "2893-55-HNC01-AN101-KA02",
+        "componente": "",
+        "denominacion_ut": "LAMPO ENTRADA VTI"
+      },
+      {
+        "id": "5de63aa0-eb02-4b27-9fcc-b8258ae05432",
+        "activo": "VENTILADOR TIRO INDUCIDO VTI U5",
+        "ubicacion": "U5",
+        "kks": "2893-55-HNC01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AP301",
+    [
+      {
+        "id": "0eccab2a-3b68-42ec-9a03-d488f3fc75e6",
+        "activo": "Bomba Vacío 1 Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP301",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -1 GBG41AP001"
+      },
+      {
+        "id": "690a2060-2138-44a7-8004-424600afbe05",
+        "activo": "BOMBA DE VACIO -1 DES9",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB02-AP301--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U1|HFC02-AJ101",
+    [
+      {
+        "id": "0ed2d2f7-ee1a-4974-a66e-d6b4e160c040",
+        "activo": "MOTOR ELECTRICO 6KV PULVERIZADOR -B",
+        "ubicacion": "U1",
+        "kks": "2893-14-HFC02-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM LUBRICACION PULV B U1 1500 H"
+      },
+      {
+        "id": "d35260b9-1dc9-4897-90b8-6ef9b9594993",
+        "activo": "Molino Pulverizador de Carbon 1B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFC02-AJ101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|PGH01-AP101",
+    [
+      {
+        "id": "0f688f32-4aa5-4214-be6f-32aff5470964",
+        "activo": "Bba Enfriamiento A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PGH01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP101"
+      },
+      {
+        "id": "7e104e0b-bf6e-4a8b-bca3-48aa1a2b919e",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -5A",
+        "ubicacion": "U5",
+        "kks": "2893-53-PGH01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5  180D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA07-AP104",
+    [
+      {
+        "id": "0fc70ce6-0405-402b-90fe-a0770d6a3c49",
+        "activo": "BOMBA SALMUERA DESALADORA -7 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "fae6a809-2a1e-4492-b70e-f3fc00f7b871",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP104-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U0|EAD01-AF001",
+    [
+      {
+        "id": "100bd49b-951b-40be-8011-8c45ccbd4010",
+        "activo": "Correa Apilador Radial",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAD01-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "SOPLADOR AIRE PURGA CAMPO A"
+      },
+      {
+        "id": "9af9f27a-ea34-47d4-92cc-5ffaed1ff181",
+        "activo": "CORREA TRANSPORTADORA APILADOR RADIAL",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAD01-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U3|LAC01-AP102",
+    [
+      {
+        "id": "108bf17c-6325-4828-84dd-9236b1f7bb32",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-2LAC01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA LAC02AP102-M01"
+      },
+      {
+        "id": "6b2a83db-9716-473d-9a21-3ef8f2425824",
+        "activo": "BOMBA LUBRICACION -B B.A.A 3B",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP102-KP03",
+        "componente": "BOMBA LUBRICACION -B LAC02AP202",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "8970a5e1-8f89-4b26-8691-096675e5bfd2",
+        "activo": "BOMBA AGUA ALIMENTACION -3B",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "d25dbdb9-dde3-4ca7-8fce-8d703d5e5dfb",
+        "activo": "BOMBA LUBRICACION -A B.A.A 3B",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP102-KP02",
+        "componente": "BOMBA LUBRICACION -A LAC02AP302",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      }
+    ]
+  ],
+  [
+    "U1|PGH01-AP102",
+    [
+      {
+        "id": "11086134-0721-49e5-a9a6-c8415c2a0abb",
+        "activo": "MOTOR BOMBA G1-11.10P11B-M01",
+        "ubicacion": "U1",
+        "kks": "2893-13-PGH01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G1"
+      },
+      {
+        "id": "30bc0261-840b-4010-b0f0-cf876b2071d3",
+        "activo": "Bba Enfriamiento B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-3PGH01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.10P11B"
+      }
+    ]
+  ],
+  [
+    "U0|EAA08-AF001",
+    [
+      {
+        "id": "11543e90-964c-4752-9dba-880e21b50c35",
+        "activo": "Correa FSC1",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA08-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "b7ed1832-e694-4d6a-ba6f-6612c981a338",
+        "activo": "CORREA TRANSPORTADORA C1",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA08-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U3|HRA05-AP102",
+    [
+      {
+        "id": "116b2e50-fd96-4d49-8c70-7d6bf785814b",
+        "activo": "Bomba Recirculadora B FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA05-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "SOPLADOR AIRE PURGA CAMPO B"
+      },
+      {
+        "id": "9a701763-ad97-4259-8ca3-bf53e635dbb5",
+        "activo": "BOMBA RECIRCULACION ABSORBER -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA05-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      },
+      {
+        "id": "bf35b551-7d4e-42af-96ae-8dec0c64637f",
+        "activo": "BOMBA RECIRCULACION ABSORBER -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA05-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U5|HNC02-AN101",
+    [
+      {
+        "id": "1277dfbb-ab57-4e91-9eda-41caee1f1026",
+        "activo": "VENTILADOR AIRE SELLO VAS -5A FGD",
+        "ubicacion": "U5",
+        "kks": "2893-55-HNC02-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "6be11980-4815-4fcf-8a38-e7f8070931d6",
+        "activo": "Ventilador Aire Sello By Pass A FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HNC02-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR VAS -A FGD"
+      }
+    ]
+  ],
+  [
+    "U3|LAC01-AP103",
+    [
+      {
+        "id": "13a86811-deb4-4433-831e-295f04495a0d",
+        "activo": "BOMBA AGUA ALIMENTACION -3C",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "148f8278-bbe0-44a7-88ea-d9cc6110df33",
+        "activo": "Bba Agua Alimentación C",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-2LAC01-AP103",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA LAC02AP103-M01"
+      }
+    ]
+  ],
+  [
+    "U0|GAA06-AP103",
+    [
+      {
+        "id": "1425b4d8-3a16-4a71-9ebc-09dd5ce89592",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      },
+      {
+        "id": "7898af2b-746d-41af-b50e-e2bc1c0f645a",
+        "activo": "BOMBA PRODUCTO DESALADORA -6 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|PAC01-AP102",
+    [
+      {
+        "id": "1447d603-8d86-427c-9170-7f19995de22e",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -3B",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "affdc9c3-6037-4ed4-861d-251760bfc233",
+        "activo": "DESCANSOS PAC01HB102",
+        "ubicacion": "U4",
+        "kks": "2893-33-PAC01-AP102-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "e18a69a5-b934-408c-9cd9-e1ab5c6527ed",
+        "activo": "MOTOR BOMBA PAC01AP102-M01",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAC01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      }
+    ]
+  ],
+  [
+    "U2|LAC01-AP103",
+    [
+      {
+        "id": "1535353e-d981-44d1-857a-8ea6f869935a",
+        "activo": "BOMBA AGUA ALIMENTACION -C",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "6036757e-f152-423a-9b8d-96ef90dc2dbe",
+        "activo": "BOMBA LUBRICACION AUXILIAR B.A.A 2C",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP103-KP02",
+        "componente": "BOMBA LUBRICACION AUXILIAR",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "864ad838-0df3-425b-9f65-2e00dc98ce97",
+        "activo": "Bba Agua Alimentación C",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-2LAC01-AP103",
+        "componente": "Amplificador",
+        "denominacion_ut": "AMPLIFICADOR REVOLUCIONES"
+      }
+    ]
+  ],
+  [
+    "U0|GAA02-AP102",
+    [
+      {
+        "id": "15cfa5e9-9c16-47a3-bdd5-caae8bc1ae9e",
+        "activo": "BOMBA DE VACIO DESALADORA -2 (U2)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA02-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "b3635f3c-569d-4c3e-9ff8-d3c69f3da993",
+        "activo": "Bomba Vacio Desaladora 2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA02-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U0|HTJ02-AM000",
+    [
+      {
+        "id": "1605c6dc-fd3c-4792-9c82-16f2b8e99a11",
+        "activo": "VENTILADOR FILTRO AIRE SALIDA HTK17AN001",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ02-AM000-KN01",
+        "componente": "VENTILADOR FILTRO AIRE SALIDA HTK17AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "8bc18c40-c8ae-4c3a-b06c-04bbdf0232fa",
+        "activo": "MOTOR VENT FILTRO SALIDA HTK17AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ02-AM000--M01",
+        "componente": "MOTOR VENT FILTRO SALIDA HTK17AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U0|GAF11-AP102",
+    [
+      {
+        "id": "160fec21-bc38-405b-8b26-1d6bdbfbb963",
+        "activo": "BOMBA BOOSTER -B DESALADORA 1-2",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAF11-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "2cfba413-7bef-4e58-8ffc-d872a3d233ab",
+        "activo": "Bomba Booster Alimentacion B U1-2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAF11-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AP111",
+    [
+      {
+        "id": "16b110bf-2d82-4da6-844c-40cc7fc2deed",
+        "activo": "BOMBA SALMUERA GBG35AP001",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP111-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1S"
+      },
+      {
+        "id": "e8f5255e-9d2b-4ec7-b0a3-c42a29a8ffc5",
+        "activo": "BOMBA SALMUERA GBG35AP001 DESA 8",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP111--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|PAD01-AP101",
+    [
+      {
+        "id": "16f2f096-079a-4346-80ad-a676fde2b53a",
+        "activo": "BOMBA CIRCULACION AUXILIAR -2A",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAD01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "6164a65d-a566-414e-9396-297cad907569",
+        "activo": "Bba Aux.A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAD01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA G1-11.09P12A-M"
+      }
+    ]
+  ],
+  [
+    "U4|HLB50-AN101",
+    [
+      {
+        "id": "17896601-0a22-417e-acdd-53e1b5d59a04",
+        "activo": "Ventilador detector de llamas A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB50-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "3f843009-00e0-4b72-8b05-fd6998cab559",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB50-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "9672d196-ea0a-45d0-84dc-db02e553556b",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -4A",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB50-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      },
+      {
+        "id": "b221a5ca-bed4-4dbf-9cd3-bbabae1bddbb",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB50-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      }
+    ]
+  ],
+  [
+    "U3|HFB04-BR101",
+    [
+      {
+        "id": "1810cbee-0f99-4c6d-aab6-9c31cfd5d6dc",
+        "activo": "MOTOR DUCTO ROTATORIO -D",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB04-BR101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "d7c40c42-b038-4d53-9db4-969c7a2f096c",
+        "activo": "Clasificador Rotatorio 3D",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB04-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "DUCTO ROTATORIO ALIMENTADOR -D"
+      }
+    ]
+  ],
+  [
+    "U5|HFB02-AF101",
+    [
+      {
+        "id": "1851adce-f394-4bce-9b81-c62f25b0c960",
+        "activo": "Alimentador de Carbon 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "7c5eb0c5-2d5f-4da6-bd70-ec741ce3476c",
+        "activo": "DESCANSOS",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB02-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      },
+      {
+        "id": "f3fcddcc-d70f-42ed-bd94-348cdfa5d32e",
+        "activo": "Alimentador de Carbon 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB02-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -B"
+      }
+    ]
+  ],
+  [
+    "U0|GAA01-AN101",
+    [
+      {
+        "id": "186bf245-7e6b-4b4d-b02a-484907b35191",
+        "activo": "Compresor Desaladora 1",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA01-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "COMPRESOR VAPOR"
+      },
+      {
+        "id": "b8363574-311f-45a5-8b42-051d59f0f6ac",
+        "activo": "MOTOR COMPRESOR DESALADORA -1 (U1)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U5|HRA02-AM102",
+    [
+      {
+        "id": "1914268b-1dcb-478a-b131-ae480ebbee4e",
+        "activo": "AGITADOR -B ESTANQUE DE ABSORBER",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM102",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      },
+      {
+        "id": "4d5fbbb4-4dc9-440a-9341-9fbc6be20454",
+        "activo": "MOTOR AGITADOR",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA02-AM102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      }
+    ]
+  ],
+  [
+    "U0|GAA04-AN101",
+    [
+      {
+        "id": "19b4d6da-0921-4e1b-bcb6-b7ace321e81a",
+        "activo": "COMPRESOR VAPOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "b9c7ca6f-7709-464f-be09-4d3fdba0f932",
+        "activo": "MOTOR COMPRESOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AP113",
+    [
+      {
+        "id": "19ff5257-ca2c-418f-a707-6eddee66ef38",
+        "activo": "BOMBA PRODUCTO GBG25AP001 DES 8",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP113--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "1e3e3df8-1d58-473d-b7ba-207d314889da",
+        "activo": "BOMBA PRODUCTO GBG25AP001",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP113-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1S"
+      }
+    ]
+  ],
+  [
+    "U5|HFC02-AJ101",
+    [
+      {
+        "id": "1ab90c61-a1f7-42e6-9e9b-d2766451c00a",
+        "activo": "Molino Pulverizador de Carbón 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFC02-AJ101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "699b1d8e-cbe9-4599-ba70-5163c50c3eeb",
+        "activo": "MOTOR ELECTRICO 6KV PULVERIZADOR -B",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFC02-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM LUBRICACION PULV B U5 1500 H"
+      }
+    ]
+  ],
+  [
+    "U4|HFB01-AF101",
+    [
+      {
+        "id": "1acdf9df-32b8-4b07-b9aa-c8b81526aeab",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-44-HFB01-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1S"
+      },
+      {
+        "id": "214a38f4-a7ef-4cd6-9781-630da8a644bd",
+        "activo": "Alimentador de Carbon 4A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB01-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -A"
+      },
+      {
+        "id": "ae1198ca-266a-4b3e-8adc-7919a9e711b6",
+        "activo": "Alimentador de Carbon 4A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|HRA08-AN202",
+    [
+      {
+        "id": "1ad688c3-60fc-4724-99b5-9e0421427b39",
+        "activo": "SOPLADOR DE OXIDACION -B",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA08-AN202--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO FGD U5  90 D"
+      },
+      {
+        "id": "a248e8d1-e490-412e-a765-4d76e5be7721",
+        "activo": "Soplador Aire Oxidación B FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HRA08-AN202",
+        "componente": "Soplador",
+        "denominacion_ut": "SOPLADOR OXIDACION -B"
+      }
+    ]
+  ],
+  [
+    "U0|ECA17-AF003",
+    [
+      {
+        "id": "1b2d496e-029f-4588-a13d-f79c220ad9ff",
+        "activo": "CORREA TRIPPER U5",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA17-AF003--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "e1972471-33b0-4e0e-9370-28ab81298bc1",
+        "activo": "Correa Tripper U5",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA17-AF003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U4|HLD20-AC101",
+    [
+      {
+        "id": "1c04c6ab-01e5-4867-82c8-59f456ea906e",
+        "activo": "MOTOR NEUMATICO",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLD20-AC101--M02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 6M G1"
+      },
+      {
+        "id": "7f1616f8-9a98-4fdd-90c3-d4f27e65bf7b",
+        "activo": "CALENTADOR AIRE REGENERATIVO",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLD20-AC101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 6M G1"
+      },
+      {
+        "id": "bcb676ca-46b4-4fa6-add0-12318c31f823",
+        "activo": "CALENTADOR AIRE REGENERATIVO U4",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLD20-AC101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CAR U4  90D"
+      },
+      {
+        "id": "f129635e-b570-4a52-ac3a-609da36432af",
+        "activo": "REDUCTOR VELOCIDAD",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLD20-AC101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 6M G1"
+      }
+    ]
+  ],
+  [
+    "U5|HFB02-BR101",
+    [
+      {
+        "id": "1c1ed6e9-b9d1-4bcc-a3fb-afe296689ce3",
+        "activo": "DUCTO ROTATORIO ALIMENTADOR -B",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB02-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G2"
+      },
+      {
+        "id": "e17632d9-c5cf-4a8b-bc65-7659ee49c608",
+        "activo": "Clasificador Rotatorio 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB02-BR101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR DUCTO ROTATORIO -B"
+      }
+    ]
+  ],
+  [
+    "U4|HFB03-AF101",
+    [
+      {
+        "id": "1c6d82c4-6d5a-471b-a50f-b38f4a8f02e5",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-44-HFB03-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1S"
+      },
+      {
+        "id": "1cf500a7-2d6e-46cb-80a2-0456696dd73a",
+        "activo": "Alimentador de Carbon 4C",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB03-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -C"
+      },
+      {
+        "id": "8c6de440-ce5b-4559-b881-0bbddcac1dab",
+        "activo": "Alimentador de Carbon 4C",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB03-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|HFB04-BR101",
+    [
+      {
+        "id": "1c6ef6c2-d777-447f-b242-5de529229d3c",
+        "activo": "Clasificador Rotatorio 5D",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB04-BR101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR DUCTO ROTATORIO -D"
+      },
+      {
+        "id": "1fc19590-1129-4481-9294-afb8e99f025e",
+        "activo": "DUCTO ROTATORIO ALIMENTADOR -D",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB04-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G2"
+      }
+    ]
+  ],
+  [
+    "U0|EAA02-AU002",
+    [
+      {
+        "id": "1ced8cd8-a474-4130-bb1a-2a964470389a",
+        "activo": "MECANISMO CIERRE  GRUA 1",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA02-AU002--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      },
+      {
+        "id": "fc926014-66ea-4e9e-a95b-7f270a220e8b",
+        "activo": "Cierre y apertura Grúa 1",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA02-AU002",
+        "componente": "Reductor",
+        "denominacion_ut": "MOTOR BOMBA HTQ37AP001-M01"
+      }
+    ]
+  ],
+  [
+    "U3|HRD02-AJ101",
+    [
+      {
+        "id": "1e12f9a5-0788-4fbf-b740-83e606d6cf29",
+        "activo": "MOLINO DE BOLAS",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "3806a0f6-4c18-45e4-bc68-39c654243641",
+        "activo": "MOTOR PRINCIPAL MOLINO DE BOLAS",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AJ101--M02",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "6414ef60-79ea-4aa7-9301-4e1bfecf84d0",
+        "activo": "DESCANSO -1",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AJ101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "a756b317-82cc-4de5-9ba7-a67aad34a196",
+        "activo": "DESCANSO -2",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AJ101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "c39c0147-39de-407e-8a7e-453ab5440a84",
+        "activo": "Molino de Bolas FGD",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRD02-AJ101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR PRINCIPAL"
+      },
+      {
+        "id": "e68dd65b-2e89-490f-84dd-dbe5db819fcb",
+        "activo": "REDUCTOR DE AVANCE LENTO",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AJ101-MG01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      }
+    ]
+  ],
+  [
+    "U0|GAD33-AP104",
+    [
+      {
+        "id": "1e70463a-5168-4862-bce5-44abe8ed9e49",
+        "activo": "Bomba Agua Servicio B U3-4",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAD33-AP104",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "401ca66d-560a-4569-8972-3c126d6bd806",
+        "activo": "MOTOR 03GHA01AP102-M01",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAD33-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AP113",
+    [
+      {
+        "id": "1f1e8fa3-9cfa-4d32-bfb3-0d2a1448e293",
+        "activo": "Bomba Producto Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AP113",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PRODUCTO GBG25AP001"
+      },
+      {
+        "id": "8abbeb2f-0d47-438d-9101-d628d8955284",
+        "activo": "BOMBA PRODUCTO GBG25AP001 DES11",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB04-AP113--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|ETA02-AF101",
+    [
+      {
+        "id": "1ffb1e57-2b88-42dc-966f-474f231b968c",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA02-AF101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "de2df63d-09f6-450e-87a5-849d5da03f4d",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA U3",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA02-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U3  180 D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA02-AN101",
+    [
+      {
+        "id": "21826a31-b059-4fb3-8734-f29ff57b0e33",
+        "activo": "Compresor Desaladora 2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA02-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "COMPRESOR VAPOR"
+      },
+      {
+        "id": "e931e2ed-fe48-40d1-a820-c97a1703bc7b",
+        "activo": "COMPRESOR VAPOR DESALADORA -2 (U2)",
+        "ubicacion": "DESAL",
+        "kks": "2893-01-GAA02-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS COMPRESORES 30D"
+      }
+    ]
+  ],
+  [
+    "U5|LCB01-AP102",
+    [
+      {
+        "id": "2289f3e8-72b6-4efb-9fd6-7a94b930ba4a",
+        "activo": "Bba. Agua Condensado 5B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-2LCB01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA LCB01AP102"
+      },
+      {
+        "id": "87bf4c4f-adf5-4ed8-9980-61d11d86fed1",
+        "activo": "BOMBA AGUA CONDENSADA -5B",
+        "ubicacion": "U5",
+        "kks": "2893-52-LCB01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      }
+    ]
+  ],
+  [
+    "U5|PAD04-AP102",
+    [
+      {
+        "id": "229d88ab-357b-427c-96bf-8643f113fc42",
+        "activo": "BOMBA BOOSTER -5B",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAD04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5  180D"
+      },
+      {
+        "id": "e0bb728a-78fa-4790-856a-b9aee58de51f",
+        "activo": "Bba Booster B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PAD04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP302"
+      }
+    ]
+  ],
+  [
+    "U0|GAA01-AP104",
+    [
+      {
+        "id": "2435fb18-0a04-43e3-8f86-73813afb3fe1",
+        "activo": "Bomba Salmuera Desaladora 1",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA01-AP104",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "68fefaec-ddb8-47f7-9fc3-59cc5679f70a",
+        "activo": "BOMBA SALMUERA DESALADORA -1 (U1)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA01-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|PAD04-AP102",
+    [
+      {
+        "id": "24629520-4822-4487-ac68-8dcd95ddd2aa",
+        "activo": "Bba Booster B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-3PAD04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP302"
+      },
+      {
+        "id": "dd80fce5-0dd0-49ef-b1c1-7f7057ec9b3b",
+        "activo": "BOMBA BOOSTER -3B",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U1|HLB50-AN101",
+    [
+      {
+        "id": "251ddc5d-c095-4804-8422-b605995dd657",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -1A",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLB50-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U1  60 D"
+      },
+      {
+        "id": "3536b28a-7d64-4c71-bc24-c31f50023df6",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLB50-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      },
+      {
+        "id": "600db6c5-69d8-4589-ac74-8bf7c5f3ada8",
+        "activo": "DESCANSOS",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLB50-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      }
+    ]
+  ],
+  [
+    "U0|EGE03-AP102",
+    [
+      {
+        "id": "258cfd9b-72d1-4e69-9805-6a9c2c5900c5",
+        "activo": "Bomba Diesel 1B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA0-1EGE03-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "4034c70a-85da-4ba3-b89a-e6ca87554e9b",
+        "activo": "BOMBA PETROLEO DIESEL -B U1-2",
+        "ubicacion": "U1-2",
+        "kks": "2893-01-EGE03-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U3|HRB03-AT101",
+    [
+      {
+        "id": "25b308b5-0941-434c-ac0c-fb44fb7a679e",
+        "activo": "MOTOR FILTRO BANDA -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB03-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO FGD U3  90 D"
+      },
+      {
+        "id": "6ad042e8-a795-4f2d-a8b2-d35a8225f555",
+        "activo": "FILTRO BANDA B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB03-AT101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "c5173ff0-fd9f-4373-9d20-592d54c29931",
+        "activo": "Filtro de Banda B FGD",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRB03-AT101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR DE VELOCIDAD"
+      }
+    ]
+  ],
+  [
+    "U0|GAA07-AN101",
+    [
+      {
+        "id": "25e32bca-c643-47d5-9292-3f48416744e9",
+        "activo": "MOTOR COMPRESOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "ebc8400b-47e6-4cd5-a03b-a317ee460c81",
+        "activo": "COMPRESOR VAPOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      }
+    ]
+  ],
+  [
+    "U5|HFB04-AF101",
+    [
+      {
+        "id": "25fcc077-c945-4bd5-a32f-cd687b25f903",
+        "activo": "Alimentador de Carbon 5D",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB04-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "b23d6955-adea-4f07-a514-d6edffc39cdf",
+        "activo": "DESCANSOS",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB04-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      },
+      {
+        "id": "d2fe2d1e-2729-40ba-a5e0-821f11a0cbbe",
+        "activo": "Alimentador de Carbon 5D",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB04-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA04-AP102",
+    [
+      {
+        "id": "265ebfac-2977-493f-8924-0fd55bc5e7bb",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "94b0cc29-dba6-4953-9d1f-1d4d4128321e",
+        "activo": "BOMBA DE VACIO DESALADORA -4 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|PGH01-AP102",
+    [
+      {
+        "id": "271fdc68-91bb-48fa-b341-e3056f3a2c73",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -2B",
+        "ubicacion": "U2",
+        "kks": "2893-23-PGH01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2  90 D"
+      },
+      {
+        "id": "802f1431-7492-4c5a-baaf-9febe24bc31e",
+        "activo": "Bba Enfriamiento B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PGH01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.10P11B"
+      }
+    ]
+  ],
+  [
+    "U0|GDB03-AP112",
+    [
+      {
+        "id": "280fff6d-6397-4bcb-ae60-8f1161f1ffdd",
+        "activo": "Bomba Circulación Desaladora 10",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB03-AP112",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA CIRCULACION GBG20AP001"
+      },
+      {
+        "id": "a08307bc-9277-4d97-b85b-c589ec775cf5",
+        "activo": "BOMBA CIRCULACION GBG20AP001 DES10",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB03-AP112--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U0|GCL15-AP102",
+    [
+      {
+        "id": "2941c1e2-f974-4037-b233-4da3d692d2c4",
+        "activo": "BOMBA AGUA FGD MAKEUP-B U5",
+        "ubicacion": "PA",
+        "kks": "2893-01-GCL15-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "7b9319ab-242f-4048-828d-0eb05da877a3",
+        "activo": "Bomba Pretratada U6-7 B",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GCL15-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U3|HRB02-AT101",
+    [
+      {
+        "id": "29cec433-b3f9-4ee1-97b3-9cb6990d8490",
+        "activo": "MOTOR FILTRO BANDA -A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB02-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO FGD U3  90 D"
+      },
+      {
+        "id": "8b17ac06-c821-4e70-8770-bc34c269a784",
+        "activo": "FILTRO BANDA A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB02-AT101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "d6464242-a4ac-471b-9794-e5f0c4519a04",
+        "activo": "Filtro de Banda A FGD",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRB02-AT101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR DE VELOCIDAD"
+      }
+    ]
+  ],
+  [
+    "U2|ETA01-AT101",
+    [
+      {
+        "id": "29d86509-e955-4b68-8df2-9e9dc8aebace",
+        "activo": "CADENA SUMERGIDA U2",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA01-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U2  180 D"
+      },
+      {
+        "id": "5d087e20-db30-4512-93a2-ed1dc54a58d1",
+        "activo": "REDUCTOR",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA01-AT101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      }
+    ]
+  ],
+  [
+    "U1|LCB01-AP101",
+    [
+      {
+        "id": "2af25587-6e75-4fb9-8ac4-f33318e61102",
+        "activo": "BOMBA AGUA CONDENSADA -1A",
+        "ubicacion": "U1",
+        "kks": "2893-12-LCB01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "6a25a802-8e69-4012-9861-78c14d4f985f",
+        "activo": "MOTOR BOMBA G1-11.05P32A-M01",
+        "ubicacion": "U1",
+        "kks": "2893-12-LCB01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G2"
+      }
+    ]
+  ],
+  [
+    "U5|HRA05-AP102",
+    [
+      {
+        "id": "2c1e82b6-afec-4703-a516-9f98bad9ed5a",
+        "activo": "MOTOR BOMBA",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA05-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      },
+      {
+        "id": "49416e7e-1dde-47b8-8bf9-c2fcce6578fc",
+        "activo": "Bomba Recirculadora B FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HRA05-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U3|ETA01-AJ101",
+    [
+      {
+        "id": "2cbd4edf-1726-4f80-b4c1-10050b3a7e26",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AJ101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "7335df44-de8e-47ce-972c-c0e28f4c0b43",
+        "activo": "TRITURADOR DE ESCORIA",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "8c102dd5-5219-4dd7-a3f5-e85bc3b41eae",
+        "activo": "TRITURADOR DE ESCORIA U3",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U3  180 D"
+      }
+    ]
+  ],
+  [
+    "U3|PAD01-AP101",
+    [
+      {
+        "id": "2cf058f4-09b1-4c22-bc32-db3a110a41b7",
+        "activo": "MOTOR BOMBA PAC01AP601-M01",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "cdb4b7f1-cd39-47d7-8549-66996372d8d9",
+        "activo": "BOMBA CIRCULACION AUXILIAR -3A",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD01-AP101-KP02",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      }
+    ]
+  ],
+  [
+    "U3|ETA01-AT101",
+    [
+      {
+        "id": "2d98f0f5-ce9d-467b-8043-40a1c511e564",
+        "activo": "CADENA SUMERGIDA",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "436454d4-a001-4531-9216-2c3f5d9b80fa",
+        "activo": "EJE MOTRIZ LADO LIBRE",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU04",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "45835555-324b-4e21-89e2-08a752c73f1d",
+        "activo": "EJE GUIA SUPERIOR",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "4f5b7199-d788-4cb6-b3ef-d3ace86738e2",
+        "activo": "EJE TENSOR",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU06",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "5e4fcc3d-649b-4b88-87c3-8ec0db60faa7",
+        "activo": "EJE MOTRIZ LADO TRANSMISION",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU05",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "632aaf8b-3e6f-4620-91c0-7751cca48571",
+        "activo": "REDUCTOR",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "c0ac9b2f-b2a0-4e16-a210-f12a1da1f484",
+        "activo": "EJE GUIA INFERIOR",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      },
+      {
+        "id": "c2f59c60-cc99-4438-8712-71967a58bc3d",
+        "activo": "CADENA SUMERGIDA U3",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U3  180 D"
+      },
+      {
+        "id": "dbb74cd6-144e-4887-a392-ab824efb997f",
+        "activo": "EJE MOTRIZ",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA01-AT101-MU03",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      }
+    ]
+  ],
+  [
+    "U0|GAA03-AP104",
+    [
+      {
+        "id": "2e63dfc3-5338-444a-8f69-cbf1f0ef7c5c",
+        "activo": "BOMBA SALMUERA DESALADORA -3 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "d85f9325-b5a6-434f-a486-8f5aac5a0e0c",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP104-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U2|HFB02-AF101",
+    [
+      {
+        "id": "2f9d6fcf-15e1-4605-9e95-cdb96aa43055",
+        "activo": "DESCANSOS",
+        "ubicacion": "U2",
+        "kks": "2893-24-HFB02-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1S"
+      },
+      {
+        "id": "70574524-eae3-4dd9-8961-62910d1237c5",
+        "activo": "Alimentador de Carbon 2B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB02-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -B"
+      },
+      {
+        "id": "dbce76b8-f35d-4df9-a708-dc6eb25a81cc",
+        "activo": "Alimentador de Carbon 2B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|HFB01-BR101",
+    [
+      {
+        "id": "2fb56f21-5a29-425b-b5c5-b1ee8220d2c9",
+        "activo": "Clasificador Rotatorio 5A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB01-BR101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR DUCTO ROTATORIO -A"
+      },
+      {
+        "id": "cfc957a3-beb3-4d34-b69c-3028f5396afb",
+        "activo": "DUCTO ROTATORIO ALIMENTADOR -A",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB01-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G2"
+      }
+    ]
+  ],
+  [
+    "U4|HLB30-AN101",
+    [
+      {
+        "id": "2fdec27e-52b6-49eb-968b-57209dec8468",
+        "activo": "VENTILADOR AIRE SELLO VAS -4A",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB30-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      },
+      {
+        "id": "68eb9788-bc44-4604-ac97-6ef531cbbadc",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB30-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "8b1c1d5b-ca8d-48a5-a6c9-d92b0b477222",
+        "activo": "VENTILADOR AIRE SELLO VAS -A",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB30-AN101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "de4861e2-44ec-4a2b-9d0c-819056d5feb6",
+        "activo": "Ventilador aire sello A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB30-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U5|HLB20-AN101",
+    [
+      {
+        "id": "2ff287a0-84c2-4582-9981-3c2e2d493889",
+        "activo": "VENTILADOR AIRE PRIMARIO VAP U5",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB20-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5 15D"
+      },
+      {
+        "id": "8871189c-6d3d-47cc-8b1f-0d6673555ddb",
+        "activo": "Ventilador Aire Primario",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB20-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|HTJ02-AM010",
+    [
+      {
+        "id": "2ff86a81-4125-4069-9845-ddb79475dbb6",
+        "activo": "MOTOR VENTILADOR HTK37AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ02-AM010--M01",
+        "componente": "MOTOR VENTILADOR HTK37AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "8ac39cfb-6ba3-4b1a-8a83-6b8f753562b8",
+        "activo": "VENTILADOR FILTRO HTK37AN001",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ02-AM010-KN01",
+        "componente": "VENTILADOR FILTRO HTK37AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U3|PGH01-AP101",
+    [
+      {
+        "id": "30ca65cb-8c9a-48d3-9010-9a1c28e31c73",
+        "activo": "Bba Enfriamiento A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-3PGH01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP101"
+      },
+      {
+        "id": "46f09cf8-b6bf-4c7b-90a6-e0c504c64115",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -A",
+        "ubicacion": "U3",
+        "kks": "2893-33-PGH01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U2|PAC01-AP101",
+    [
+      {
+        "id": "3123f644-0421-47bc-b095-73bb61b4d03f",
+        "activo": "Bba. Circulación PPLL 2A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAC01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA"
+      },
+      {
+        "id": "490f92a1-fd5a-4925-9de7-d0ab3520d200",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -2A",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      }
+    ]
+  ],
+  [
+    "U4|HTC02-AN101",
+    [
+      {
+        "id": "317db4f4-179d-42f0-9b8d-d391d2eec265",
+        "activo": "Ventilador tiro inducido",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HTC02-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR VTI HTC10AN001"
+      },
+      {
+        "id": "4e49f17b-19f3-4e44-8f4f-7f766c77f582",
+        "activo": "UNIDAD VENTILADOR VTI U4",
+        "ubicacion": "U4",
+        "kks": "2893-45-HTC02-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4 15D"
+      }
+    ]
+  ],
+  [
+    "U0|HTJ01-AF002",
+    [
+      {
+        "id": "31c4a172-4bd1-49f7-bdb5-afd6d82923fe",
+        "activo": "MOTOR VENTILADOR HTJ31AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF002--M02",
+        "componente": "MOTOR VENTILADOR HTJ31AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "b1794eaa-26b7-4de2-a264-607c5a798559",
+        "activo": "VENTILADOR ENFRIAMIENTO HTJ31AN001",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF002-KN01",
+        "componente": "VENTILADOR ENFRIAMIENTO HTJ31AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "d80e7e3e-30c2-491f-83a2-4660ecfc83e4",
+        "activo": "MOTOR ALIMENTADOR HTJ31AF001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF002--M01",
+        "componente": "MOTOR ALIMENTADOR HTJ31AF001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AP112",
+    [
+      {
+        "id": "31d6d1e1-1554-4bbb-afbd-b90f06290ce6",
+        "activo": "BOMBA CIRCULACION GBG20AP001 DES11",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB04-AP112--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "45439079-d30f-4128-8493-d64c4445efde",
+        "activo": "Bomba Circulación Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AP112",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA CIRCULACION GBG20AP001"
+      }
+    ]
+  ],
+  [
+    "U2|HLD20-AC101",
+    [
+      {
+        "id": "32b48a9a-ad8e-4498-93d4-2b8525fb18b1",
+        "activo": "REDUCTOR VELOCIDAD",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLD20-AC101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      },
+      {
+        "id": "5bbc7823-80c6-4a5c-af0e-032734d9c498",
+        "activo": "RODAMIENTO SUPERIOR",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLD20-AC101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 3M G2"
+      },
+      {
+        "id": "60f9f351-8958-472a-ab56-934bb344cc72",
+        "activo": "CALENTADOR AIRE REGENERATIVO",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLD20-AC101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      },
+      {
+        "id": "955bd47c-504c-40d8-9938-8c84253e44e8",
+        "activo": "RODAMIENTO INFERIOR",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLD20-AC101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 3M G2"
+      },
+      {
+        "id": "c7e7b1a1-0a15-4309-a241-620d524f5478",
+        "activo": "CALENTADOR AIRE REGENERATIVO U2",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLD20-AC101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CAR U2  90D"
+      }
+    ]
+  ],
+  [
+    "U1|ETA02-AF102",
+    [
+      {
+        "id": "33b5d91f-cf10-4e7e-af8b-5f71232c9c79",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA02-AF102-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      },
+      {
+        "id": "6e9ae44a-9590-4959-8eb1-89fedd2c5287",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA U1",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA02-AF102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U1  180 D"
+      },
+      {
+        "id": "9f674ecf-4432-4476-9dc1-f59619496f98",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA02-AF102",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      }
+    ]
+  ],
+  [
+    "U0|ECA17-AF002",
+    [
+      {
+        "id": "33d3d64a-1a0d-469b-aba6-123593a073f9",
+        "activo": "CORREA TRIPPER U3U4",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA17-AF002--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "46612f31-2e11-4388-9fa9-66f7e878099d",
+        "activo": "Correa Tripper U3-4",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA17-AF002",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "53f12682-9c4c-4b29-81a8-c36878c5375a",
+        "activo": "Correa Tripper U3-4",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA17-AF002",
+        "componente": "Pulley",
+        "denominacion_ut": "CORREA TRIPPER U3U4"
+      }
+    ]
+  ],
+  [
+    "U5|HSD01-AN102",
+    [
+      {
+        "id": "342f79eb-7551-409a-b3ee-9596995031fc",
+        "activo": "VENTILADOR DILUCION AMON -5B HSA02AN102",
+        "ubicacion": "U5",
+        "kks": "2893-55-HSD01-AN102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "a4b77e84-6c94-4c0c-b208-396282af90f5",
+        "activo": "Ventilador detector de amoniaco B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HSD01-AN102",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U5|HNC03-AN101",
+    [
+      {
+        "id": "3443e807-f2f8-4156-83ec-22b066f8cccc",
+        "activo": "VENTILADOR AIRE SELLO VAS -5B FGD",
+        "ubicacion": "U5",
+        "kks": "2893-55-HNC03-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "5fe7786d-e9ec-49cb-8473-77de0f2333ba",
+        "activo": "Ventilador Aire Sello By Pass B FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HNC03-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR VAS -B FGD"
+      }
+    ]
+  ],
+  [
+    "U4|HLB40-AN101",
+    [
+      {
+        "id": "3620e40d-0ef8-40bb-a50b-590d357aea5d",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB40-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "5afd0617-0f92-4f5b-8434-626c386a5a72",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB40-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "9472d470-04df-4597-b564-272a5259fecd",
+        "activo": "VENTILADOR AIRE IGNITORES U4",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB40-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4 15D"
+      },
+      {
+        "id": "c59ae629-8da0-4a20-8a32-9fd7bd354f76",
+        "activo": "Ventilador aire ignitores",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB40-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U4|PAD01-AP101",
+    [
+      {
+        "id": "37fe35b6-50a7-421b-b323-0e2172a99f2c",
+        "activo": "Bba Aux.A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAD01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP601"
+      },
+      {
+        "id": "7fa6cb30-3e62-4b7d-904d-220524752307",
+        "activo": "BOMBA CIRCULACION AUXILIAR -4A",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAD01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U2|HTP11-AF101",
+    [
+      {
+        "id": "384dfb12-757f-4f13-a21f-a4771030ab34",
+        "activo": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-25-HTP11-AF101--M01",
+        "componente": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "546a2b6b-7e33-47e7-a00c-8a398e169a45",
+        "activo": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-25-HTP11-AF101--M03",
+        "componente": "MOTOR VENTILADOR HTK51AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "823718cf-e81c-45d8-8e56-d995bcb84e29",
+        "activo": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion": "SC",
+        "kks": "2893-25-HTP11-AF101-KN01",
+        "componente": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U5|HFB03-AF101",
+    [
+      {
+        "id": "3932c2cb-d2f8-4c9c-a19f-ade327cb936f",
+        "activo": "Alimentador de Carbon 5C",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB03-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "aa159b38-73ab-4a69-bb16-63174c19f8ba",
+        "activo": "Alimentador de Carbon 5C",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB03-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -C"
+      },
+      {
+        "id": "bd70f259-fb28-4610-aa17-e2263135a848",
+        "activo": "DESCANSOS",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB03-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      }
+    ]
+  ],
+  [
+    "U2|ETA02-AF102",
+    [
+      {
+        "id": "3952dbb1-fb97-423d-9b92-8ee0fa79731e",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA U2",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA02-AF102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U2  180 D"
+      },
+      {
+        "id": "39c23718-d5d7-40c2-ade7-73ecc62d8dab",
+        "activo": "Correa 2 de Escorias U2",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-6ETA02-AF102",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR DE VELOCIDAD"
+      },
+      {
+        "id": "bf7a0779-4199-41e6-92f2-2ab4491f189e",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA02-AF102",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      }
+    ]
+  ],
+  [
+    "U2|LCB01-AP101",
+    [
+      {
+        "id": "396b5027-64a8-49a3-9042-358e54c2864c",
+        "activo": "MOTOR BOMBA G2-11.05P32A-M01",
+        "ubicacion": "U2",
+        "kks": "2893-22-LCB01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 6M G2"
+      },
+      {
+        "id": "68c0cbce-324c-40ca-85f1-ff7bd142d030",
+        "activo": "BOMBA AGUA CONDENSADA -2A",
+        "ubicacion": "U2",
+        "kks": "2893-22-LCB01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      }
+    ]
+  ],
+  [
+    "U3|HLB50-AN101",
+    [
+      {
+        "id": "396f5f79-f347-4a44-86bf-f3c456dcbb8b",
+        "activo": "Ventilador detector de llamas A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB50-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "5503e55b-b871-4915-bd21-91783455a887",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB50-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "e83970af-1711-4b70-bbd0-3b337540bca8",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB50-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "ff30e278-d97e-4e67-9671-b5ff0843c426",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -3A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB50-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      }
+    ]
+  ],
+  [
+    "U4|HTP11-AF101",
+    [
+      {
+        "id": "39f3a8f3-bc4f-41c3-852a-2d29f7de9526",
+        "activo": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-45-HTP11-AF101--M03",
+        "componente": "MOTOR VENTILADOR HTK51AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "8853e196-89df-4dcc-85fc-1ac9d34ae2c0",
+        "activo": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-45-HTP11-AF101--M01",
+        "componente": "MOTOR ALIMENTADOR HTK51AF001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "fedc80f4-6e36-4686-93ef-882c48fc7e54",
+        "activo": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion": "SC",
+        "kks": "2893-45-HTP11-AF101-KN01",
+        "componente": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U3|HNC02-AN101",
+    [
+      {
+        "id": "3ac08f74-597d-4217-bab5-1b3181fb123a",
+        "activo": "Ventilador Aire Sello By Pass A FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HNC02-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR VAS -A FGD"
+      },
+      {
+        "id": "9785060d-656f-406e-a3ba-439ad2c44f3b",
+        "activo": "VENTILADOR AIRE SELLO VAS -3A FGD",
+        "ubicacion": "U3",
+        "kks": "2893-35-HNC02-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      }
+    ]
+  ],
+  [
+    "U0|EAA03-AU002",
+    [
+      {
+        "id": "3bd3dbe6-a4bc-4669-8832-cf15d642bb5a",
+        "activo": "Cierre y apertura Grúa 2",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA03-AU002",
+        "componente": "Reductor",
+        "denominacion_ut": "MOTOR BOMBA HTQ38AP001-M01"
+      },
+      {
+        "id": "c3e6a586-f9ee-47f7-acff-530982d8ea31",
+        "activo": "MECANISMO CIERRE GRUA 2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA03-AU002--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U4|ETA02-AF102",
+    [
+      {
+        "id": "3bf56637-fe7e-4aa9-9833-732af228acb1",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA02-AF102-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "63e414ef-c535-4cee-9616-f2e84a5c61d7",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA02-AF102",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "d4cc2bd6-3b60-48d4-bd3b-864fa3465946",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA U4",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA02-AF102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U4  180 D"
+      }
+    ]
+  ],
+  [
+    "U3|HLB30-AN101",
+    [
+      {
+        "id": "3c6153ef-3abb-4fd0-ae2e-d6363e77b406",
+        "activo": "VENTILADOR AIRE SELLO VAS -A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB30-AN101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "83e3406b-43db-4fb6-b094-b1dc06ec0f61",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB30-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "a12a02f1-b477-47bb-954e-28de72efc8af",
+        "activo": "Ventilador aire sello A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB30-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "c6d36d96-68e8-477f-966f-44ac2f56327b",
+        "activo": "VENTILADOR AIRE SELLO VAS -3A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB30-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      }
+    ]
+  ],
+  [
+    "U3|HRD01-AF101",
+    [
+      {
+        "id": "3c955c0e-8aaf-4d85-98e8-5425dad8d3b5",
+        "activo": "Correa Alimentadora de Caliza",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRD01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR CORREA ALIM CALIZA"
+      },
+      {
+        "id": "f570e87a-9dae-4b0d-bf59-964e5b22c2be",
+        "activo": "CORREA ALIM CALIZA AL MOLINO DE MARTILLO U3",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD01-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U3  180 D"
+      }
+    ]
+  ],
+  [
+    "U1|HLB20-AN101",
+    [
+      {
+        "id": "3d87630a-0f74-4f01-a18d-624439860082",
+        "activo": "Ventilador Aire Primario",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-5HLB20-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "e1005965-dfda-49b9-88f1-95ac1345262a",
+        "activo": "VENTILADOR AIRE PRIMARIO VAP U1",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLB20-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U1 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA01-AP103",
+    [
+      {
+        "id": "3e3dee1f-ca29-463c-99cf-5e6a5dc22e1c",
+        "activo": "BOMBA PRODUCTO DESALADORA -1 (U1)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA01-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "6be47d63-86f2-4f8e-8f2e-1fd566188c62",
+        "activo": "Bomba Producto Desaladora 1",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA01-AP103",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U4|PAC01-AP102",
+    [
+      {
+        "id": "3edcc6e9-eec8-4fee-9104-ea88dcca0848",
+        "activo": "Bba. Circulación PPLL 4B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAC01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP102"
+      },
+      {
+        "id": "96ce75d2-cc99-4d27-8880-af14efaa5139",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -4B",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAC01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AP302",
+    [
+      {
+        "id": "3f80a541-60cd-4e78-a244-7ee61464221b",
+        "activo": "Bomba Vacío 2 Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP302",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BBA VACIO GBG42AP001-M01"
+      },
+      {
+        "id": "5dafd061-c7af-4b49-ac26-1a72f39c74d0",
+        "activo": "BOMBA DE VACIO -2 DES9",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB02-AP302-M01",
+        "componente": "",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "a4edd0c6-d3d8-45f7-a4c3-40db02495ccb",
+        "activo": "Bomba Vacío 2 Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP302",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -2 GBG42AP001"
+      }
+    ]
+  ],
+  [
+    "U4|LAC01-AP102",
+    [
+      {
+        "id": "4014af42-652f-4fd9-bd44-8c174bcef1a4",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-2LAC01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA LAC02AP102-M01"
+      },
+      {
+        "id": "c385af31-d2b8-4a35-b30e-22b78fa64841",
+        "activo": "BOMBA AGUA ALIMENTACION -4B",
+        "ubicacion": "U4",
+        "kks": "2893-42-LAC01-AP102-MU01",
+        "componente": "DESCANSO MOTOR RADIAL -1",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      },
+      {
+        "id": "c9bda2ed-405b-4293-8e64-e07433573053",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-2LAC01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA LAC02AP102"
+      },
+      {
+        "id": "f887c705-067a-48c4-aaf8-ec093cf06822",
+        "activo": "BOMBA LUBRICACION -B (B.A.A 4B)",
+        "ubicacion": "U4",
+        "kks": "2893-42-LAC01-AP102-KP03",
+        "componente": "BOMBA LUBRICACION -B LAC02AP202",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U4|PAD04-AP101",
+    [
+      {
+        "id": "4034662c-f7e3-4207-b952-786af0ef2052",
+        "activo": "MOTOR BOMBA BOOSTER -A PAC01AP301-M01",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAD04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 6M G2"
+      },
+      {
+        "id": "89b9c27a-3013-4b50-9143-8ced3a893140",
+        "activo": "Bba Booster A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAD04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP301"
+      }
+    ]
+  ],
+  [
+    "U0|GAA01-AP102",
+    [
+      {
+        "id": "40743f4c-89a1-4673-ae47-5f9f11b3fe43",
+        "activo": "BOMBA DE VACIO DESALADORA -1 (U1)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "e2d17741-698c-409b-969c-e51f75f7c32c",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U0|EAA09-AF001",
+    [
+      {
+        "id": "4459c699-2ba0-4b71-b0fc-9fc6dca27896",
+        "activo": "CORREA TRANSPORTADORA C2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA09-AF001--M02",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      },
+      {
+        "id": "72565f00-e2e5-42b9-9907-ec873f763a2e",
+        "activo": "Correa FSC2",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA09-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U1|PAD01-AP101",
+    [
+      {
+        "id": "45f1dcc2-8d35-4f0b-9a5c-9bc873e552b8",
+        "activo": "Bba Aux.A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-3PAD01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.09P12A"
+      },
+      {
+        "id": "6a9e77d4-a2bf-4993-bfee-4b57abfb44af",
+        "activo": "MOTOR BOMBA G1-11.09P12A-M",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAD01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G2"
+      }
+    ]
+  ],
+  [
+    "U3|PAC01-AP101",
+    [
+      {
+        "id": "4624ca95-faa5-46be-b83f-86cda24f6bea",
+        "activo": "MOTOR BOMBA PAC01AP101-M01",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAC01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "495c9a48-5254-49b7-8a85-54c95d8920b2",
+        "activo": "DESCANSOS PAC01HA101",
+        "ubicacion": "U4",
+        "kks": "2893-33-PAC01-AP101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 3M G2"
+      },
+      {
+        "id": "a78fa554-da93-4eb6-b167-5d0caaa0dd3c",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -3A",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      }
+    ]
+  ],
+  [
+    "U2|PAD04-AP102",
+    [
+      {
+        "id": "4697c32b-c9b7-4808-97e5-197710519fd1",
+        "activo": "Bba Booster B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAD04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.09P13B"
+      },
+      {
+        "id": "4d314e1a-e74d-40be-b467-5db1eba457ac",
+        "activo": "BOMBA BOOSTER -2B",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAD04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2  90 D"
+      }
+    ]
+  ],
+  [
+    "U1|LAC01-AP103",
+    [
+      {
+        "id": "46caf7d8-7872-4c82-bd78-0ea78648f558",
+        "activo": "Bba Agua Alimentación C",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP103",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA G1-AA.07P11CM"
+      },
+      {
+        "id": "654ab18d-8742-4f79-a612-a9d02b1cfa3c",
+        "activo": "BOMBA LUBRICACION AUXILIAR B.A.A 1C",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP103-KP02",
+        "componente": "BOMBA LUBRICACION AUXILIAR",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "6abf1c62-7be1-4465-9adf-b75c5e14f846",
+        "activo": "BOMBA LUBRICACION PRINCIPAL B.A.A 1C",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP103-KP03",
+        "componente": "",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "f7f93ad7-58fd-4313-8281-6a1673e16fef",
+        "activo": "BOMBA AGUA ALIMENTACION -1C",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP103-MG01",
+        "componente": "Amplificador",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "ffd3f661-ae56-45eb-8b4a-c7a5f2801022",
+        "activo": "Bba Agua Alimentación C",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP103",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA G1-AA.07P11C"
+      }
+    ]
+  ],
+  [
+    "U1|ETA02-AF101",
+    [
+      {
+        "id": "47254bd7-5894-4d42-9d99-01e1da0ba9f4",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA U1",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA02-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U1  180 D"
+      },
+      {
+        "id": "9af98a5a-b461-49c1-8d04-daef0209e2f9",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA02-AF101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      }
+    ]
+  ],
+  [
+    "U4|HLB20-AN101",
+    [
+      {
+        "id": "48785c35-3b9c-43a8-b4f1-0655da28592a",
+        "activo": "VENTILADOR AIRE PRIMARIO VAP U4",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB20-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4 15D"
+      },
+      {
+        "id": "dc4159fa-ab2d-4224-992b-cec9f168f01e",
+        "activo": "Ventilador Aire Primario",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB20-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GAD16-AP101",
+    [
+      {
+        "id": "48b100a1-d287-4e78-9335-c38946f24c40",
+        "activo": "BOMBA AGUA PRETRATADA -A 5",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAD16-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "a8c9a762-4c43-4f86-ae88-c9bcf2a80588",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAD16-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U0|ECA06-AF001",
+    [
+      {
+        "id": "48c5a099-2ea5-4493-82fe-433aa850f3cc",
+        "activo": "CORREA TRANSPORTADORA C9",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA06-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "fcf6dc04-b417-4a7c-b986-f4b470edca41",
+        "activo": "Correa FSC9",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA06-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U1|HFB03-AF101",
+    [
+      {
+        "id": "4a187d46-382d-4b58-9e21-e6a9dae75fa3",
+        "activo": "DESCANSOS ALIMENTADOR DE CARBON -C",
+        "ubicacion": "U1",
+        "kks": "2893-14-HFB03-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1S"
+      },
+      {
+        "id": "719e7f6f-c8dc-4798-8aae-2bc539889240",
+        "activo": "Alimentador de Carbon 1C",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB03-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -C"
+      },
+      {
+        "id": "8650da3d-f609-433c-b700-27ba07b7b1ba",
+        "activo": "Alimentador de Carbon 1C",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB03-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|EGE04-AP102",
+    [
+      {
+        "id": "4a77580a-ab2e-4d61-a80c-4c3bfd6c9887",
+        "activo": "Bomba Diesel 3B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA0-1EGE04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "88c50e9c-18ea-4f86-ac36-8c24fbfac0fe",
+        "activo": "BOMBA PETROLEO DIESEL -B U3-4-5",
+        "ubicacion": "U3-4-5",
+        "kks": "2893-01-EGE04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U0|EAA03-AU001",
+    [
+      {
+        "id": "4ad703fd-9308-4d81-b83c-2f95a70abb4a",
+        "activo": "Levante y Bajada Grúa 2",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA03-AU001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR ELEVACION"
+      },
+      {
+        "id": "5894707a-a087-4071-945d-9145860445a6",
+        "activo": "MECANISMO ELEVACION GRUA 2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA03-AU001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA05-AN101",
+    [
+      {
+        "id": "4b94b0b5-4ba9-4027-b0de-5710ca8e8a79",
+        "activo": "COMPRESOR VAPOR DESALADORA -5 (U4)",
+        "ubicacion": "DESAL",
+        "kks": "2893-01-GAA05-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS COMPRESORES 30D"
+      },
+      {
+        "id": "6e94a898-4f8a-4681-b65c-6100158e5b10",
+        "activo": "COMPRESOR VAPOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "8b913ff2-0bba-4567-9df0-113c7986fd98",
+        "activo": "COMPRESOR VAPOR DESALADORA -5 (U4)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U1|LCB01-AP102",
+    [
+      {
+        "id": "4c53b769-a443-4777-806e-4aca9788fcc5",
+        "activo": "MOTOR BOMBA G1-11.05P32B-M01",
+        "ubicacion": "U1",
+        "kks": "2893-12-LCB01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G2"
+      },
+      {
+        "id": "6ec04b3b-7cca-4e6f-9e00-9512e9126c8e",
+        "activo": "BOMBA AGUA CONDENSADA -1B",
+        "ubicacion": "U1",
+        "kks": "2893-12-LCB01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      }
+    ]
+  ],
+  [
+    "U0|ECA11-AF001",
+    [
+      {
+        "id": "4c6403e6-e8a6-473d-85aa-faf67b0a6716",
+        "activo": "Correa FSC13",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA11-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "92d141ab-955f-4d9f-a54e-bf583d61c6fb",
+        "activo": "CORREA TRANSPORTADORA C13",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA11-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      }
+    ]
+  ],
+  [
+    "U1|LAC01-AP102",
+    [
+      {
+        "id": "4cd10a4c-d9db-4020-a874-eb58d7113215",
+        "activo": "BOMBA LUBRICACION PRINCIPAL B.A.A 1B",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP102-KP03",
+        "componente": "BOMBA LUBRICACION PRINCIPAL",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "57677449-1448-4783-b3ab-3ba07963bd9c",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA G1-AA.07P11BM"
+      },
+      {
+        "id": "7e8e0537-118d-430e-a44b-c9b0c54d8a5c",
+        "activo": "BOMBA AGUA ALIMENTACION -1B",
+        "ubicacion": "U1",
+        "kks": "2893-12-LAC01-AP102-MG01",
+        "componente": "Amplificador",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "974a4e81-0f64-429a-8459-c11876991735",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-2LAC01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA G1-AA.07P11B"
+      }
+    ]
+  ],
+  [
+    "U3|HFB03-AF101",
+    [
+      {
+        "id": "4cdf6328-0488-4e15-91c3-011724f851be",
+        "activo": "Alimentador de Carbón 3C",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB03-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "6b65df79-208b-4c54-a9aa-658966a81c45",
+        "activo": "Alimentador de Carbón 3C",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB03-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -C"
+      },
+      {
+        "id": "af2352e3-2a0f-4f24-b65b-3457241b0654",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB03-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      }
+    ]
+  ],
+  [
+    "U3|HRA08-AN201",
+    [
+      {
+        "id": "4dc427fe-b02a-49f6-8fb3-2c3cce69fbd6",
+        "activo": "MOTOR SOPLADOR OXIDACION -A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA08-AN201--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO FGD U3  90 D"
+      },
+      {
+        "id": "79618d2f-b4ca-468e-b2a6-13c09f01690e",
+        "activo": "Soplador Aire Oxidación A FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA08-AN201",
+        "componente": "Soplador",
+        "denominacion_ut": "SOPLADOR OXIDACION -A"
+      }
+    ]
+  ],
+  [
+    "U1|ETA01-AJ101",
+    [
+      {
+        "id": "4df2d4b6-5f53-4f71-bede-d243a95ed54f",
+        "activo": "TRITURADOR DE ESCORIA U1",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA01-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U1  180 D"
+      },
+      {
+        "id": "8df1b58e-fe83-41a7-ae56-e1f26f4633b4",
+        "activo": "TRITURADOR DE ESCORIA",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA01-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      },
+      {
+        "id": "c77a012b-98fe-46c6-b193-ed975c7bbbfb",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA01-AJ101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      }
+    ]
+  ],
+  [
+    "U0|GAA05-AP103",
+    [
+      {
+        "id": "4fe5f42e-eca8-40f3-b2ac-a6d4c0ec34c3",
+        "activo": "BOMBA PRODUCTO DESALADORA -5 (U4)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "d84c97c0-bd8d-472e-bb89-672cfe0322af",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U3|MAK20-GR001",
+    [
+      {
+        "id": "50ce4654-9388-4fa2-bc12-e178c7529b9a",
+        "activo": "ESCOBILLAS GENERADOR",
+        "ubicacion": "U3",
+        "kks": "2893-31-MAK20-GR001--G03",
+        "componente": "",
+        "denominacion_ut": "ESCOBILLAS GENERADOR"
+      },
+      {
+        "id": "dd0225ab-4c34-4452-a1c3-10df5c9e8f1d",
+        "activo": "Excitatriz U3",
+        "ubicacion": "U3",
+        "kks": "2893-31-MAK20-GR001--G03",
+        "componente": null,
+        "denominacion_ut": "MP ME REV Y TERMOGRAFIA CARBONES U3 1S"
+      }
+    ]
+  ],
+  [
+    "U2|HFB04-AF101",
+    [
+      {
+        "id": "511c9e20-3326-4157-a67f-dd9e020b821b",
+        "activo": "Alimentador de Carbon 2D",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB04-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "a113b860-8a76-406e-b05d-ffff9295dbaa",
+        "activo": "DESCANSOS",
+        "ubicacion": "U2",
+        "kks": "2893-24-HFB04-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1S"
+      },
+      {
+        "id": "fa756227-ea5b-4236-aadc-8c8fa76fe36b",
+        "activo": "Alimentador de Carbon 2D",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB04-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -D"
+      }
+    ]
+  ],
+  [
+    "U0|EGE04-AP101",
+    [
+      {
+        "id": "513b25f6-d8ba-4553-b8bc-d3bf0b3d7e3f",
+        "activo": "Bomba Diesel 3A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA0-1EGE04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "5f444f38-ea13-4048-b375-f0683e58e724",
+        "activo": "BOMBA PETROLEO DIESEL -A U3-4-5",
+        "ubicacion": "U3-4-5",
+        "kks": "2893-01-EGE04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      },
+      {
+        "id": "bbb11ea8-b05f-4164-8800-f87b9a8145ba",
+        "activo": "BOMBA PETROLEO DIESEL -A U3-4-5",
+        "ubicacion": "U3-4-5",
+        "kks": "2893-01-EGE04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U2|ETA01-AJ101",
+    [
+      {
+        "id": "535141f6-4e22-4054-8950-441b5eff6cbc",
+        "activo": "TRITURADOR DE ESCORIA U2",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA01-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U2  180 D"
+      },
+      {
+        "id": "65f84197-099c-47e6-952c-2bfa3e1d93e7",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA01-AJ101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      },
+      {
+        "id": "70a511c5-f31e-493a-b494-770789366b5a",
+        "activo": "TRITURADOR DE ESCORIA",
+        "ubicacion": "U2",
+        "kks": "2893-26-ETA01-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      }
+    ]
+  ],
+  [
+    "U1|ETA01-AT101",
+    [
+      {
+        "id": "53fb7e93-a187-4a28-bc04-235d5e71c207",
+        "activo": "REDUCTOR",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA01-AT101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      },
+      {
+        "id": "a1b81f6d-7b6b-4a83-9edd-58615cddde68",
+        "activo": "CADENA SUMERGIDA U1",
+        "ubicacion": "U1",
+        "kks": "2893-16-ETA01-AT101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U1  180 D"
+      }
+    ]
+  ],
+  [
+    "U5|MAK20-GR001",
+    [
+      {
+        "id": "5551764a-95dd-45dc-9061-c39394211a06",
+        "activo": "ESCOBILLAS GENERADOR",
+        "ubicacion": "U5",
+        "kks": "2893-51-MAK20-GR001--G03",
+        "componente": "",
+        "denominacion_ut": "ESCOBILLAS GENERADOR"
+      },
+      {
+        "id": "5a48e9ca-5d0c-4a2e-818c-64fd149e5613",
+        "activo": "Excitatriz U5",
+        "ubicacion": "U5",
+        "kks": "2893-51-MAK20-GR001--G03",
+        "componente": null,
+        "denominacion_ut": "MP ME REV Y TERMOGRAFIA CARBONES U5 1S"
+      }
+    ]
+  ],
+  [
+    "U0|EAA02-AU001",
+    [
+      {
+        "id": "57ea3e17-8d47-4d78-9646-34232457e539",
+        "activo": "Levante y Bajada Grúa 1",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA02-AU001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR ELEVACION"
+      },
+      {
+        "id": "c3b5a10c-c6b3-4186-8cc5-aaef41cf26d5",
+        "activo": "MECANISMO ELEVACION GRUA 1",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA02-AU001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U4|PAD04-AP102",
+    [
+      {
+        "id": "5c47011d-7cbb-42d2-bbdc-8c1eb99cf8ce",
+        "activo": "BOMBA BOOSTER -4B",
+        "ubicacion": "U4",
+        "kks": "2893-43-PAD04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4  90 D"
+      },
+      {
+        "id": "fb9157d7-8778-4b2f-89c2-80d6e93f7940",
+        "activo": "Bba Booster B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PAD04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP302"
+      }
+    ]
+  ],
+  [
+    "U5|PAD04-AP101",
+    [
+      {
+        "id": "5c49afc8-3198-4587-b3c6-0e57de2824f8",
+        "activo": "MOTOR BOMBA BOOSTER -A PAC01AP301-M01",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAD04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G2"
+      },
+      {
+        "id": "679cff9e-458e-4458-a93c-6112d9a1c8e2",
+        "activo": "Bba Booster A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PAD04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP301"
+      }
+    ]
+  ],
+  [
+    "U0|GDB03-AP302",
+    [
+      {
+        "id": "5e3ff83b-4a10-4a75-b911-029834f7afa5",
+        "activo": "Bomba Vacio 2 Desaladora 10",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB03-AP302",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -2 GBG42AP001"
+      },
+      {
+        "id": "f0810e86-c5dd-41be-b18e-578235bb2f67",
+        "activo": "BOMBA DE VACIO -2 DES10",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB03-AP302--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U5|ETA02-AF101",
+    [
+      {
+        "id": "5e6a1251-b65f-4fe5-ae5c-c8678c8793fe",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA U5",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA02-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U5  180 D"
+      },
+      {
+        "id": "e597a67b-253e-4a76-b1ad-a9b9af567abf",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA02-AF101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      }
+    ]
+  ],
+  [
+    "U0|ECA17-AF001",
+    [
+      {
+        "id": "5e761a8f-801a-44e6-be03-af7acef9210c",
+        "activo": "CORREA TRIPPER U1U2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA17-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "c34fdc00-c494-4669-b1cb-c8628075e23d",
+        "activo": "Correa Tripper U1-2",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA17-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR CORREA TRIPPER"
+      }
+    ]
+  ],
+  [
+    "U4|ETA02-AF101",
+    [
+      {
+        "id": "5ebeb31b-1c7f-4cbd-b4e2-ecf2d0010b4d",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA U4",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA02-AF101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U4  180 D"
+      },
+      {
+        "id": "bafa24f8-feec-4da3-a35a-f260385a3c05",
+        "activo": "CORREA TRANSPORTADORA -1 ESCORIA",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA02-AF101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      }
+    ]
+  ],
+  [
+    "U0|GAA03-AP102",
+    [
+      {
+        "id": "5f2d4a06-d8ab-4966-aa7d-ddd181cc4618",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "7aa81f1f-e0f1-4034-96d7-51558f4d231f",
+        "activo": "BOMBA DE VACIO DESALADORA -3 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|PAD01-AP102",
+    [
+      {
+        "id": "5f2e9e14-b24e-46cb-a259-50917a1cf944",
+        "activo": "Bba Aux.B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAD01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA G1-11.09P12B-M"
+      },
+      {
+        "id": "9ff7923b-603a-47dc-b025-958813aae99e",
+        "activo": "BOMBA CIRCULACION AUXILIAR -2B",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAD01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GAF11-AP101",
+    [
+      {
+        "id": "5f44d0f0-dc45-4be4-a304-1a9fbe3ae4e9",
+        "activo": "Bombas Pretratada U1-2 A",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAF11-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "83e2917f-d5c7-48b4-8c98-da6da79d5bac",
+        "activo": "BOMBA BOOSTER -A DESALADORA 1-2",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAF11-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "95ad85c3-4566-4a22-bb99-96b71f09dcf4",
+        "activo": "Bombas Pretratada U1-2 B",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAF11-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U0|GCL14-AP103",
+    [
+      {
+        "id": "5fdaedeb-ca5d-489c-84d3-fd0aa40a3eaf",
+        "activo": "Bomba Make Up C U3-4",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GCL14-AP103",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "6212b005-99c8-4954-a65e-0c7000a509f1",
+        "activo": "BOMBA AGUA MAKEUP-C U3-4",
+        "ubicacion": "PA",
+        "kks": "2893-01-GCL14-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|HRB03-AP101",
+    [
+      {
+        "id": "604fb97c-5f7c-4593-81da-a559d3f87212",
+        "activo": "Bomba Vacío Filtro Banda B FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRB03-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "6b5f583a-1d24-43cb-a0db-98be3259e4ba",
+        "activo": "MOTOR BOMBA VACIO FILTRO BANDA -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB03-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      }
+    ]
+  ],
+  [
+    "U0|EAA03-AU003",
+    [
+      {
+        "id": "60f2be4e-5139-447a-b6ae-a03b14178070",
+        "activo": "MECANISMO GIRO -A GRUA 2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA03-AU003--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      },
+      {
+        "id": "749d478b-d626-4fbe-9556-a7c384e8da1e",
+        "activo": "Moto-Reductor Giro A Grúa 2",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA03-AU003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR PLANETARIO -A"
+      },
+      {
+        "id": "a0d69899-4a30-4a3d-bdd3-e87014fd9aee",
+        "activo": "MECANISMO GIRO -B GRUA 2",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA03-AU003--M02",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      },
+      {
+        "id": "fd84185e-5fcc-4a42-97e5-169f077cb451",
+        "activo": "Moto-Reductor Giro B Grúa 2",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA03-AU003",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR PLANETARIO -B"
+      }
+    ]
+  ],
+  [
+    "U1|PAD04-AP102",
+    [
+      {
+        "id": "61182c51-bd38-4030-afef-531247dda7f6",
+        "activo": "Bba Booster B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-3PAD04-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.09P13B"
+      },
+      {
+        "id": "9b11c25a-f8dd-4286-9320-f2a6b96a26a0",
+        "activo": "BOMBA BOOSTER -1B",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAD04-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1  90 D"
+      }
+    ]
+  ],
+  [
+    "U3|HFB02-BR101",
+    [
+      {
+        "id": "61955be7-90a2-4f6d-bd8d-9f8718006703",
+        "activo": "MOTOR DUCTO ROTATORIO -B",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB02-BR101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "68281350-e07e-48be-9978-9d10e8ccb88e",
+        "activo": "Clasificador Rotatorio 3B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB02-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "DUCTO ROTATORIO ALIMENTADOR -B"
+      }
+    ]
+  ],
+  [
+    "U3|HFB03-BR101",
+    [
+      {
+        "id": "65e16143-cd2a-40fd-ba1d-1bb43c45aae9",
+        "activo": "MOTOR DUCTO ROTATORIO -C",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB03-BR101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "6aab16bd-d65e-4b53-ac75-a0f5cf3134b4",
+        "activo": "Clasificador Rotatorio 3C",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB03-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "DUCTO ROTATORIO ALIMENTADOR -C"
+      }
+    ]
+  ],
+  [
+    "U3|HRD01-AJ101",
+    [
+      {
+        "id": "65fa8f39-e6dd-4af5-8796-317cf15e503f",
+        "activo": "MOLINO MARTILLO",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD01-AJ101",
+        "componente": "Molino",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "939d43f8-36f3-45a2-b659-0f99759bc557",
+        "activo": "Molino de Martillos FGD",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRD01-AJ101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR MOLINO MARTILLO"
+      }
+    ]
+  ],
+  [
+    "U0|GAA06-AP104",
+    [
+      {
+        "id": "6652fd11-2532-45f0-8729-127c029e2639",
+        "activo": "BOMBA SALMUERA DESALADORA -6 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "8cefb303-8227-4d19-a8be-2c457d288bea",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AP104-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U1|HLB31-AN101",
+    [
+      {
+        "id": "6664177f-4f03-4ae8-9c39-1f59eacbc20b",
+        "activo": "VENTILADOR AIRE SELLO VAS -1B",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLB31-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U1  60 D"
+      },
+      {
+        "id": "cebb5677-a549-4245-bf6b-7b934676b207",
+        "activo": "Ventilador aire sello B",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-5HLB31-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U1|HTP11-AF101",
+    [
+      {
+        "id": "67c5444d-a785-4ee6-a2f8-8c4cddb28927",
+        "activo": "MOTOR VENTILADOR HTK51AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-15-HTP11-AF101--M03",
+        "componente": "MOTOR VENTILADOR HTK51AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "b3e2be3b-de0f-44ec-be58-16c9c0d5740c",
+        "activo": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "ubicacion": "SC",
+        "kks": "2893-15-HTP11-AF101-KN01",
+        "componente": "VENTILADOR ENFRIAMIENTO HTK51AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U2|LCB01-AP102",
+    [
+      {
+        "id": "6a6494a9-b48d-4d6b-a52f-31d5d75afdb8",
+        "activo": "BOMBA AGUA CONDENSADA -2B",
+        "ubicacion": "U2",
+        "kks": "2893-22-LCB01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "ae66231d-9a22-49ff-9fa4-1de440180aeb",
+        "activo": "Bba. Agua Condensado 2B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-2LCB01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA G2-11.05P32B-M01"
+      }
+    ]
+  ],
+  [
+    "U2|PAD04-AP101",
+    [
+      {
+        "id": "6a7f5d96-feda-453c-8686-56050c37c3e9",
+        "activo": "Bba Booster A",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAD04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.09P13A"
+      },
+      {
+        "id": "ead5c1f5-9d3c-48b2-8a64-48514404abf3",
+        "activo": "BOMBA BOOSTER -2A",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAD04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2  90 D"
+      }
+    ]
+  ],
+  [
+    "U1|HLD20-AC101",
+    [
+      {
+        "id": "6ae670a5-1e9f-43b2-82f7-f293c6ca3c6e",
+        "activo": "CALENTADOR AIRE REGENERATIVO",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLD20-AC101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      },
+      {
+        "id": "9fc3f8c6-7907-4b3e-aff2-7c7e62a0042b",
+        "activo": "CALENTADOR AIRE REGENERATIVO U1",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLD20-AC101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CAR U1  90D"
+      },
+      {
+        "id": "c5640719-cb0a-46a4-8668-6ecae7e9f4ae",
+        "activo": "REDUCTOR VELOCIDAD",
+        "ubicacion": "U1",
+        "kks": "2893-15-HLD20-AC101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1M"
+      }
+    ]
+  ],
+  [
+    "U0|EGE03-AP101",
+    [
+      {
+        "id": "6b5af39c-03c1-4202-b036-c8f2c8dfe9b9",
+        "activo": "BOMBA PETROLEO DIESEL -A U1-2",
+        "ubicacion": "U1-2",
+        "kks": "2893-01-EGE03-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      },
+      {
+        "id": "6ee11f59-b004-4329-815b-9b17d61aa41c",
+        "activo": "Bomba Diesel 1A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA0-1EGE03-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U3|LAC01-AP101",
+    [
+      {
+        "id": "6b8426f0-ee29-4351-a7d8-417abeb0925e",
+        "activo": "BOMBA LUBRICACION -A B.A.A 3A",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP101-KP02",
+        "componente": "BOMBA LUBRICACION -A LAC02AP301",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "823d1ac6-3f98-455b-958e-4121af4c8ae8",
+        "activo": "Bba Agua Alimentación A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-2LAC01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA AGUA LAC02AP101-M01"
+      },
+      {
+        "id": "cb360335-7b99-419b-b825-18a165d28bc3",
+        "activo": "BOMBA AGUA ALIMENTACION -3A",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "f386d2ac-65c3-4a0a-b982-925aa5fcc844",
+        "activo": "BOMBA LUBRICACION -B B.A.A 3A",
+        "ubicacion": "U3",
+        "kks": "2893-32-LAC01-AP101-KP03",
+        "componente": "BOMBA LUBRICACION -B LAC02AP201",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      }
+    ]
+  ],
+  [
+    "U2|HLB50-AN101",
+    [
+      {
+        "id": "6bfc5803-3eb6-48f1-9719-3e8c58fa5ca5",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -2A",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLB50-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U2  60 D"
+      },
+      {
+        "id": "8d12455a-24c2-46fa-9ffd-cd6fc8c2afeb",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLB50-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      },
+      {
+        "id": "bc4535a1-6264-4bc9-886d-4604ee241045",
+        "activo": "DESCANSOS",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLB50-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1M"
+      }
+    ]
+  ],
+  [
+    "U4|LCB01-AP102",
+    [
+      {
+        "id": "6cb93e32-9b13-4a25-bbed-e2f323db9780",
+        "activo": "BOMBA AGUA CONDENSADA -4B",
+        "ubicacion": "U4",
+        "kks": "2893-42-LCB01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      },
+      {
+        "id": "8e5636d0-dcad-4aac-9de9-1a48fc15b5fe",
+        "activo": "Bba. Agua Condensado 4B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-2LCB01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA LCB01AP102"
+      }
+    ]
+  ],
+  [
+    "U5|ETA02-AF102",
+    [
+      {
+        "id": "6cd25a03-0903-4d60-a2a6-c457aacdafba",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA02-AF102",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "8f0fdbd5-172b-407d-9f03-c38bcf7d73f2",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA U5",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA02-AF102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U5  180 D"
+      }
+    ]
+  ],
+  [
+    "U3|HRA05-AP101",
+    [
+      {
+        "id": "6d0a9737-82b6-4a1d-b16b-be132305eb9c",
+        "activo": "MOTOR BOMBA RECIRCULACION -A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA05-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO FGD U3  90 D"
+      },
+      {
+        "id": "fe586fcb-ae8d-4302-9e3a-64d3fa9078c7",
+        "activo": "Bomba Recirculadora A FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA05-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA RECIRCULACION -A"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AP112",
+    [
+      {
+        "id": "6df69b6a-ea93-40dd-ae60-66a92fc91df8",
+        "activo": "BOMBA CIRCULACION GBG20AP001",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP112-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1S"
+      },
+      {
+        "id": "974ee54b-ae95-4a44-a219-215ef559f2f7",
+        "activo": "BOMBA CIRCULACION GBG20AP001 DESA 8",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP112--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U5|HFB01-AF101",
+    [
+      {
+        "id": "6ee6bf74-fe96-40ef-8967-3e172784cd71",
+        "activo": "Alimentador de Carbon 5A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "8b4f49ff-2649-40f2-bf81-a0aaab164893",
+        "activo": "Alimentador de Carbon 5A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB01-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -A"
+      },
+      {
+        "id": "e33ed811-4f71-4aab-a1e5-2bc37c0e9278",
+        "activo": "DESCANSOS",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB01-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 1S"
+      }
+    ]
+  ],
+  [
+    "U3|HLB31-AN101",
+    [
+      {
+        "id": "6f133b54-f52b-4a0b-87cb-c2d2690adf03",
+        "activo": "Ventilador aire sello B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB31-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "e945e103-c2d1-429b-9a65-a47acf41999f",
+        "activo": "VENTILADOR AIRE SELLO VAS -3B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB31-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      }
+    ]
+  ],
+  [
+    "U2|LAC01-AP102",
+    [
+      {
+        "id": "6f46bd5e-6efa-49f8-bd9c-2a8bd4c0eac1",
+        "activo": "BOMBA AGUA ALIMENTACION -2B",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      },
+      {
+        "id": "e9ec1e3d-307d-4f58-b082-e59e002ff0e6",
+        "activo": "BOMBA LUBRICACION AUXILIAR B.A.A 2B",
+        "ubicacion": "U2",
+        "kks": "2893-22-LAC01-AP102-KP02",
+        "componente": "BOMBA LUBRICACION AUXILIAR",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      }
+    ]
+  ],
+  [
+    "U4|HFB02-AF101",
+    [
+      {
+        "id": "6f5054b0-8e6c-45b4-9396-2bdf3bf6045b",
+        "activo": "Alimentador de Carbon 4B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB02-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -B"
+      },
+      {
+        "id": "97b2dec2-be86-4200-9e31-e1097d32d7a6",
+        "activo": "DESCANSOS",
+        "ubicacion": "U4",
+        "kks": "2893-44-HFB02-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1S"
+      },
+      {
+        "id": "b344fdac-e051-491b-bf17-71cc6f1063f2",
+        "activo": "Alimentador de Carbon 4B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFB02-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|GAA06-AN101",
+    [
+      {
+        "id": "70e6df0c-5b09-4a6e-ac07-53530da0d821",
+        "activo": "COMPRESOR VAPOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "79ea6081-3fab-47fe-a1f5-57073bc494d5",
+        "activo": "MOTOR COMPRESOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "9ae9d07f-5492-42c9-9495-b246548e3faf",
+        "activo": "COMPRESOR VAPOR DESALADORA -6 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA06-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|HRA02-AM101",
+    [
+      {
+        "id": "71b63796-6ee1-4af8-b221-8fde9e9dc4ee",
+        "activo": "AGITADOR -A ESTANQUE DE ABSORBER",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA02-AM101",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      },
+      {
+        "id": "be5c5c27-5c8f-442c-bd74-f7d716caf8da",
+        "activo": "Agitador Absorber A FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA02-AM101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR AGITADOR"
+      }
+    ]
+  ],
+  [
+    "U5|HRA08-AN201",
+    [
+      {
+        "id": "72c6c081-bd15-4056-af51-db333fa8db7d",
+        "activo": "Soplador Aire Oxidación A FGD U5",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HRA08-AN201",
+        "componente": "Soplador",
+        "denominacion_ut": "SOPLADOR OXIDACION -A"
+      },
+      {
+        "id": "d2eede49-2a25-46df-a7f6-dce46232810e",
+        "activo": "MOTOR SOPLADOR OXIDACION -A",
+        "ubicacion": "U5",
+        "kks": "2893-55-HRA08-AN201--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G1"
+      }
+    ]
+  ],
+  [
+    "U3|HNC03-AN101",
+    [
+      {
+        "id": "73292c61-b26d-4cbf-b17c-444df88c7bc0",
+        "activo": "VENTILADOR AIRE SELLO VAS -3B FGD",
+        "ubicacion": "U3",
+        "kks": "2893-35-HNC03-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      },
+      {
+        "id": "e6fe5adc-40af-443f-9774-7fcf300d9c8d",
+        "activo": "Ventilador Aire Sello By Pass B FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HNC03-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR VAS -B FGD"
+      }
+    ]
+  ],
+  [
+    "U0|GAA05-AP104",
+    [
+      {
+        "id": "735fd704-f501-4f7d-a29b-6c53bdbb9499",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP104-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      },
+      {
+        "id": "f2584c6d-9e7d-4e02-8920-e20e80af0e89",
+        "activo": "BOMBA SALMUERA DESALADORA -5 (U4)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|HFB03-AF101",
+    [
+      {
+        "id": "7409e3fc-43c7-4791-8139-1ddfd63e252d",
+        "activo": "Alimentador de Carbon 2C",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB03-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -C"
+      },
+      {
+        "id": "e5e1bab3-6ecc-4e5b-8797-10d080804a99",
+        "activo": "DESCANSOS",
+        "ubicacion": "U2",
+        "kks": "2893-24-HFB03-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U2 1S"
+      },
+      {
+        "id": "f08f0d2a-4681-4cf7-b9d9-5cee74a21f22",
+        "activo": "Alimentador de Carbon 2C",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-4HFB03-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U4|MAK20-GR001",
+    [
+      {
+        "id": "74fb706c-ea6a-4884-bbb4-51ae3b35b416",
+        "activo": "Excitatriz U4",
+        "ubicacion": "U4",
+        "kks": "2893-41-MAK20-GR001--G03",
+        "componente": null,
+        "denominacion_ut": "MP ME REV Y TERMOGRAFIA CARBONES U4 1S"
+      },
+      {
+        "id": "b7d3d070-5765-44e2-8c8e-97f65b02e218",
+        "activo": "ESCOBILLAS GENERADOR",
+        "ubicacion": "U4",
+        "kks": "2893-41-MAK20-GR001--G03",
+        "componente": "",
+        "denominacion_ut": "ESCOBILLAS GENERADOR"
+      }
+    ]
+  ],
+  [
+    "U3|HRB02-AP101",
+    [
+      {
+        "id": "75f8a27d-ec36-43a6-994e-926746042783",
+        "activo": "Bomba Vacío Filtro Banda A FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRB02-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      },
+      {
+        "id": "b98c4868-8c22-4917-84b6-73b877091b21",
+        "activo": "MOTOR BOMBA VACIO FILTRO BANDA -A",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRB02-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      }
+    ]
+  ],
+  [
+    "U1|PGH01-AP101",
+    [
+      {
+        "id": "76e982a0-6b08-434d-a4cd-79bb162ec23c",
+        "activo": "Bba Enfriamiento A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-3PGH01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.10P11A"
+      },
+      {
+        "id": "b400e2b9-e19a-4eeb-99ee-252ec699665a",
+        "activo": "MOTOR BOMBA G1-11.10P11A-M01",
+        "ubicacion": "U1",
+        "kks": "2893-13-PGH01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G1"
+      }
+    ]
+  ],
+  [
+    "U0|HTJ01-AF001",
+    [
+      {
+        "id": "7711b77d-a225-4255-a26a-50210ae6e3bc",
+        "activo": "MOTOR ALIMENTADOR HTJ11AF001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF001--M01",
+        "componente": "MOTOR ALIMENTADOR HTJ11AF001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "77ecb7a4-3aad-4c94-b3dd-2a271f89e22b",
+        "activo": "ALIMENTADOR ROTATORIO SILO 1 HTJ11AF001",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF001-KN01",
+        "componente": "VENTILADOR ENFRIAMIENTO HTJ11AN001",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      },
+      {
+        "id": "b1a09377-e108-4cfc-83e9-154fcd497343",
+        "activo": "MOTOR VENTILADOR HTJ11AN001-M01",
+        "ubicacion": "SC",
+        "kks": "2893-01-HTJ01-AF001--M02",
+        "componente": "MOTOR VENTILADOR HTJ11AN001-M01",
+        "denominacion_ut": "MP MM MONITOREO CONDIC TRANSP RETRO  90"
+      }
+    ]
+  ],
+  [
+    "U4|HLB31-AN101",
+    [
+      {
+        "id": "7742d8f0-3142-415b-8c45-4eb78b0636b5",
+        "activo": "VENTILADOR AIRE SELLO VAS -4B",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB31-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      },
+      {
+        "id": "9ed724b0-e5e3-422f-909b-0fb7ffe21089",
+        "activo": "Ventilador aire sello B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB31-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AN101",
+    [
+      {
+        "id": "79eddf5e-0601-4f2d-858b-73d4d2453cf6",
+        "activo": "COMPRESOR VAPOR GBG20AN001 DES11",
+        "ubicacion": "DESAL",
+        "kks": "2893-01-GDB04-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS COMPRESORES 30D"
+      },
+      {
+        "id": "94a826ee-1951-46ce-a860-9ae2d415aaff",
+        "activo": "Compresor Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "COMPRESOR VAPOR GBG20AN001"
+      }
+    ]
+  ],
+  [
+    "U5|LAC01-AP102",
+    [
+      {
+        "id": "7aaaf7e0-4b7e-4a9b-996b-62d81d8ccbc6",
+        "activo": "Bba Agua Alimentación B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-2LAC01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA AGUA LAC02AP102"
+      },
+      {
+        "id": "95698844-76a0-4f43-a736-ab73b9f65711",
+        "activo": "BOMBA AGUA ALIMENTACION -5B",
+        "ubicacion": "U5",
+        "kks": "2893-52-LAC01-AP102--M03",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      }
+    ]
+  ],
+  [
+    "U0|ECA03-AF004",
+    [
+      {
+        "id": "7abc6bb6-d118-46a9-8a50-3dad93eac666",
+        "activo": "CORREA TRANSPORTADORA C6B",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA03-AF004--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      },
+      {
+        "id": "d0b5b4ba-a58f-4aa4-a0b7-d08188a515fa",
+        "activo": "Correa FSC6B",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA03-AF004",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U5|HLB40-AN101",
+    [
+      {
+        "id": "7b7efc62-5870-4780-ad25-c5324f1cb3a9",
+        "activo": "MOTOR VAI U5",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB40-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5 15D"
+      },
+      {
+        "id": "f7a7219f-3842-4f0c-8049-326ee26ba5f1",
+        "activo": "Ventilador aire ignitores",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB40-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GAA05-AP102",
+    [
+      {
+        "id": "7c2dd23a-c3ba-4dc8-a69f-4e91093ce4f4",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "b7ed008d-4d59-4ae7-9b67-1114bdf86ae0",
+        "activo": "BOMBA DE VACIO DESALADORA -5 (U4)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA05-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U4|HLB51-AN101",
+    [
+      {
+        "id": "7d942f4d-0ba1-497b-a220-cb92f114b0c1",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -4B",
+        "ubicacion": "U4",
+        "kks": "2893-45-HLB51-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      },
+      {
+        "id": "d07cf7e7-c43f-4e72-ab10-0979974d8439",
+        "activo": "Ventilador detector de llamas B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HLB51-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AP301",
+    [
+      {
+        "id": "7d96d54b-3049-4a2e-9e24-93a806ea2c30",
+        "activo": "Bomba Vacio 1 Desaladora 8",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB01-AP301",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -1 GBG41AP001"
+      },
+      {
+        "id": "e88dc126-8f84-404b-b863-8768b9484854",
+        "activo": "BOMBA DE VACIO -1 DES8",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP301--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|HLB20-AN101",
+    [
+      {
+        "id": "7e7b752b-1e23-445e-a2c4-acde36a0f59c",
+        "activo": "Ventilador Aire Primario",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB20-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "8ce73b74-77ee-4a4f-84d9-4ec0b2404d61",
+        "activo": "VENTILADOR AIRE PRIMARIO VAP U3",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB20-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA04-AP104",
+    [
+      {
+        "id": "830005b3-4d48-4b95-9a40-c4aed6d670b9",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP104-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      },
+      {
+        "id": "d98abd4d-c569-4fc1-95cb-21016ad3f294",
+        "activo": "BOMBA SALMUERA DESALADORA -4 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U5|HSD01-AN101",
+    [
+      {
+        "id": "8419d62c-b6a2-4964-b287-37cfbca9edd9",
+        "activo": "VENTILADOR DILUCION AMON -5A HSA02AN101",
+        "ubicacion": "U5",
+        "kks": "2893-55-HSD01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "d6b4026a-956c-44a0-a24e-909e7db019d9",
+        "activo": "Ventilador detector de amoniaco A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HSD01-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GAA02-AP103",
+    [
+      {
+        "id": "844e7a37-41b6-4abd-91db-d3b50748f578",
+        "activo": "Bomba Producto Desaladora 2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA02-AP103",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA PRODUCTO"
+      },
+      {
+        "id": "94644254-4709-4fc8-ab5c-37cf7bb147dc",
+        "activo": "BOMBA PRODUCTO DESALADORA -2 (U2)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA02-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "a6cee996-6ca4-48c5-a5d5-36a26bfe1816",
+        "activo": "Bomba Circulación Desaladora 1",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA02-AP103",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U4|ETA01-AJ101",
+    [
+      {
+        "id": "84bb95ab-8129-4533-a0d3-dac34299db16",
+        "activo": "TRITURADOR DE ESCORIA U4",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U4  180 D"
+      },
+      {
+        "id": "8d39a562-2d5c-4d4a-a6b6-714d87143fbb",
+        "activo": "TRITURADOR DE ESCORIA",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      },
+      {
+        "id": "b7a34c2c-f332-4252-91c2-22e572864104",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U4",
+        "kks": "2893-46-ETA01-AJ101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1M"
+      }
+    ]
+  ],
+  [
+    "U0|ECA04-AF001",
+    [
+      {
+        "id": "84e5b6f4-ff73-405b-a8d0-f1ea6e7259e1",
+        "activo": "Correa FSC7",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA04-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "e105619c-acf4-45fa-afda-31a086059535",
+        "activo": "CORREA TRANSPORTADORA C7",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA04-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      }
+    ]
+  ],
+  [
+    "U0|GAA04-AP103",
+    [
+      {
+        "id": "86009ed2-91d9-49be-98d4-7d3adc7c3de5",
+        "activo": "BOMBA PRODUCTO DESALADORA -4 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "de58f0b6-3ec4-4cc7-9319-46f94e25ebe3",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA04-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U5|HFB03-BR101",
+    [
+      {
+        "id": "86444045-9d44-4843-a2d0-97df8424cf5a",
+        "activo": "DUCTO ROTATORIO ALIMENTADOR -C",
+        "ubicacion": "U5",
+        "kks": "2893-54-HFB03-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 6M G2"
+      },
+      {
+        "id": "91515c87-d133-47e1-9cd3-7f1d6680a64f",
+        "activo": "Clasificador Rotatorio 5C",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-4HFB03-BR101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR DUCTO ROTATORIO -C"
+      }
+    ]
+  ],
+  [
+    "U0|GDB03-AP301",
+    [
+      {
+        "id": "87930553-0714-4709-8bed-e62afbcd793c",
+        "activo": "BOMBA DE VACIO -1 DES10",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB03-AP301--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "dfc587b7-a1cf-450b-b388-aa9d77a3425f",
+        "activo": "Bomba Vacio 1 Desaladora 10",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB03-AP301",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -1 GBG41AP001"
+      }
+    ]
+  ],
+  [
+    "U0|GAA03-AP103",
+    [
+      {
+        "id": "87ff63b6-1993-44f0-b0db-45a9223f89bb",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      },
+      {
+        "id": "9f448b60-f0bf-48bb-a7e1-5b2bbcb30232",
+        "activo": "BOMBA PRODUCTO DESALADORA -3 (U3)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AP301",
+    [
+      {
+        "id": "8827a085-6719-4cb3-bc0e-284628792baf",
+        "activo": "Bomba Vacio 1 Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AP301",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -1 GBG41AP001"
+      },
+      {
+        "id": "898d9503-cdeb-4a44-823a-d386977a61e3",
+        "activo": "BOMBA DE VACIO -1 DES11",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB04-AP301--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|HLB51-AN101",
+    [
+      {
+        "id": "8a8147a0-7839-4547-95d6-2302160e8c43",
+        "activo": "Ventilador detector de llamas B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB51-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "f5431b1c-ecef-4c8c-a2b7-6e23c2d4bc53",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -3B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB51-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3  60 D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA07-AP103",
+    [
+      {
+        "id": "8abb39cb-2898-479d-a7e3-c47ea3627d5c",
+        "activo": "BOMBA PRODUCTO DESALADORA -7 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP103--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "8db928db-556a-46b2-a563-73840a87cd11",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP103-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U3|HLB40-AN101",
+    [
+      {
+        "id": "8af68d66-aa4b-48d4-89d8-39e77a18fc16",
+        "activo": "DESCANSOS MOTOR",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB40-AN101-MU02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "af98051e-c443-42ad-81a1-7b0f7ddcb887",
+        "activo": "VENTILADOR AIRE IGNITORES U3",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB40-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3 15D"
+      },
+      {
+        "id": "b376e7d1-df20-4d56-a87f-e49b3884b92f",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLB40-AN101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "beec0cd4-f08d-49b3-a464-e61b5b118748",
+        "activo": "Ventilador aire ignitores",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HLB40-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U4|HSD01-AN101",
+    [
+      {
+        "id": "8b09c4d1-4e1c-4fde-ac47-a549a4342514",
+        "activo": "Ventilador detector de amoniaco A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HSD01-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "e40ad580-ba0f-48cb-9061-ac5faf0a0712",
+        "activo": "VENTILADOR DILUCION AMON -4A HSA02AN101",
+        "ubicacion": "U4",
+        "kks": "2893-45-HSD01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA03-AN101",
+    [
+      {
+        "id": "8d3e4a72-de52-49de-bbfe-35d574bf28ef",
+        "activo": "MOTOR COMPRESOR 00GDB01AN101A-M01",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "caf13d7b-fb11-4a3e-97e0-993106254c79",
+        "activo": "COMPRESOR VAPOR",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA03-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      }
+    ]
+  ],
+  [
+    "U3|HRA02-AM102",
+    [
+      {
+        "id": "8dd5a155-a8b5-418c-902e-df384af7663c",
+        "activo": "Agitador Absorber B FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA02-AM102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR AGITADOR"
+      },
+      {
+        "id": "e9941d3b-dc3c-44bd-8e6e-782e502962ff",
+        "activo": "AGITADOR -B ESTANQUE DE ABSORBER",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA02-AM102",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      }
+    ]
+  ],
+  [
+    "U4|PGH01-AP101",
+    [
+      {
+        "id": "91ae01f0-b726-423d-840f-cae4654f38ca",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -4A",
+        "ubicacion": "U4",
+        "kks": "2893-43-PGH01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4  90 D"
+      },
+      {
+        "id": "af9fedf6-0c6b-4ff2-a8ff-9db55599fd79",
+        "activo": "Bba Enfriamiento A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PGH01-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP101"
+      }
+    ]
+  ],
+  [
+    "U1|PAD04-AP101",
+    [
+      {
+        "id": "91e5cc59-a8bf-4dbd-ad80-1d0c053beca1",
+        "activo": "BOMBA BOOSTER -1A",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAD04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1  90 D"
+      },
+      {
+        "id": "9fcfe8e7-7ad6-4ad5-9bc8-76e4552703a7",
+        "activo": "Bba Booster A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-3PAD04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA G1-11.09P13A"
+      }
+    ]
+  ],
+  [
+    "U3|HRA08-AN202",
+    [
+      {
+        "id": "94e740a2-d35e-47dd-8621-9c875e3eb1f1",
+        "activo": "MOTOR SOPLADOR OXIDACION -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA08-AN202--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO FGD U3  90 D"
+      },
+      {
+        "id": "ce5f7fb7-4c0f-4813-b97e-876f588b8cba",
+        "activo": "Soplador Aire Oxidación B FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA08-AN202",
+        "componente": "Soplador",
+        "denominacion_ut": "SOPLADOR OXIDACION -B"
+      }
+    ]
+  ],
+  [
+    "U5|HLB30-AN101",
+    [
+      {
+        "id": "95832836-082e-4fb6-8a41-094fb5f67b1d",
+        "activo": "Ventilador aire sello A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB30-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "bb5e68ae-fc16-4ad9-940a-d145a27419ad",
+        "activo": "VENTILADOR AIRE SELLO VAS -5A",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB30-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      }
+    ]
+  ],
+  [
+    "U3|ETA02-AF102",
+    [
+      {
+        "id": "96a748bd-81da-4f3f-b38f-42f86bbd24d5",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA U3",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA02-AF102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U3  180 D"
+      },
+      {
+        "id": "b845c783-b29c-4ecd-9b23-19ec5e5ffc65",
+        "activo": "REDUCTOR DE VELOCIDAD",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA02-AF102-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "bd566f5b-9d3e-4490-a141-21925763f389",
+        "activo": "CORREA TRANSPORTADORA -2 ESCORIA",
+        "ubicacion": "U3",
+        "kks": "2893-36-ETA02-AF102",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      }
+    ]
+  ],
+  [
+    "U3|HNC01-AN101",
+    [
+      {
+        "id": "96c42df1-d31f-451d-a037-8ab5e6855d76",
+        "activo": "VENTILADOR TIRO INDUCIDO VTI",
+        "ubicacion": "U3",
+        "kks": "2893-35-HNC01-AN101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "c91a56b4-1eda-47d6-ab59-c7732df6991e",
+        "activo": "LAMPO ENTRADA VTI",
+        "ubicacion": "U3",
+        "kks": "2893-35-HNC01-AN101-KA02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1M"
+      },
+      {
+        "id": "eb9e207a-cd5a-4674-b9fd-22cf38328bf2",
+        "activo": "VENTILADOR TIRO INDUCIDO VTI U3",
+        "ubicacion": "U3",
+        "kks": "2893-35-HNC01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U3 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GAA07-AP102",
+    [
+      {
+        "id": "97232bf5-cc38-45a3-abb2-5e3a3cb743c9",
+        "activo": "BOMBA",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 6M"
+      },
+      {
+        "id": "b3bd5441-ae35-44a2-84a5-19cedeed2507",
+        "activo": "BOMBA DE VACIO DESALADORA -7 (U5)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA07-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U5|HLB31-AN101",
+    [
+      {
+        "id": "9844a8f0-fd65-4dbd-95b9-488219b19f95",
+        "activo": "VENTILADOR AIRE SELLO VAS -5B",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB31-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      },
+      {
+        "id": "ccab4e41-b419-493f-9c7b-ee7fdff5e7cd",
+        "activo": "Ventilador aire sello B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB31-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      }
+    ]
+  ],
+  [
+    "U0|GAA02-AP104",
+    [
+      {
+        "id": "9875f432-5cd8-441f-af3d-1ea2c05e59b3",
+        "activo": "BOMBA SALMUERA DESALADORA -2 (U2)",
+        "ubicacion": "PA",
+        "kks": "2893-01-GAA02-AP104--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "bd8460ef-b395-4683-8f67-0399fa53e120",
+        "activo": "Bomba Salmuera Desaladora 2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GAA02-AP104",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U3|PAD04-AP101",
+    [
+      {
+        "id": "98bdf414-a302-4bdb-a7c5-aee0df624fbb",
+        "activo": "BOMBA BOOSTER -4A",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD04-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      },
+      {
+        "id": "b812e2f9-e13a-4064-97d6-27906a99051c",
+        "activo": "Bba Booster A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-3PAD04-AP101",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PAC01AP301"
+      }
+    ]
+  ],
+  [
+    "U0|ECA10-AF001",
+    [
+      {
+        "id": "9a52204a-2166-4a48-ba02-00326ea2aedc",
+        "activo": "Correa FSC12",
+        "ubicacion": "LLENADO DE SILO",
+        "kks": "GUA0-1ECA10-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "e2b2e5f1-ecee-436e-a71d-ba0fd6b9713a",
+        "activo": "CORREA TRANSPORTADORA C12",
+        "ubicacion": "SMC",
+        "kks": "2893-01-ECA10-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES LLENADO SILO"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AP302",
+    [
+      {
+        "id": "9c61d53b-9295-442e-b1a4-bb537d8af7c0",
+        "activo": "Bomba Vacio 2 Desaladora 8",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB01-AP302",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -2 GBG42AP001"
+      },
+      {
+        "id": "e241fab5-b7c1-45dc-9be9-7922727bc9c1",
+        "activo": "BOMBA DE VACIO -2 DES8",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AP302--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U3|HFB01-AF101",
+    [
+      {
+        "id": "9d715691-ef68-4ded-b3fd-03bdd414bc4c",
+        "activo": "Alimentador de Carbón 3A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB01-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -A"
+      },
+      {
+        "id": "f793730a-a009-41e3-8fd9-f147303b8e1f",
+        "activo": "Alimentador de Carbón 3A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "fbf2b896-da49-4dfa-971b-41efc434727a",
+        "activo": "DESCANSOS",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB01-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      }
+    ]
+  ],
+  [
+    "U3|PAD01-AP102",
+    [
+      {
+        "id": "9fa9b01a-07f1-4669-840c-e686ece1a571",
+        "activo": "BOMBA CIRCULACION AUXILIAR -3B",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD01-AP102-KP02",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "d7aaf429-0230-4584-8810-12df6c71038c",
+        "activo": "MOTOR BOMBA PAC01AP602-M01",
+        "ubicacion": "U3",
+        "kks": "2893-33-PAD01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 3M G2"
+      }
+    ]
+  ],
+  [
+    "U5|HLB50-AN101",
+    [
+      {
+        "id": "a4809605-56df-43e9-a3be-49dc7b0f19c5",
+        "activo": "Ventilador detector de llamas A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-5HLB50-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "c9c9427a-b3ea-44da-914c-e316803c6ec7",
+        "activo": "VENTILADOR DETECTOR LLAMA VDLL -5A",
+        "ubicacion": "U5",
+        "kks": "2893-55-HLB50-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U5  60 D"
+      }
+    ]
+  ],
+  [
+    "U3|LCB01-AP102",
+    [
+      {
+        "id": "a4a23448-7330-4a60-bab7-9f2db9aba3f2",
+        "activo": "BOMBA AGUA CONDENSADA -3B",
+        "ubicacion": "U3",
+        "kks": "2893-32-LCB01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3 15D"
+      },
+      {
+        "id": "ff78ec8d-f1d7-4c5c-820a-cdfff6b251d8",
+        "activo": "Bba. Agua Condensado 3B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-2LCB01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA LCB01AP102-M01"
+      }
+    ]
+  ],
+  [
+    "U3|HRA02-AM103",
+    [
+      {
+        "id": "a8533bb1-79fc-434a-996c-868e27121fab",
+        "activo": "Agitador Absorber C FGD U3",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-5HRA02-AM103",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR AGITADOR"
+      },
+      {
+        "id": "d9d787fb-ca91-42e6-a51b-79d4d2350fd1",
+        "activo": "AGITADOR -C ESTANQUE DE ABSORBER",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRA02-AM103",
+        "componente": "Agitador",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      }
+    ]
+  ],
+  [
+    "U5|PAC01-AP101",
+    [
+      {
+        "id": "a8d4f1c3-e1a9-4785-9a85-5258e30e8f51",
+        "activo": "DESCANSOS PAC01HA101",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAC01-AP101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      },
+      {
+        "id": "d5ddfee4-28ce-4fba-a66c-e5be3bad87c7",
+        "activo": "Bba. Circulación PPLL 5A",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PAC01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA PAC01AP101-M01"
+      },
+      {
+        "id": "fca8b8d9-505c-425c-a070-1d92f548f34d",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -5A",
+        "ubicacion": "U5",
+        "kks": "2893-53-PAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5 15D"
+      }
+    ]
+  ],
+  [
+    "U1|PAC01-AP101",
+    [
+      {
+        "id": "ab0c3bf7-df33-49de-bdf8-7c9d2d498fb1",
+        "activo": "MOTOR BOMBA",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAC01-AP101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G2"
+      },
+      {
+        "id": "f93f180b-e6d3-465c-beb8-57f5f71e2351",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -1A",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAC01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      }
+    ]
+  ],
+  [
+    "U4|PGH01-AP102",
+    [
+      {
+        "id": "abea8b3a-bdb8-4c7e-9647-cbc795597f69",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -4B",
+        "ubicacion": "U4",
+        "kks": "2893-43-PGH01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4  90 D"
+      },
+      {
+        "id": "be3e3307-12f1-4ecb-9dc0-d0e8dd6db1b4",
+        "activo": "VALVULA DESCARGA -A PGA02AA902",
+        "ubicacion": "U4",
+        "kks": "2893-43-PGH01-AP102-KA02",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U4 1S"
+      },
+      {
+        "id": "e7566e96-f583-47b1-8bbb-2b551e878820",
+        "activo": "Bba Enfriamiento B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-3PGH01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP102"
+      }
+    ]
+  ],
+  [
+    "U4|LCB01-AP101",
+    [
+      {
+        "id": "ae66a892-a23f-4952-bdae-b5c6bb004d23",
+        "activo": "Bba. Agua Condensado 4A",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-2LCB01-AP101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA LCB01AP101-M01"
+      },
+      {
+        "id": "b66cca8b-5b29-43a8-918b-182436dcb102",
+        "activo": "BOMBA AGUA CONDENSADA -4A",
+        "ubicacion": "U4",
+        "kks": "2893-42-LCB01-AP101-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U4 15D"
+      }
+    ]
+  ],
+  [
+    "U3|PGH01-AP102",
+    [
+      {
+        "id": "affd4a5f-40c7-4bd3-a826-8c5ba98262c0",
+        "activo": "Bba Enfriamiento B",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-3PGH01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP102"
+      },
+      {
+        "id": "e59bc420-e35f-4881-ac8c-3232b352d671",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -B",
+        "ubicacion": "U3",
+        "kks": "2893-33-PGH01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      }
+    ]
+  ],
+  [
+    "U4|HSD01-AN102",
+    [
+      {
+        "id": "b5b8ad9a-45bf-47f1-97b2-905c339c4ab8",
+        "activo": "Ventilador detector de amoniaco B",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-5HSD01-AN102",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "e0a43d69-c5ef-462d-933e-8ad89f10b52e",
+        "activo": "VENTILADOR DILUCION AMON -4B HSA02AN102",
+        "ubicacion": "U4",
+        "kks": "2893-45-HSD01-AN102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U4  60 D"
+      }
+    ]
+  ],
+  [
+    "U0|GCL12-AP102",
+    [
+      {
+        "id": "b9e73b21-4849-4ea6-95c5-9fd980fd51f8",
+        "activo": "BOMBA -B MAKEUP 1-2",
+        "ubicacion": "PA",
+        "kks": "2893-01-GCL12-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "e262442a-6603-4ec8-a02b-1d000235cf3f",
+        "activo": "Bomba Make Up B U1-2",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GCL12-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA"
+      }
+    ]
+  ],
+  [
+    "U5|PGH01-AP102",
+    [
+      {
+        "id": "bcdddc67-e761-4ebb-a8c8-41c038ddf075",
+        "activo": "BOMBA AGUA ENFRIAMIENTO -5B",
+        "ubicacion": "U5",
+        "kks": "2893-53-PGH01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U5  180D"
+      },
+      {
+        "id": "c958c60f-ab28-493e-8401-60686c82c586",
+        "activo": "Bba Enfriamiento B",
+        "ubicacion": "Unidad 5",
+        "kks": "GUA5-3PGH01-AP102",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PGA02AP102"
+      }
+    ]
+  ],
+  [
+    "U1|HFB01-AF101",
+    [
+      {
+        "id": "bf1cf6ae-70b3-4a26-bf34-9133031e2f93",
+        "activo": "DESCANSOS ALIMENTADOR DE CARBON -A",
+        "ubicacion": "U1",
+        "kks": "2893-14-HFB01-AF101-MU01",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 1S"
+      },
+      {
+        "id": "c679d2ee-91e2-45a1-a788-214e4485a379",
+        "activo": "Alimentador de Carbon 1A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB01-AF101",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR ALIMENTADOR DE CARBON -A"
+      },
+      {
+        "id": "e064905b-208e-4b0b-b147-9a35da472882",
+        "activo": "Alimentador de Carbon 1A",
+        "ubicacion": "Unidad 1",
+        "kks": "GUA1-4HFB01-AF101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|EAA10-AF001",
+    [
+      {
+        "id": "c2026b4f-8f6f-4ddf-8ded-d71fc6dc1d5f",
+        "activo": "Correa FSC3",
+        "ubicacion": "PUERTO",
+        "kks": "GUA0-1EAA10-AF001",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      },
+      {
+        "id": "fba9c74c-1bf6-40d9-ae9a-1e0e2771063b",
+        "activo": "CORREA TRANSPORTADORA C3",
+        "ubicacion": "SMC",
+        "kks": "2893-01-EAA10-AF001--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CONDICIONES PUERTO 30D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AP112",
+    [
+      {
+        "id": "cc75839b-fcde-43dc-b8ed-893582ca0d6e",
+        "activo": "Bomba Circulación Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP112",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA CIRCULACION GBG20AP001"
+      },
+      {
+        "id": "e98add38-b23b-47af-81a1-4d2bf5ce8754",
+        "activo": "BOMBA CIRCULACION GBG20AP001 DES9",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB02-AP112--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|HLB20-AN101",
+    [
+      {
+        "id": "cf0e68d8-7709-4ae7-8fcb-b5ad597357f0",
+        "activo": "Ventilador Aire Primario",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-5HLB20-AN101",
+        "componente": "Ventilador",
+        "denominacion_ut": "VENTILADOR"
+      },
+      {
+        "id": "f788b58e-6814-432f-93c4-f12c8ef7a21d",
+        "activo": "VENTILADOR AIRE PRIMARIO VAP U2",
+        "ubicacion": "U2",
+        "kks": "2893-25-HLB20-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO VENTILADORES U2 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB01-AN101",
+    [
+      {
+        "id": "cf28f0aa-fbf9-4d58-b03d-ae3e4b71d969",
+        "activo": "COMPRESOR VAPOR GBG20AN001",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AN101-KN01",
+        "componente": "Compresor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1S"
+      },
+      {
+        "id": "e9371bc1-8236-49eb-a148-5655743591be",
+        "activo": "MOTOR COMPRESOR GBG20AN001-M01",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB01-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION PLANTA AGUA 1M"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AP113",
+    [
+      {
+        "id": "d50af261-d2a4-4cdf-846d-cc78b6649f15",
+        "activo": "Bomba Producto Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP113",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA PRODUCTO GBG25AP001"
+      },
+      {
+        "id": "dc035498-236c-46b8-9c60-0a821b7aa39e",
+        "activo": "BOMBA PRODUCTO GBG25AP001 DES9",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB02-AP113--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AP111",
+    [
+      {
+        "id": "d605d663-907c-451c-93c9-cc63229a077b",
+        "activo": "Bomba Salmuera Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AP111",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA SALMUERA GBG35AP001"
+      },
+      {
+        "id": "f548c07a-7bd1-4225-aa20-8e5cd638f0f4",
+        "activo": "BOMBA SALMUERA GBG35AP001 DES9",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB02-AP111--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U5|ETA01-AJ101",
+    [
+      {
+        "id": "d7082279-da4f-4545-872a-c8702c42bb63",
+        "activo": "TRITURADOR DE ESCORIA U5",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO ESCORIA U5  180 D"
+      },
+      {
+        "id": "da77355e-5180-40ff-a246-76cbae8feead",
+        "activo": "TRITURADOR DE ESCORIA",
+        "ubicacion": "U5",
+        "kks": "2893-56-ETA01-AJ101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U5 3M G2"
+      }
+    ]
+  ],
+  [
+    "U3|HFB01-BR101",
+    [
+      {
+        "id": "da369be1-bd6c-4f44-88ab-a33edf03cfd7",
+        "activo": "Clasificador Rotatorio 3A",
+        "ubicacion": "Unidad 3",
+        "kks": "GUA3-4HFB01-BR101",
+        "componente": "Clasificador",
+        "denominacion_ut": "DUCTO ROTATORIO ALIMENTADOR -A"
+      },
+      {
+        "id": "e2dbfbb3-4bea-4313-a4d6-ddfbf93aa6f6",
+        "activo": "MOTOR DUCTO ROTATORIO -A",
+        "ubicacion": "U3",
+        "kks": "2893-34-HFB01-BR101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      }
+    ]
+  ],
+  [
+    "U3|HRD02-AP102",
+    [
+      {
+        "id": "dbe8d088-7daa-4818-a53c-f27309473f6a",
+        "activo": "BOMBAS RECICLADO -B",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U3  180D"
+      },
+      {
+        "id": "e3db5e8a-fa61-4c16-a1e4-460f7811f11a",
+        "activo": "BOMBA",
+        "ubicacion": "U3",
+        "kks": "2893-35-HRD02-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 1S"
+      }
+    ]
+  ],
+  [
+    "U4|HFC03-AJ101",
+    [
+      {
+        "id": "dde9e37d-a0a3-4e08-b715-6816fe6719b6",
+        "activo": "MOTOR ELECTRICO 6KV PULVERIZADOR -C",
+        "ubicacion": "U4",
+        "kks": "2893-44-HFC03-AJ101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM LUBRICACION PULV C U4 1500 H"
+      },
+      {
+        "id": "ffc7a933-8f94-46ae-a7b5-37a27ff46c62",
+        "activo": "Molino Pulverizador de Carbon 4C",
+        "ubicacion": "Unidad 4",
+        "kks": "GUA4-4HFC03-AJ101",
+        "componente": "Reductor",
+        "denominacion_ut": "REDUCTOR"
+      }
+    ]
+  ],
+  [
+    "U0|GDB04-AP302",
+    [
+      {
+        "id": "e11c704e-3b45-4ab3-8ebb-8ee48dfdec40",
+        "activo": "BOMBA DE VACIO -2 DES11",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB04-AP302--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      },
+      {
+        "id": "faf5cf31-2c7f-4e32-96e9-170c1ae1fd10",
+        "activo": "Bomba Vacio 2 Desaladora 11",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB04-AP302",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA DE VACIO -2 GBG42AP001"
+      }
+    ]
+  ],
+  [
+    "U3|HLD20-AC101",
+    [
+      {
+        "id": "e2a27170-6cde-4c99-a495-b5b2d39d4388",
+        "activo": "CALENTADOR AIRE REGENERATIVO",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLD20-AC101",
+        "componente": "",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      },
+      {
+        "id": "eec413de-d809-422c-8e3b-5f490add604d",
+        "activo": "CALENTADOR AIRE REGENERATIVO U3",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLD20-AC101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM MONITOREO CAR U3  90D"
+      },
+      {
+        "id": "fcab15b2-5efc-4c52-a8f5-85f2e7a56f82",
+        "activo": "REDUCTOR VELOCIDAD",
+        "ubicacion": "U3",
+        "kks": "2893-35-HLD20-AC101-MG01",
+        "componente": "Reductor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U3 6M G1"
+      }
+    ]
+  ],
+  [
+    "U0|GDB03-AP111",
+    [
+      {
+        "id": "e48c4142-34fe-4970-92e5-24f01d13522e",
+        "activo": "Bomba Salmuera Desaladora 10",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB03-AP111",
+        "componente": "Bomba",
+        "denominacion_ut": "BOMBA SALMUERA GBG35AP001"
+      },
+      {
+        "id": "f014c574-b54a-4aa1-b456-e40a9cec7c88",
+        "activo": "BOMBA SALMUERA GBG35AP001 DES10",
+        "ubicacion": "PA",
+        "kks": "2893-01-GDB03-AP111-M01",
+        "componente": "",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS BOMBAS 180D"
+      }
+    ]
+  ],
+  [
+    "U2|PAC01-AP102",
+    [
+      {
+        "id": "e560021f-d0ff-4b67-90f2-5985b39d751b",
+        "activo": "Bba. Circulación PPLL 2B",
+        "ubicacion": "Unidad 2",
+        "kks": "GUA2-3PAC01-AP102",
+        "componente": "Motor",
+        "denominacion_ut": "MOTOR BOMBA"
+      },
+      {
+        "id": "e75ee36d-89e1-40be-bd0c-5a31e01b8c20",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -2B",
+        "ubicacion": "U2",
+        "kks": "2893-23-PAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U2 15D"
+      }
+    ]
+  ],
+  [
+    "U0|GDB02-AN101",
+    [
+      {
+        "id": "e6b7b6d5-7f7e-4be0-ae23-540cc8a26994",
+        "activo": "COMPRESOR VAPOR GBG20AN001 DES9",
+        "ubicacion": "DESAL",
+        "kks": "2893-01-GDB02-AN101--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM  PLANTA DE AGUAS COMPRESORES 30D"
+      },
+      {
+        "id": "fb56439c-67b5-4e94-a2d5-acfa37c3618f",
+        "activo": "Compresor Desaladora 9",
+        "ubicacion": "Pta.Agua",
+        "kks": "GUA0-1GDB02-AN101",
+        "componente": "Compresor",
+        "denominacion_ut": "COMPRESOR VAPOR GBG20AN001"
+      }
+    ]
+  ],
+  [
+    "U1|PAC01-AP102",
+    [
+      {
+        "id": "e94c09dd-dc18-430a-9cc1-6af75412bd73",
+        "activo": "BOMBA CIRCULACION PRINCIPAL -1B",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAC01-AP102-KP01",
+        "componente": "Bomba",
+        "denominacion_ut": "MP MM MONITOREO BOMBAS U1 15D"
+      },
+      {
+        "id": "fcf1fa66-5453-4a1c-86be-ca999a61b876",
+        "activo": "MOTOR BOMBA",
+        "ubicacion": "U1",
+        "kks": "2893-13-PAC01-AP102--M01",
+        "componente": "Motor",
+        "denominacion_ut": "MP MM RUTA LUBRICACION U1 6M G2"
+      }
+    ]
+  ]
+]

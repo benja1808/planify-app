@@ -28,8 +28,11 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         sync: false
-      # Supabase: ya hardcodeada en server.js, pero permitir override
+      # Supabase: OBLIGATORIAS (server.js ya no trae claves escritas).
+      # Basta SUPABASE_ANON_KEY; SUPABASE_SERVICE_ROLE_KEY tiene prioridad si existe.
       - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false

@@ -870,6 +870,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
     }
 
     function getRouteExecutions() {
+        if (window.RouteExecutionStore) return window.RouteExecutionStore.projection();
         try {
             const raw = localStorage.getItem('planify_rutas_ejecuciones');
             const parsed = raw ? JSON.parse(raw) : {};
@@ -1798,8 +1799,9 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             };
 
             const routeActivity = [];
-            Object.entries(routeExecutions).forEach(([routeIdxRaw, execution]) => {
-                const routeIdx = Number(routeIdxRaw);
+            const allExecutions = window.RouteExecutionStore?.all() || Object.entries(routeExecutions).map(([idx,e]) => ({...e,rutaIdx:Number(idx)}));
+            allExecutions.forEach(execution => {
+                const routeIdx = execution.rutaIdx;
                 const route = routeCatalog[routeIdx];
                 if (!route || !execution) return;
                 eqIdxsHechos(route, execution).forEach(eqIdx => {
@@ -1862,8 +1864,9 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
             const routeEquipmentProgressPct = routeProgramTotalEquipment
                 ? Math.min(100, Math.round((routeActivityInRange.length / routeProgramTotalEquipment) * 100))
                 : 0;
-            const routeStats = routeCatalog.map((route, index) => {
-                const execution = routeExecutions[index] || null;
+            const routeStats = routeCatalog.flatMap((route, index) => {
+                const opened = allExecutions.filter(e => e.rutaIdx === index);
+                return (opened.length ? opened : [null]).map(execution => {
                 // Contamos COMPONENTES (no equipos). Así el avance se ve en
                 // cuanto el trabajador tickea uno solo, no espera al equipo
                 // completo. Compatibilidad: si la ejecución antigua trae
@@ -1913,6 +1916,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                     active: !!execution,
                     color: getRouteColor(route.unidad)
                 };
+                });
             });
             const activeRouteStats = routeStats.filter(item => item.active);
             const routesByUnit = [...activeRouteStats.reduce((acc, item) => {
@@ -1936,7 +1940,7 @@ body.analytics-print-equipment-mode .analytics-equipment-print-hero{break-inside
                 .slice(0, 6);
             const routeCardsHtml = routeFocusStats.length
                 ? routeFocusStats.map(item => `
-<article class="analytics-route-card" style="--route-accent:${item.color};" data-route-index="${item.index}">
+<article class="analytics-route-card" style="--route-accent:${item.color};" data-route-index="${item.index}" data-execution-id="${esc(item.execution?.id || '')}">
   <div class="analytics-route-card-top">
     <div>
       <div class="analytics-route-meta">
@@ -4245,7 +4249,7 @@ ${conditionKpiHtml}
                         event.preventDefault();
                         const index = Number(routeTrigger.dataset.routeIndex);
                         if (Number.isFinite(index) && typeof window.rutasAbrirDetalle === 'function') {
-                            window.rutasAbrirDetalle(index);
+                            window.rutasAbrirDetalle(index, routeTrigger.dataset.executionId || undefined);
                         } else if (typeof window.mostrarVista === 'function') {
                             window.mostrarVista('rutas');
                         }

@@ -13,6 +13,24 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["-y", "http-server", "-p", "4174", "-c-1", "."],
       "port": 4174
+    },
+    {
+      "name": "futbol-kits",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "http.server", "4180", "--directory", "C:/Users/benja/.gemini/antigravity/scratch/futbol_kits"],
+      "port": 4180
+    },
+    {
+      "name": "gimnasio",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/benja/.gemini/antigravity/scratch/proyecto_gym/server.js"],
+      "port": 4190
+    },
+    {
+      "name": "finanzas-camisetas",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:/Users/benja/.gemini/antigravity/scratch/finanzas_camisetas/server.js"],
+      "port": 4185
     }
   ]
 }

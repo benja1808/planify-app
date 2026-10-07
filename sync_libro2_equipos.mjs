@@ -1,7 +1,8 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 
-const sb = createClient('https://fygvulgffhxrimaeyoep.supabase.co','sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF');
+const sb = createClient(SUPABASE_URL,SUPABASE_KEY);
 
 const rutas = JSON.parse(fs.readFileSync('libro2_rutas.json', 'utf-8'));
 // Equipos únicos por UT

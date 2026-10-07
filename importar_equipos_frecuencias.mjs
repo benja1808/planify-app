@@ -1,3 +1,4 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 // Script de importación de Frecuencias.xlsx → Supabase tabla "equipos"
 // Ejecutar UNA SOLA VEZ con: node importar_equipos_frecuencias.mjs
 
@@ -5,8 +6,8 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { read, utils } from 'xlsx';
 
-const supabaseUrl = 'https://fygvulgffhxrimaeyoep.supabase.co';
-const supabaseKey = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+const supabaseUrl = SUPABASE_URL;
+const supabaseKey = SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Leer Excel

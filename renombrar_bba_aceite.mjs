@@ -1,5 +1,6 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 import { createClient } from '@supabase/supabase-js';
-const sb = createClient('https://fygvulgffhxrimaeyoep.supabase.co','sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF');
+const sb = createClient(SUPABASE_URL,SUPABASE_KEY);
 
 const equipos = [
     { ut: '2893-11-MAE10-AP302--M01', unidad: 'U1' },

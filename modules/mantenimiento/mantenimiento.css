@@ -1,0 +1,60 @@
+.maint {max-width:1180px;margin:auto;color:var(--text-color,#172033)}
+.maint header,.maint .maint-row {display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.maint h1 {font-size:1.8rem;margin:8px 0}.maint h2 {font-size:1.15rem;margin:0 0 12px}.maint p {color:var(--text-muted,#64748b);line-height:1.6}
+.maint .maint-eyebrow {color:#d85a00;font-size:.75rem;letter-spacing:.12em;font-weight:700;text-transform:uppercase}
+.maint .maint-note {background:#fff7ed;border:1px solid #fed7aa;padding:12px 16px;border-radius:12px;margin:20px 0;font-size:.85rem;color:#9a3412}
+.maint .maint-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:16px;margin:22px 0}
+.maint .maint-card {background:var(--bg-panel,#fff);border:1px solid var(--border-color,#e2e8f0);border-radius:16px;padding:24px;text-align:left;color:inherit;overflow-wrap:anywhere}
+.maint button.maint-card {cursor:pointer;transition:transform .15s,border-color .15s}.maint button.maint-card:hover {border-color:#ff6900;transform:translateY(-2px)}
+.maint .maint-icon {display:block;color:#ef6900;font-size:1.5rem;margin-bottom:20px}.maint .maint-card strong {display:block;font-size:1.05rem;margin-bottom:8px}
+.maint .maint-card small {color:var(--text-muted,#64748b)}.maint .maint-empty {text-align:center;padding:45px 20px;border:1px dashed #cbd5e1;border-radius:16px;margin:20px 0}
+.maint .maint-panel {border:1px solid var(--border-color,#e2e8f0);border-radius:16px;padding:22px;background:var(--bg-panel,#fff);margin:18px 0}
+.maint label {display:block;font-weight:600;font-size:.85rem;margin:16px 0 6px}.maint input,.maint select,.maint textarea {width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:8px;background:var(--bg-panel,#fff);color:inherit;font:inherit}.maint textarea {min-height:95px;resize:vertical}
+.maint progress {width:100%;height:12px;accent-color:#ff6900;margin:10px 0}.maint .maint-actions {display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.maint .maint-results {max-height:300px;overflow:auto;margin-top:12px}.maint .maint-result {width:100%;padding:13px;text-align:left;background:transparent;border:0;border-bottom:1px solid #e2e8f0;cursor:pointer;color:inherit}.maint .maint-result:hover {background:#fff7ed}
+.maint .maint-photos {display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}.maint .maint-photos img {width:100%;height:145px;object-fit:cover;border-radius:10px}.maint figure {margin:0}.maint figcaption {font-size:.8rem;overflow-wrap:anywhere;margin-top:5px}
+.maint .maint-error {color:#b91c1c;margin:12px 0}.maint .maint-danger {color:#b91c1c;border:1px solid #fecaca;background:#fff}.maint .maint-breadcrumb {display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.maint button:focus-visible {outline:3px solid #fb923c;outline-offset:3px}.maint button:disabled {opacity:.5;cursor:not-allowed}
+@media(max-width:600px){.maint .maint-grid{grid-template-columns:1fr 1fr}.maint .maint-card{padding:18px}.maint .maint-panel{padding:16px}.maint h1{font-size:1.4rem}}
+
+/* Maintenance workspace: scoped layout and responsive states. */
+.maint {padding:12px 0 36px;--maint-accent:#e65f00}
+.maint .maint-intro {margin-bottom:24px;align-items:center}
+.maint .maint-intro h1 {font-size:clamp(1.65rem,3vw,2.2rem);letter-spacing:-.035em;margin:8px 0}
+.maint .maint-intro p {margin:0;max-width:650px;font-size:.95rem}
+.maint .maint-badge {display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border:1px solid var(--border-color,#e2e8f0);border-radius:30px;background:var(--bg-panel,#fff);font-size:.78rem;color:var(--text-muted,#64748b)}
+.maint .maint-state {display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 24px;background:var(--bg-panel,#fff);border:1px solid var(--border-color,#e2e8f0);border-radius:22px;box-shadow:0 8px 30px #17203305}
+.maint .maint-state-icon {display:grid;place-items:center;width:68px;height:68px;background:#fff3e8;border:1px solid #ffdfc5;border-radius:20px;color:#d85a00;font-size:1.65rem;margin-bottom:24px}
+.maint .maint-state h2 {font-size:clamp(1.3rem,2.5vw,1.75rem);letter-spacing:-.025em;margin:12px 0 0}
+.maint .maint-state p {max-width:490px;margin:14px 0 4px;font-size:.95rem}
+.maint .maint-state .maint-actions {justify-content:center;gap:12px;margin-top:24px}
+.maint .btn {min-height:42px;box-shadow:none;font-size:.88rem;display:inline-flex;align-items:center;justify-content:center;gap:12px}
+.maint .maint-context {display:flex;justify-content:center;gap:28px;flex-wrap:wrap;margin-top:24px;color:var(--text-muted,#64748b);font-size:.8rem}
+.maint .maint-context span {display:flex;gap:8px;align-items:center}
+.maint .maint-summary {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border-color,#e2e8f0);background:var(--bg-panel,#fff);border-radius:16px;margin-bottom:28px;overflow:hidden}
+.maint .maint-summary>div {padding:20px 24px;display:flex;flex-direction:column;gap:8px}
+.maint .maint-summary>div+div {border-left:1px solid var(--border-color,#e2e8f0)}
+.maint .maint-summary span {font-size:.8rem;color:var(--text-muted,#64748b)}
+.maint .maint-summary strong {font-size:1.45rem;letter-spacing:-.025em}
+.maint .maint-summary small {font-size:.8rem;font-weight:400;color:var(--text-muted,#64748b)}
+.maint .maint-card {position:relative;padding:24px;min-height:200px;display:flex;flex-direction:column;box-shadow:0 3px 12px #17203303}
+.maint .maint-card .maint-icon {background:#fff3e8;border-radius:13px;width:46px;height:46px;display:grid;place-items:center;font-size:1.2rem;margin-bottom:20px}
+.maint .maint-card-link {display:flex;justify-content:space-between;gap:12px;padding-top:22px;margin-top:auto;color:var(--maint-accent);font-size:.8rem;font-weight:600}
+.maint .maint-breadcrumb .btn {min-height:32px;font-size:.78rem;padding:6px 10px;border-color:transparent;background:transparent;color:var(--text-muted,#64748b)}
+.maint .maint-panel {padding:26px;border-radius:18px}
+.maint .maint-form-title {margin-top:24px;padding-top:24px;border-top:1px solid var(--border-color,#e2e8f0)}
+.maint #maint-job {display:grid;grid-template-columns:1fr 2fr;gap:0 22px}
+.maint #maint-job>label,.maint #maint-job>input,.maint #maint-job>select,.maint #maint-job>textarea,.maint #maint-job>p,.maint #maint-job>.maint-actions {grid-column:1/-1}
+.maint textarea {min-height:130px}
+.maint input:focus-visible,.maint select:focus-visible,.maint textarea:focus-visible {outline:3px solid #ff690033;border-color:#e65f00;outline-offset:1px}
+.maint input[type=file] {padding:22px;background:#fffaf6;border:1px dashed #edb98f;cursor:pointer}
+.maint input::file-selector-button {border:1px solid #fed7aa;background:white;border-radius:8px;padding:9px 14px;margin-right:12px;color:#9a3412;font-weight:600;cursor:pointer}
+.maint #maint-selected {font-size:.8rem;margin:8px 0}
+.maint .maint-photos {grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-top:20px}
+.maint .maint-photos figure {border:1px solid var(--border-color,#e2e8f0);border-radius:12px;overflow:hidden}
+.maint .maint-photos img {display:block;height:190px;border-radius:0}
+.maint .maint-photos figcaption {padding:10px 12px;margin:0;color:var(--text-muted,#64748b)}
+.maint .maint-error:empty {display:none}
+.maint .maint-error:not(:empty) {padding:14px 18px;background:#fef2f2;border:1px solid #fecaca;border-radius:12px;line-height:1.5}
+@media(max-width:600px){.maint .maint-state{padding:32px 18px}.maint .maint-state .maint-actions{width:100%}.maint .maint-state .btn{width:100%}.maint .maint-context{gap:14px;font-size:.72rem}.maint .maint-summary>div{padding:14px 10px}.maint .maint-summary strong{font-size:1rem}.maint .maint-summary span{font-size:.72rem}.maint .maint-card{padding:16px;min-height:190px}.maint .maint-card strong{font-size:.95rem}.maint .maint-panel{padding:18px}.maint .maint-photos{grid-template-columns:repeat(2,minmax(0,1fr))}.maint .maint-photos img{height:135px}.maint .maint-row select{max-width:100%}.maint .maint-actions .btn{flex:1 1 auto}}
+@media(prefers-reduced-motion:reduce){.maint.fade-in{animation:none}.maint button.maint-card{transition:none}.maint .fa-spin{animation:none}}

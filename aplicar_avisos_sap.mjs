@@ -1,10 +1,11 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 // Aplica la migración avisos_sap.sql usando supabase-js (vía rpc 'exec_sql' si existe,
 // o intentando insertar para detectar si la tabla ya existe).
 import { createClient } from '@supabase/supabase-js';
 
 const sb = createClient(
-    'https://fygvulgffhxrimaeyoep.supabase.co',
-    'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF'
+    SUPABASE_URL,
+    SUPABASE_KEY
 );
 
 // Intentar leer la tabla; si no existe, dará error 42P01.

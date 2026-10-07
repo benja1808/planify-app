@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node -c app.js && node -c server.js"
+    "start:maintenance": "node maintenance-server.cjs",
+    "test": "node -c app.js && node -c server.js && node --test equipment-components.test.cjs route-executions.test.cjs worker-status.test.cjs vib-daily.test.cjs"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +19,7 @@
     "@supabase/supabase-js": "^2.99.0",
     "exceljs": "^4.4.0",
     "express": "^4.22.1",
+    "pdfjs-dist": "4.10.38",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   }

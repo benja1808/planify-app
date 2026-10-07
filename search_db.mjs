@@ -1,7 +1,8 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://fygvulgffhxrimaeyoep.supabase.co';
-const supabaseKey = 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+const supabaseUrl = SUPABASE_URL;
+const supabaseKey = SUPABASE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function searchEquipos() {

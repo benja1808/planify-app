@@ -15,8 +15,14 @@ try {
 const requestedPort = Number(process.env.PORT || 4173);
 const rootDir = __dirname;
 const TEMP_DIR = path.join(__dirname, 'temp');
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://fygvulgffhxrimaeyoep.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+// Credenciales desde variables de entorno (Render) o .env local (no versionado).
+if (fs.existsSync(path.join(rootDir, '.env'))) process.loadEnvFile(path.join(rootDir, '.env'));
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.error('[server] Faltan SUPABASE_URL y SUPABASE_ANON_KEY (o SUPABASE_SERVICE_ROLE_KEY). Copia .env.example a .env.');
+    process.exit(1);
+}
 const supabaseServer = createClient(SUPABASE_URL, SUPABASE_KEY);
 const PUSH_POLL_MS = Number(process.env.PUSH_POLL_MS || 30000);
 
@@ -1541,7 +1547,18 @@ function iniciarRealtimePush() {
         });
 }
 
+const maintenanceConfigPath = path.join(require('os').homedir(), '.planify-private', 'maintenance.json');
+const maintenanceGateway = fs.existsSync(maintenanceConfigPath)
+    ? require('./maintenance-server.cjs').createGateway(JSON.parse(fs.readFileSync(maintenanceConfigPath, 'utf8')))
+    : null;
 const server = http.createServer(async (req, res) => {
+    if ((req.url || '').startsWith('/api/maintenance/')) {
+        if (maintenanceGateway && await maintenanceGateway(req, res)) return;
+        res.writeHead(503, {'Content-Type':'application/json'});
+        res.end(JSON.stringify({message:'El acceso local de Mantenimiento no está configurado.'}));
+        return;
+    }
+
     // CORS preflight
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -1865,7 +1882,7 @@ function listenWithFallback(port, attemptsRemaining = 10) {
         process.exit(1);
     });
 
-    server.listen(port, () => {
+    server.listen(port, process.env.HOST || '::', () => {
         const address = server.address();
         const activePort = typeof address === 'object' && address ? address.port : port;
         console.log(`Planner app running at http://localhost:${activePort}`);
@@ -1873,7 +1890,7 @@ function listenWithFallback(port, attemptsRemaining = 10) {
         if (activePort !== requestedPort) {
             console.log(`[server] Puerto solicitado ${requestedPort} ocupado; usando ${activePort}.`);
         }
-        if (pushReady) {
+        if (pushReady && process.env.DISABLE_PUSH !== '1') {
             revisarCambiosPush().then(iniciarRealtimePush);
             setInterval(revisarCambiosPush, PUSH_POLL_MS);
             console.log(`[push] Push remoto activo. Realtime + respaldo cada ${PUSH_POLL_MS} ms.`);

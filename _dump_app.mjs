@@ -1,7 +1,8 @@
+import { SUPABASE_URL, SUPABASE_KEY } from './supabase-env.mjs';
 // Snapshot de equipos: detecta unidad (2893-N | GUA-N | "Unidad N" | "U N")
 // y marca origen 'canon' (kks GUA# o ruta R.VENT) vs '2893'.
-const url='https://fygvulgffhxrimaeyoep.supabase.co';
-const key='sb_publishable_YOksHoWnkBBt74lnKFqc8g_XyP3EyQF';
+const url=SUPABASE_URL;
+const key=SUPABASE_KEY;
 import fs from 'fs';
 let all=[],from=0,size=1000;
 while(true){
