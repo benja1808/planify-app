@@ -26,8 +26,12 @@
             const anchors = items.filter(i=>col(i)===5+offset && /^(SI|NO)$/.test(norm(i.s))).sort((a,b)=>b.y-a.y);
             const codes = items.filter(i=>col(i)===3+offset && /^\d{4}-/.test(i.s));
             if (codes.length !== anchors.length || (!anchors.length && items.length)) throw new Error('Hay filas sin disponibilidad o sin ubicación técnica. Revisa el PDF antes de importarlo.');
+            // Compact tables can put the first row within 28 points of the header.
+            // Bound it by the lowest header line instead of including "TRABAJO" as an OT.
+            const headerLines = items.filter(i => i.y > anchors[0]?.y && /^(ORDEN DE|ORDEN DE TRABAJO|OT|TRABAJO|UBICACION|ACTIVO|COMPONENTE|TECNICA|CRITICIDAD|DISPONIBILIDAD DE|ENTREGA \(SI \/ NO\)|OBSERVACIONES|OPERACIONES)$/.test(norm(i.s)));
+            const headerBottom = headerLines.length ? Math.min(...headerLines.map(i=>i.y)) : Infinity;
             anchors.forEach((anchor,index)=>{
-                const top = index ? (anchors[index-1].y+anchor.y)/2 : anchor.y+28;
+                const top = index ? (anchors[index-1].y+anchor.y)/2 : Math.min(anchor.y+28, headerBottom);
                 const bottom = index<anchors.length-1 ? (anchors[index+1].y+anchor.y)/2 : anchor.y-28;
                 const cells = Array.from({length:centers.length},()=>[]);
                 items.filter(i=>i.y<top && i.y>bottom).sort((a,b)=>Math.abs(a.y-b.y)<2?a.x-b.x:b.y-a.y).forEach(i=>cells[col(i)].push(i.s));

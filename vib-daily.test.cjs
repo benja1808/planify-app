@@ -4,6 +4,12 @@ const core=require('./vib-daily-core.js');
 const item=(str,x,y)=>({str,width:0,transform:[1,0,0,1,x,y]});
 const header=['UBICACIÓN','ACTIVO','COMPONENTE','UBICACIÓN','Criticidad','DISPONIBILIDAD DE','OBSERVACIONES'].map((s,i)=>item(s,50+i*100,500));
 const row=(y,code,status,observation='')=>['UNIDAD 1','BOMBA A','MOTOR',code,'',status,observation].map((s,i)=>item(s,50+i*100,y));
+test('compact first row excludes the second header line from OT and technical code',()=>{
+    const shifted=values=>values.map(i=>({...i,transform:[1,0,0,1,i.transform[4]+100,i.transform[5]]}));
+    const result=core.parsePages([{width:800,items:[item('ORDEN DE',50,505),item('TRABAJO',50,496),...shifted(header),item('TÉCNICA',450,496),item('2002185120',50,471),...shifted(row(471,'2893-33-PAC01-AP102-KP01','SI')),item('2002185120',50,455),...shifted(row(455,'2893-33-PAC01-AP102--M01','SI'))]}]);
+    assert.equal(result.length,1);assert.equal(result[0].ot,'2002185120');assert.equal(result[0].componentes.length,2);
+    assert.equal(result[0].componentes[0].ubicacion_tecnica,'2893-33-PAC01-AP102-KP01');
+});
 test('optional PDF order column is read as a string and grouped with its equipment',()=>{
     const shifted=values=>values.map(i=>({...i,transform:[1,0,0,1,i.transform[4]+100,i.transform[5]]}));
     const result=core.parsePages([{width:800,items:[item('ORDEN DE',50,500),...shifted(header),item('2002185124',50,400),...shifted(row(400,'2893-01-GAA02-AN101--M01','SI'))]}]);
