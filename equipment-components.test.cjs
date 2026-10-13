@@ -6,6 +6,8 @@ const source = fs.readFileSync('app.js', 'utf8');
 function context(equipos) {
     const ctx = vm.createContext({ window: {}, estado: { equipos } });
     vm.runInContext(source.slice(source.indexOf('function _equipoEsCanonico('), source.indexOf('function renderEquiposView(')), ctx);
+    const start = source.indexOf('function gruposEquiposParaRequerimiento()');
+    vm.runInContext(source.slice(start, source.indexOf('window.rutasEditarOtEjecucion', start)), ctx);
     return ctx;
 }
 test('VTF retains fan beside canonical motor and keeps every measurement ID accessible', () => {
@@ -16,6 +18,21 @@ test('VTF retains fan beside canonical motor and keeps every measurement ID acce
         { id: 'other-unit', kks: '2893-45-HLB10-AN101--M01', componente: 'Motor' }
     ];
     assert.deepEqual(Array.from(context(rows).filtrarEquiposDuplicados(rows), e => e.id), ['motor', 'fan', 'duplicate', 'other-unit']);
+});
+
+test('requirement picker includes all component IDs despite different asset names and unit labels', () => {
+    const rows = [
+        { id: 'motor', activo: 'VENTILADOR TIRO FORZADO VTF U5', ubicacion: 'U5', kks: '2893-55-HLB10-AN101--M01', componente: 'Motor' },
+        { id: 'fan', activo: 'Ventilador tiro forzado', ubicacion: 'Unidad 5', kks: '2893-55-HLB10-AN101-KN01', componente: 'Ventilador' },
+        { id: 'bearing', kks: '2893-55-HLB10-AN101-MU01', componente: 'Descanso' },
+        { id: 'other', activo: 'VENTILADOR TIRO FORZADO VTF U5', ubicacion: 'U5', kks: '2893-55-HLB10-AN102--M01', componente: 'Motor' },
+        { id: 'u4', activo: 'Ventilador tiro forzado', ubicacion: 'U4', kks: '2893-45-HLB10-AN101-KN01', componente: 'Ventilador' }
+    ];
+    const groups = context(rows).gruposEquiposParaRequerimiento();
+    const vtf = groups.find(g => g.componentes.some(c => c.id === 'motor'));
+    assert.deepEqual(Array.from(vtf.componentes, c => c.equipo_id).sort(), ['bearing', 'fan', 'motor']);
+    assert.equal(groups.length, 3);
+    assert.ok(vtf.busqueda.includes('Unidad 5'));
 });
 test('VTF aliases group within their unit without joining other assets', () => {
     const ctx = context([]);

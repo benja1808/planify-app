@@ -166,7 +166,7 @@ test('daily data survives actual application upload/download helpers and retries
     const first=browser();
     const daily={id:'daily',rutaIdx:-2,_new:true,ot:'',estado:'activa',fechaInicio:'2026-10-06',liderId:'tech-1',ayudanteId:'tech-2',
         componentesEstado:{__vibDiaria:{fecha:'2026-10-06',archivo:'entrega.pdf'},'0.0':'listo'},mediciones:{'0.0':{vibracion:'1.23',temperaturas:[{punto:3,valor:44}]}},observaciones:{'0.0':'Verificar'},
-        requerimientoEquipos:[{id:'eq',nombre:'Bomba',ot:'12345',entregaFuente:'entrega.pdf',rutaSugerida:5,enlace:{ejecucionId:'route',rutaIdx:5,componentKeys:['2.1','2.2']},componentes:[comp('M'),{...comp('B'),disponible:false,observacionOperaciones:'En montaje'}]}]};
+        requerimientoEquipos:[{id:'eq',nombre:'Bomba',horaInicio:'23:30',horaFin:'01:15',ot:'12345',entregaFuente:'entrega.pdf',rutaSugerida:5,enlace:{ejecucionId:'route',rutaIdx:5,componentKeys:['2.1','2.2']},componentes:[comp('M'),{...comp('B'),disponible:false,observacionOperaciones:'En montaje'}]}]};
     first.ctx.setEjecucionActiva(-2,daily,{skipPush:true});
     fail=true;await assert.rejects(()=>first.ctx._pushEjecucionASupabase(-2,daily),/network unavailable/);
     assert.equal(first.store.get('daily')._dirty,true);assert.equal(remote.size,0);
@@ -178,6 +178,7 @@ test('daily data survives actual application upload/download helpers and retries
     const loaded=second.ctx.getEjecucionActiva(-2,'daily');
     assert.equal(loaded.mediciones['0.0'].vibracion,'1.23');assert.equal(loaded.mediciones['0.0'].temperaturas[0].punto,3);
     assert.equal(loaded.observaciones['0.0'],'Verificar');assert.equal(loaded.fechaInicio,'2026-10-06');
+    assert.equal(loaded.requerimientoEquipos[0].horaInicio,'23:30');assert.equal(loaded.requerimientoEquipos[0].horaFin,'01:15');
     assert.equal(loaded.requerimientoEquipos[0].ot,'12345');assert.equal(loaded.requerimientoEquipos[0].componentes[1].disponible,false);
     assert.equal(loaded.requerimientoEquipos[0].componentes[1].observacionOperaciones,'En montaje');
     assert.equal(loaded.componentesEstado.__vibDiaria.archivo,'entrega.pdf');assert.equal(loaded.liderId,'tech-1');

@@ -4568,6 +4568,7 @@ async function actualizarConfiguracionInsumo(insumoId, patch = {}) {
 }
 
 async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '', tipoMovimiento = null) {
+    if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para ajustar el stock.');
     const insumo = obtenerInsumoPorId(insumoId);
     if (!insumo) throw new Error('Insumo no encontrado.');
     const antes = enteroSeguro(insumo.stock_actual, 0);
@@ -5576,11 +5577,12 @@ async function renderInsumosView() {
         const bajo = stock <= minimo && minimo > 0;
         const criticoColor = stock <= 0 ? '#7f1d1d' : bajo ? '#dc2626' : 'var(--text-main)';
         const barColor = stock <= 0 ? '#7f1d1d' : bajo ? '#dc2626' : '#cbd5e1';
-        const acciones = esAdmin ? `
+        const acciones = puedeAprobar ? `
             <div class="inv-card-actions">
                 <button type="button" class="btn btn-outline btn-small" onclick="window._invAjustarStock('${item.id}')"><i class="fa-solid fa-pen-to-square"></i> Ajustar</button>
-                <button type="button" class="btn btn-outline btn-small" onclick="window._invEditar('${item.id}')"><i class="fa-solid fa-sliders"></i> Editar</button>
+                ${esAdmin ? `<button type="button" class="btn btn-outline btn-small" onclick="window._invEditar('${item.id}')"><i class="fa-solid fa-sliders"></i> Editar</button>
                 <button type="button" class="btn btn-outline btn-small inv-danger-btn" onclick="window._invEliminar('${item.id}')" title="Archivar"><i class="fa-solid fa-trash"></i></button>
+                ` : ''}
             </div>
         ` : '';
         return `
@@ -6025,6 +6027,7 @@ async function renderInsumosView() {
     });
 
     window._invAjustarStock = (insumoId) => {
+        if (!usuarioPuedeAprobarInsumos()) return;
         const insumo = obtenerInsumoPorId(insumoId);
         if (!insumo) return;
         abrirModalInsumo({
@@ -6051,9 +6054,10 @@ async function renderInsumosView() {
             `,
             onConfirm: async () => {
                 const tipo = document.querySelector('input[name="inv-mov"]:checked')?.value || 'entrada';
-                const cantidad = enteroSeguro(document.getElementById('inv-ajuste-cantidad')?.value, 0);
+                const cantidadTexto = document.getElementById('inv-ajuste-cantidad')?.value ?? '';
+                const cantidad = Number(cantidadTexto);
                 const motivo = String(document.getElementById('inv-ajuste-motivo')?.value || '').trim();
-                if (cantidad <= 0) throw new Error('La cantidad debe ser mayor a cero.');
+                if (!cantidadTexto.trim() || !Number.isSafeInteger(cantidad) || cantidad < 0 || (tipo !== 'ajuste' && cantidad === 0)) throw new Error('Ingresa una cantidad válida para el movimiento.');
                 if (!motivo) throw new Error('Indica un motivo para el movimiento.');
                 if (tipo === 'ajuste') {
                     await ajustarStockInsumo(insumoId, cantidad, motivo);
@@ -15218,6 +15222,8 @@ function _normalizarEquipoRequerimiento(eq) {
         enlace: eq?.enlace || null,
         rutaSugerida: eq?.rutaSugerida ?? null,
         entregaFuente: eq?.entregaFuente || '',
+        horaInicio: /^([01]\d|2[0-3]):[0-5]\d$/.test(eq?.horaInicio || '') ? eq.horaInicio : '',
+        horaFin: /^([01]\d|2[0-3]):[0-5]\d$/.test(eq?.horaFin || '') ? eq.horaFin : '',
         nombre: eq?.nombre || eq?.activo || 'Equipo requerido',
         unidad: eq?.unidad || eq?.ubicacion || 'REQ',
         ubicacion_tecnica: eq?.ubicacion_tecnica || eq?.kks || '',
@@ -16009,6 +16015,7 @@ function renderTrabajadorRutaDetalle() {
         return `
             <div class="trab-eq-body" style="border-top:1px solid #f1f5f9;">
                 ${window.VibDailyImport?.equipmentBadge(ejActual,eq,eqIdx) || ''}
+                ${renderHorarioEquipoRequerimiento(idx,ejActual,eq)}
                 ${comps.map((c, ci) => {
                     if (Number(idx) === -2 && c.disponible === false) return window.VibDailyImport.unavailable(c);
                     if (Number(idx) === -2 && window.VibDailyImport?.closedLink(eq)) return window.VibDailyImport.closedComponent(c,ejActual.mediciones?.[`${eqIdx}.${ci}`]);
@@ -17978,6 +17985,7 @@ function renderRutasDetalle(idx) {
                     <i class="fa-solid fa-gears" style="color:#64748b;"></i>
                     <span style="font-weight:800; color:#0f172a; font-size:0.95rem;">${escapeHtml(eq.nombre)}</span>
                     ${window.VibDailyImport?.equipmentBadge(ej,eq,eqIdx) || ''}
+                    ${renderHorarioEquipoRequerimiento(idx,ej,eq)}
                     <span style="font-size:0.72rem; color:#64748b;">${totalEq} comp.</span>
                 </div>
                 ${ej ? `
@@ -18116,16 +18124,44 @@ window.rutasAbrirFichaEquipo = function(equipoId) {
         alert('La ficha técnica no está disponible.');
     }
 };
+function renderHorarioEquipoRequerimiento(idx, ej, eq) {
+    if (!ej || !esRutaRequerimientos(idx)) return '';
+    return `<div style="display:flex;gap:0.75rem;flex-wrap:wrap;padding:0.5rem 0;">
+        ${[['horaInicio','Hora inicio'],['horaFin','Hora fin']].map(([campo,label])=>`<label style="font-size:0.8rem;">${label}<input type="time" class="form-control" value="${escapeHtml(eq[campo] || '')}" data-ejecucion="${escapeHtml(ej.id)}" data-equipo="${escapeHtml(eq.id)}" data-campo="${campo}" onchange="window.rutasGuardarHorarioEquipo(${Number(idx)},this)"></label>`).join('')}
+        <small style="align-self:end;color:#64748b;">Si la hora fin es menor que la de inicio, corresponde al día siguiente.</small>
+    </div>`;
+}
+
+window.rutasGuardarHorarioEquipo = function(idx, input) {
+    if (!esRutaRequerimientos(idx)) return;
+    const campo = input.dataset.campo;
+    if (!['horaInicio','horaFin'].includes(campo)) return;
+    if (input.value && !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)) return;
+    const ej = getEjecucionActiva(idx,input.dataset.ejecucion);
+    if (!ej) return;
+    normalizarEjecucionRequerimientos(ej);
+    const eq = ej.requerimientoEquipos.find(item=>String(item.id)===input.dataset.equipo);
+    if (!eq) return;
+    eq[campo] = input.value;
+    setEjecucionActiva(idx,ej);
+};
+
 function gruposEquiposParaRequerimiento() {
     const grupos = new Map();
     (estado.equipos || []).forEach(eq => {
         const activo = String(eq.activo || '').trim();
-        if (!activo) return;
+        if (!activo && !_ubicacionTecnicaFicha(eq)) return;
         const ubicacion = String(eq.ubicacion || '').trim();
-        const key = `${activo.toLowerCase()}|${ubicacion.toLowerCase()}`;
+        // Compartir la identidad técnica de la ficha: nombres y ubicaciones
+        // pueden variar entre el motor, el ventilador y las partes auxiliares.
+        const key = _claveActivoFicha(eq);
         if (!grupos.has(key)) {
-            grupos.set(key, { key, nombre: activo, unidad: ubicacion || 'REQ', componentes: [] });
+            grupos.set(key, { key, nombre: activo || 'Equipo sin nombre', unidad: ubicacion || 'REQ', componentes: [], busqueda: [] });
         }
+        const grupo = grupos.get(key);
+        grupo.busqueda.push(activo, ubicacion);
+        if (_equipoEsCanonico(eq) || grupo.nombre === 'Equipo sin nombre') grupo.nombre = activo || grupo.nombre;
+        if (grupo.unidad === 'REQ' && ubicacion) grupo.unidad = ubicacion;
         grupos.get(key).componentes.push({
             id: eq.id,
             equipo_id: eq.id,
@@ -18214,7 +18250,7 @@ window.rutasRequerimientosAgregarEquipo = function(idx) {
         const q = String(buscar.value || '').toLowerCase().trim();
         const visibles = grupos.filter(g => {
             if (!q) return true;
-            const texto = [g.nombre, g.unidad, ...g.componentes.flatMap(c => [c.nombre, c.ubicacion_tecnica, c.kks])].join(' ').toLowerCase();
+            const texto = [g.nombre, g.unidad, ...g.busqueda, ...g.componentes.flatMap(c => [c.nombre, c.ubicacion_tecnica, c.kks])].join(' ').toLowerCase();
             return texto.includes(q);
         }).slice(0, 60);
         lista.innerHTML = visibles.length ? visibles.map(g => `
@@ -25168,6 +25204,22 @@ document.getElementById('btn-logout')?.addEventListener('click', () => {
 window.addEventListener('DOMContentLoaded', async () => {
     actualizarEstadoSyncStripUI();
     registrarResyncNotificaciones();
+    // Con una sesión guardada, ocultar el selector de acceso mientras se
+    // restaura: si no, se alcanza a escribir un PIN que "falla" y luego la
+    // sesión entra sola.
+    let sesionGuardada = null;
+    try { sesionGuardada = localStorage.getItem('planify_session'); } catch (e) { /* noop */ }
+    const roleCards = document.querySelector('.role-cards');
+    let avisoRestaurando = null;
+    if (sesionGuardada && roleCards) {
+        roleCards.style.display = 'none';
+        avisoRestaurando = document.createElement('p');
+        avisoRestaurando.id = 'login-restaurando';
+        avisoRestaurando.setAttribute('role', 'status');
+        avisoRestaurando.style.cssText = 'margin:1.5rem 0 .5rem;text-align:center;color:var(--text-muted);font-size:.9rem;';
+        avisoRestaurando.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Recuperando tu sesión…';
+        roleCards.after(avisoRestaurando);
+    }
     // Esperar a que carguen datos (trabajadores, tareas, equipos) antes
     // de intentar restaurar sesión. Sin esto, sesiones de trabajador
     // pueden no encontrar el objeto y caer al login.
@@ -25177,7 +25229,13 @@ window.addEventListener('DOMContentLoaded', async () => {
         console.warn('inicializarDatos falló, continuamos con datos parciales:', e);
     }
     // Restaurar sesión si existe (sobrevive F5)
-    await restaurarSesionPersistida();
+    let restaurada = false;
+    try { restaurada = await restaurarSesionPersistida(); }
+    catch (e) { console.warn('No se pudo restaurar la sesión:', e); }
+    if (avisoRestaurando) {
+        avisoRestaurando.remove();
+        if (!restaurada) roleCards.style.display = 'block';
+    }
     // Bajar/subir mediciones de tiristores (redibuja si la vista activa cambio)
     refrescarTiristoresYRedibujar();
 });
