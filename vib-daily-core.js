@@ -8,19 +8,62 @@
     const ut = s => norm(s).replace(/\s/g, ''); // Double hyphens in motor KKS are significant.
     const fields = ['componentesEstado', 'componentesAt', 'mediciones', 'observaciones'];
     const clone = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+    const importColumns = ['unidad','activo','nombre','ubicacion_tecnica','disponible','ot','observacionOperaciones'];
+    function recoveryText(pages) {
+        return pages.flatMap(page=>{
+            const lines=[];
+            for(const item of page.items.filter(i=>i.str?.trim()).sort((a,b)=>b.transform[5]-a.transform[5])) {
+                let line=lines.find(l=>Math.abs(l.y-item.transform[5])<2);
+                if(!line){line={y:item.transform[5],items:[]};lines.push(line);}
+                line.items.push(item);
+            }
+            return lines.map(l=>l.items.sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str.trim().replace(/[\t\r\n]+/g,' ')).join('\t'));
+        }).join('\n');
+    }
+    function parseRecovery(text, mapping) {
+        const selected=importColumns.map(k=>mapping[k]).filter(v=>Number.isInteger(v) && v>=0);
+        if(importColumns.slice(0,5).some(k=>!Number.isInteger(mapping[k]) || mapping[k]<0))throw new Error('Asigna las cinco columnas obligatorias.');
+        if(new Set(selected).size!==selected.length)throw new Error('Cada campo debe usar una columna diferente.');
+        const groups=new Map(),seen=new Set();
+        String(text).split(/\r?\n/).forEach((line,index)=>{
+            if(!line.trim())return;
+            const cells=line.split('\t'),row={};
+            importColumns.forEach(k=>row[k]=mapping[k]>=0?(cells[mapping[k]] || '').trim():'');
+            const fail=message=>{throw new Error(`Fila ${index+1}: ${message}`);};
+            if(!row.unidad || !row.activo || !row.nombre)fail('completa ubicación, activo y componente.');
+            row.ubicacion_tecnica=ut(row.ubicacion_tecnica);
+            if(!/^\d{4}-[A-Z0-9-]+$/.test(row.ubicacion_tecnica))fail('revisa la ubicación técnica.');
+            if(!/^(SI|NO)$/.test(norm(row.disponible)))fail('la disponibilidad debe ser Sí o No.');
+            if(row.ot && !/^[A-Z0-9-]+$/i.test(row.ot))fail('revisa la OT.');
+            if(seen.has(row.ubicacion_tecnica))fail('ubicación técnica repetida.');
+            seen.add(row.ubicacion_tecnica);row.disponible=norm(row.disponible)==='SI';
+            const key=JSON.stringify([norm(row.unidad),norm(row.activo),norm(row.ot)]);
+            if(!groups.has(key))groups.set(key,{nombre:row.activo,unidad:row.unidad,ot:row.ot,componentes:[]});
+            groups.get(key).componentes.push(row);
+        });
+        if(!groups.size)throw new Error('Agrega al menos una fila de equipos.');
+        return [...groups.values()];
+    }
     function parsePages(pages) {
         let centers, hasOt = false;
         const rows = [], seen = new Set();
         for (const page of pages) {
-            const items = page.items.filter(i => i.str?.trim()).map(i => ({s:i.str.trim(),x:(i.transform[4] + i.width / 2) / page.width,y:i.transform[5]}));
-            if (!centers) {
-                const labels = ['UBICACION','ACTIVO','COMPONENTE','UBICACION','CRITICIDAD','DISPONIBILIDAD DE','OBSERVACIONES'];
-                const header = items.filter(i => labels.includes(norm(i.s))).sort((a,b)=>a.x-b.x);
-                if (header.length !== 7) throw new Error('No se reconoce la tabla de entrega. Usa el PDF con ubicación, activo, componente, ubicación técnica y disponibilidad.');
-                const otHeader = items.find(i=>/^(ORDEN DE|ORDEN DE TRABAJO|OT)$/.test(norm(i.s)) && i.x<header[0].x);
+            const items = page.items.filter(i => i.str?.trim()).map(i => ({s:i.str.trim(),x:(i.transform[4] + (i.width || 0) / 2) / page.width,y:i.transform[5]}));
+            if (!items.length) continue;
+            // PDF exporters can put the whole heading in one text item or split it
+            // over several lines. Identify columns by their leading label instead.
+            const firstCodeY = Math.max(-Infinity,...items.filter(i=>/^\d{4}-/.test(i.s)).map(i=>i.y));
+            const headings = items.filter(i=>i.y>firstCodeY);
+            const header = headings.filter(i=>/^(UBICACION\b|ACTIVO\b|COMPONENTE\b|CRITICIDAD\b|DISPONIBILIDAD\b|OBSERVACIONES\b)/.test(norm(i.s))).sort((a,b)=>a.x-b.x);
+            const locations=header.filter(i=>/^UBICACION\b/.test(norm(i.s)));
+            const find=label=>header.find(i=>norm(i.s).startsWith(label));
+            const columns=[locations[0],find('ACTIVO'),find('COMPONENTE'),locations[1],find('CRITICIDAD'),find('DISPONIBILIDAD'),find('OBSERVACIONES')];
+            if (locations.length===2 && [0,1,2,3,5].every(i=>columns[i])) {
+                const otHeader = headings.find(i=>/^(ORDEN\b|O\.?\s*T\.?(?:\s|$))/.test(norm(i.s)) && i.x<locations[0].x);
                 hasOt = !!otHeader;
-                centers = [...(otHeader?[otHeader.x]:[]),...header.map(i=>i.x)];
+                centers = [...(otHeader?[otHeader.x]:[]),...columns.map(i=>i?.x ?? Infinity)];
             }
+            if (!centers) throw new Error('No se reconoce la tabla de entrega. Usa el PDF con ubicación, activo, componente, ubicación técnica y disponibilidad.');
             const col = item => centers.reduce((best,c,i)=>Math.abs(c-item.x)<Math.abs(centers[best]-item.x)?i:best,0);
             const offset=hasOt?1:0;
             const anchors = items.filter(i=>col(i)===5+offset && /^(SI|NO)$/.test(norm(i.s))).sort((a,b)=>b.y-a.y);
@@ -28,7 +71,7 @@
             if (codes.length !== anchors.length || (!anchors.length && items.length)) throw new Error('Hay filas sin disponibilidad o sin ubicación técnica. Revisa el PDF antes de importarlo.');
             // Compact tables can put the first row within 28 points of the header.
             // Bound it by the lowest header line instead of including "TRABAJO" as an OT.
-            const headerLines = items.filter(i => i.y > anchors[0]?.y && /^(ORDEN DE|ORDEN DE TRABAJO|OT|TRABAJO|UBICACION|ACTIVO|COMPONENTE|TECNICA|CRITICIDAD|DISPONIBILIDAD DE|ENTREGA \(SI \/ NO\)|OBSERVACIONES|OPERACIONES)$/.test(norm(i.s)));
+            const headerLines = items.filter(i => i.y > anchors[0]?.y && /^(ORDEN\b|O\.?\s*T\.?(?:\s|$)|TRABAJO\b|UBICACION\b|ACTIVO\b|COMPONENTE\b|TECNICA\b|CRITICIDAD\b|DISPONIBILIDAD\b|ENTREGA\b|OBSERVACIONES\b|OPERACIONES\b)/.test(norm(i.s)));
             const headerBottom = headerLines.length ? Math.min(...headerLines.map(i=>i.y)) : Infinity;
             anchors.forEach((anchor,index)=>{
                 const top = index ? (anchors[index-1].y+anchor.y)/2 : Math.min(anchor.y+28, headerBottom);
@@ -112,5 +155,5 @@
         });
         return [...updates.values()];
     }
-    return {norm,ut,parsePages,mergeImport,candidates,mapping,links,hydrate,changes,fields,copyField};
+    return {norm,ut,parsePages,recoveryText,parseRecovery,importColumns,mergeImport,candidates,mapping,links,hydrate,changes,fields,copyField};
 });

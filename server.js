@@ -1574,6 +1574,11 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    if (req.method === 'POST' && pathname === '/api/excitatriz/leer-imagen') {
+        await require('./excitatriz-ocr-server.cjs').handle(req, res);
+        return;
+    }
+
     if (req.method === 'GET' && pathname === '/push/vapid-public-key') {
         writeJson(res, pushReady ? 200 : 503, {
             enabled: pushReady,
@@ -1838,6 +1843,15 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Static files
+    // Never serve server secrets (including the OCR provider key) as static files.
+    let decodedPath;
+    try { decodedPath = decodeURIComponent(pathname).replace(/\\/g, '/'); }
+    catch { res.writeHead(400); res.end('Bad Request'); return; }
+    if (decodedPath.split('/').some(part => part.startsWith('.')) || /\.(?:cjs|env)$/i.test(decodedPath)) {
+        res.writeHead(403);
+        res.end('Forbidden');
+        return;
+    }
     const filePath = resolvePath(pathname);
     if (!filePath) {
         res.writeHead(403);

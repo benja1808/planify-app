@@ -8,11 +8,11 @@
         const overlay=document.createElement('div');
         overlay.id='vib-daily-dialog';overlay.className='vib-import-overlay';
         overlay.innerHTML=`<section class="vib-import-dialog" role="dialog" aria-modal="true" aria-labelledby="vib-dialog-title"><header><h2 id="vib-dialog-title">${esc(title)}</h2><button type="button" class="btn btn-outline" data-close aria-label="Cerrar">✕</button></header><div class="vib-import-body">${body}</div></section>`;
-        const close=()=>{overlay.remove();document.removeEventListener('keydown',onKey);};
+        const close=()=>{overlay.dispatchEvent(new Event('vib-close'));overlay.remove();document.removeEventListener('keydown',onKey);};
         const onKey=e=>{
             if(e.key==='Escape')close();
             if(e.key==='Tab'){
-                const controls=[...overlay.querySelectorAll('button,input,select')].filter(el=>!el.disabled && el.getClientRects().length);
+                const controls=[...overlay.querySelectorAll('button,input,select,textarea')].filter(el=>!el.disabled && el.getClientRects().length);
                 const first=controls[0],last=controls[controls.length-1];
                 if(e.shiftKey && document.activeElement===first){e.preventDefault();last?.focus();}
                 else if(!e.shiftKey && document.activeElement===last){e.preventDefault();first?.focus();}
@@ -25,6 +25,33 @@
     function equipmentHtml(eq) {
         const matches=core.candidates(eq,routes());
         return `<article class="vib-import-equipment"><h3>${esc(eq.nombre)} <small>${esc(eq.unidad)}${eq.ot ? ` · OT ${esc(eq.ot)}` : ' · Sin OT en el archivo'}</small></h3><p class="vib-import-route">${matches.length===1 ? esc(matches[0].nombre) : matches.length ? 'Varias rutas posibles: se resolverá al asignar la OT.' : 'Ruta pendiente de identificar.'}</p><ul>${eq.componentes.map(c=>`<li><div><strong>${esc(c.nombre)}</strong><code>${esc(c.ubicacion_tecnica)}</code>${c.observacionOperaciones?`<p>${esc(c.observacionOperaciones)}</p>`:''}</div><span class="vib-availability ${c.disponible?'':'unavailable'}">${c.disponible?'A medir':'No disponible'}</span></li>`).join('')}</ul></article>`;
+    }
+    function recoverImport(dialog,pages,error) {
+        return new Promise(resolve=>{
+            const body=dialog.overlay.querySelector('.vib-import-body');
+            const labels=['Ubicación *','Activo *','Componente *','Ubicación técnica *','Disponibilidad *','OT (opcional)','Observaciones (opcional)'];
+            body.innerHTML=`<p role="alert">${esc(error.message)}</p><h3>Corregir lectura del PDF</h3><p>Puedes resolverlo aquí: deja solo las filas de equipos, corrige el texto y selecciona qué columna corresponde a cada campo. Las columnas se separan con tabulaciones; también puedes pegar una tabla desde Excel. Conserva todas las filas y observaciones del documento.</p><label>Tabla editable<textarea id="vib-recovery-text" class="form-control" rows="12" wrap="off" style="width:100%;white-space:pre"></textarea></label><p id="vib-recovery-count" role="status"></p><div id="vib-recovery-columns">${core.importColumns.map((key,i)=>`<label>${labels[i]}<select class="form-control" data-field="${key}"></select></label>`).join('')}</div><p id="vib-recovery-error" role="alert"></p><p>Se validarán todas las filas antes de mostrar la vista previa. La planificación aún no se modifica.</p><button type="button" class="btn btn-primary" id="vib-recovery-check">Validar y revisar equipos</button>`;
+            const textarea=body.querySelector('textarea');textarea.value=core.recoveryText(pages);
+            const selects=[...body.querySelectorAll('[data-field]')];
+            function refresh(){
+                const rows=textarea.value.split(/\r?\n/).filter(s=>s.trim());
+                const count=Math.max(0,...rows.map(s=>s.split('\t').length));
+                body.querySelector('#vib-recovery-count').textContent=`${rows.length} filas · ${count} columnas. Elimina títulos y encabezados antes de validar.`;
+                selects.forEach(select=>{
+                    const previous=select.value;
+                    select.innerHTML='<option value="-1">Seleccionar / Sin columna</option>'+Array.from({length:count},(_,i)=>`<option value="${i}">Columna ${i+1}: ${esc((rows[0]?.split('\t')[i] || '').slice(0,60))}</option>`).join('');
+                    select.value=previous && Number(previous)<count?previous:'-1';
+                });
+            }
+            textarea.addEventListener('input',refresh);refresh();textarea.focus();
+            const cancel=()=>resolve(null);dialog.overlay.addEventListener('vib-close',cancel,{once:true});
+            body.querySelector('#vib-recovery-check').onclick=()=>{
+                try {
+                    const result=core.parseRecovery(textarea.value,Object.fromEntries(selects.map(s=>[s.dataset.field,Number(s.value)])));
+                    dialog.overlay.removeEventListener('vib-close',cancel);resolve(result);
+                }catch(e){body.querySelector('#vib-recovery-error').textContent=e.message;}
+            };
+        });
     }
     async function importPdf(targetId=null) {
         if(!esRolGestion())return;
@@ -41,7 +68,12 @@
                     if(documentPdf.numPages>50)throw new Error('La entrega admite hasta 50 páginas.');
                     for(let n=1;n<=documentPdf.numPages;n++){const page=await documentPdf.getPage(n);pages.push({width:page.view[2]-page.view[0],items:(await page.getTextContent()).items});}
                 } finally {await documentPdf.destroy();}
-                const equipment=core.parsePages(pages).map(eq=>{
+                if(!dialog.overlay.isConnected)return;
+                let parsed;
+                try {parsed=core.parsePages(pages);}
+                catch(error){parsed=await recoverImport(dialog,pages,error);}
+                if(!parsed || !dialog.overlay.isConnected)return;
+                const equipment=parsed.map(eq=>{
                     const matches=core.candidates(eq,routes());
                     return {...eq,id:window.RouteExecutionStore.newId(),rutaSugerida:matches.length===1?matches[0].idx:null,entregaFuente:file.name};
                 });

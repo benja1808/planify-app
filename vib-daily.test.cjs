@@ -4,6 +4,49 @@ const core=require('./vib-daily-core.js');
 const item=(str,x,y)=>({str,width:0,transform:[1,0,0,1,x,y]});
 const header=['UBICACIÓN','ACTIVO','COMPONENTE','UBICACIÓN','Criticidad','DISPONIBILIDAD DE','OBSERVACIONES'].map((s,i)=>item(s,50+i*100,500));
 const row=(y,code,status,observation='')=>['UNIDAD 1','BOMBA A','MOTOR',code,'',status,observation].map((s,i)=>item(s,50+i*100,y));
+const recoveryMapping={unidad:3,activo:2,nombre:1,ubicacion_tecnica:0,disponible:4,ot:5,observacionOperaciones:6};
+const recoveryRow='2893-01-ABC01-AP101--M01\tMotor\tBomba\tUnidad 1\tSí\t001234\tRevisar antes de medir';
+test('guided recovery imports reordered columns and preserves OT, exact KKS and observations',()=>{
+    const result=core.parseRecovery(recoveryRow+'\n'+recoveryRow.replace('--M01','-KP01').replace('Sí','NO'),recoveryMapping);
+    assert.equal(result.length,1);assert.equal(result[0].ot,'001234');
+    assert.equal(result[0].componentes[0].ubicacion_tecnica,'2893-01-ABC01-AP101--M01');
+    assert.equal(result[0].componentes[0].observacionOperaciones,'Revisar antes de medir');
+    assert.equal(result[0].componentes[0].disponible,true);
+    assert.equal(result[0].componentes[1].disponible,false);
+});
+test('guided recovery rejects incomplete mappings and identifies bad rows without partial import',()=>{
+    assert.throws(()=>core.parseRecovery(recoveryRow,{...recoveryMapping,activo:-1}),/obligatorias/);
+    assert.throws(()=>core.parseRecovery(recoveryRow,{...recoveryMapping,activo:1}),/diferente/);
+    assert.throws(()=>core.parseRecovery(recoveryRow+'\n'+recoveryRow,recoveryMapping),/Fila 2.*repetida/);
+    assert.throws(()=>core.parseRecovery(recoveryRow.replace('Sí','Pendiente'),recoveryMapping),/Fila 1.*Sí o No/);
+    assert.throws(()=>core.parseRecovery(recoveryRow.replace('Bomba',''),recoveryMapping),/Fila 1.*completa/);
+    assert.throws(()=>core.parseRecovery(recoveryRow.replace('2893-01-ABC01-AP101--M01','???'),recoveryMapping),/ubicación técnica/);
+    assert.throws(()=>core.parseRecovery('',recoveryMapping),/al menos/);
+    assert.equal(core.parseRecovery(recoveryRow,{...recoveryMapping,ot:-1})[0].ot,'');
+});
+test('recovery text preserves unknown headings and all rows for user review in reading order',()=>{
+    const pages=[{items:[item('NO',300,300),item('Título desconocido',20,500),item('Motor',100,300),item('Bomba',20,300)]},{items:[item('Última fila',20,400)]}];
+    assert.equal(core.recoveryText(pages),'Título desconocido\nBomba\tMotor\tNO\nÚltima fila');
+    assert.equal(core.recoveryText([{items:[]}]),'');
+});
+test('PDF accepts full headings, optional columns and recalibrates repeated page headers',()=>{
+    const full=['Ubicación','Activo','Componente','Ubicación técnica','Disponibilidad de entrega (Sí / No)','Observaciones de Operaciones'];
+    const page=(width,shift,code,status)=>({width,items:[
+        ...full.map((s,i)=>item(s,shift+i*100,500)),
+        ...['UNIDAD 1','BOMBA A','MOTOR',code,status,'Revisar antes de medir'].map((s,i)=>item(s,shift+i*100,475))
+    ]});
+    const result=core.parsePages([page(700,50,'2893-01-ABC01-AP101-KP01','Sí'),page(900,200,'2893-01-ABC01-AP101--M01','NO')]);
+    assert.equal(result.length,1);
+    assert.equal(result[0].componentes.length,2);
+    assert.equal(result[0].componentes[0].disponible,true);
+    assert.equal(result[0].componentes[1].disponible,false);
+    assert.equal(result[0].componentes[0].observacionOperaciones,'Revisar antes de medir');
+});
+test('PDF accepts availability heading without DE and reports empty text as a scan',()=>{
+    const variant=header.map(i=>i.str==='DISPONIBILIDAD DE'?{...i,str:'DISPONIBILIDAD'}:i);
+    assert.equal(core.parsePages([{width:700,items:[...variant,...row(400,'2893-01-ABC01-AP101-KP01','SI')]}]).length,1);
+    assert.throws(()=>core.parsePages([{width:700,items:[]}]),/legible/);
+});
 test('compact first row excludes the second header line from OT and technical code',()=>{
     const shifted=values=>values.map(i=>({...i,transform:[1,0,0,1,i.transform[4]+100,i.transform[5]]}));
     const result=core.parsePages([{width:800,items:[item('ORDEN DE',50,505),item('TRABAJO',50,496),...shifted(header),item('TÉCNICA',450,496),item('2002185120',50,471),...shifted(row(471,'2893-33-PAC01-AP102-KP01','SI')),item('2002185120',50,455),...shifted(row(455,'2893-33-PAC01-AP102--M01','SI'))]}]);

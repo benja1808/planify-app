@@ -1,5 +1,5 @@
 // Service Worker — Planify Offline v5
-const CACHE_NAME = 'planify-offline-v58';
+const CACHE_NAME = 'planify-offline-v65';
 
 // En localhost no cacheamos nada — siempre red directa
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -10,6 +10,8 @@ const LOCAL_SHELL = [
   './index.html',
   './styles.css',
   './app.js',
+  './excitatriz-ocr-core.js',
+  './excitatriz-ocr.js',
   './route-executions-store.js',
   './vib-diaria.js',
   './vib-daily-core.js',

@@ -6455,8 +6455,217 @@ h3 {
     }
 }
 
-.overtime-filter-grid .he-bulk-actions {display:flex;flex-direction:column;gap:.5rem;align-self:end;}
-.overtime-filter-grid .he-bulk-actions .btn {white-space:nowrap;justify-content:center;}
+/* Horas extra: conteo por periodo de pago + filtros */
+.he-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.1rem;
+}
+.he-section-head h2 {
+    margin: 0 0 0.25rem;
+    font-size: 1.15rem;
+}
+.he-section-head .overtime-note {
+    margin: 0;
+    max-width: 62ch;
+}
+.he-section-head--compact { margin-bottom: 0.85rem; }
+.he-section-head--compact h2 {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+.he-month-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.8rem;
+    white-space: nowrap;
+}
+.he-month-badge strong { color: #0f172a; }
+
+.he-pay-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1rem;
+}
+.he-pay-card {
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1.1rem 1.2rem 1rem;
+    border-radius: 16px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+.he-pay-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--accent);
+}
+.he-pay-card--mes-siguiente {
+    --accent: #7c3aed;
+    --accent-soft: #f5f3ff;
+}
+.he-pay-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.he-pay-card-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    flex-shrink: 0;
+}
+.he-pay-card-title {
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.95rem;
+}
+.he-pay-card-sub {
+    font-size: 0.78rem;
+    color: #64748b;
+}
+.he-pay-card-value {
+    font-size: 2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+.he-pay-card-value span {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #64748b;
+    letter-spacing: 0;
+    margin-left: 0.3rem;
+}
+.he-pay-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-top: 0.8rem;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 0.8rem;
+    color: #475569;
+}
+.he-pay-card-date strong { color: #0f172a; }
+.he-pay-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 700;
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.he-pay-chip.is-pending {
+    background: #fffbeb;
+    color: #b45309;
+    border-color: #fde68a;
+}
+
+.he-filter-panel .overtime-filter-grid {
+    grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(140px, 1fr));
+    align-items: start;
+}
+.he-filter-panel .overtime-filter-grid label {
+    display: block;
+    margin-bottom: 0.4rem;
+    line-height: 1.2;
+}
+.he-filter-panel .overtime-filter-grid .form-control {
+    height: 46px;
+    margin: 0;
+    box-sizing: border-box;
+}
+.he-bulk-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eef2f7;
+}
+#he-bulk-status {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+.he-bulk-actions {
+    display: flex;
+    gap: 0.6rem;
+    flex-shrink: 0;
+}
+.he-bulk-actions .btn {
+    white-space: nowrap;
+    justify-content: center;
+}
+.he-btn-approve {
+    border-color: #bbf7d0;
+    color: #15803d;
+    background: #f0fdf4;
+}
+.he-btn-danger {
+    border-color: #fecaca;
+    color: #dc2626;
+    background: #fff5f5;
+}
+.he-bulk-actions .btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+    .he-filter-panel .overtime-filter-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .he-filter-panel .overtime-filter-grid .form-group:first-child {
+        grid-column: 1 / -1;
+    }
+}
+@media (max-width: 720px) {
+    .he-section-head,
+    .he-bulk-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .he-month-badge { align-self: flex-start; }
+    .he-filter-panel .overtime-filter-grid { grid-template-columns: 1fr; }
+    .he-bulk-actions .btn { flex: 1; }
+}
 
 /* Android: an off-screen fixed drawer contributes to the layout viewport even
    with visibility:hidden. Remove the closed drawer from layout altogether. */

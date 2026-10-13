@@ -432,7 +432,9 @@ async function fetchAllEquipos() {
             .from('equipos')
             .select('*')
             .range(from, from + pageSize - 1);
-        if (error || !data || data.length === 0) break;
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('Respuesta inválida al cargar equipos');
+        if (data.length === 0) break;
         all = all.concat(data);
         if (data.length < pageSize) break;
         from += pageSize;
@@ -1781,7 +1783,12 @@ function _checkinVigente(t) {
     return t.disponible === true;
 }
 
+let realtimeChannel = null;
+
 function configurarRealtime() {
+    if (realtimeChannel) return;
+    let flushEnCurso = false;
+    let flushPendiente = false;
     // Debounce: agrupa múltiples eventos seguidos en un solo re-render
     let realtimeTimer = null;
     let pendingTareas = false;
@@ -1795,106 +1802,138 @@ function configurarRealtime() {
     let pendingEquipos = false;
 
     async function flushRealtime() {
-        const fetches = [];
-        if (pendingTareas) fetches.push(
-            supabaseClient.from('tareas').select('*').then(({ data }) => {
-                estado.tareas = _aplicarTransicionesLocalesTareas((data || []).map(t => ({
-                    id: t.id, tipo: t.tipo,
-                    liderId: t.lider_id, liderNombre: t.lider_nombre,
-                    ayudantesIds: t.ayudantes_ids || [], ayudantesNombres: t.ayudantes_nombres || [],
-                    estadoTarea: t.estado_tarea, otNumero: t.ot_numero,
-                    horaAsignacion: t.hora_asignacion,
-                    fechaAsignacion: t.created_at || null,
-                    estadoEjecucion: t.estado_ejecucion || 'activo',
-                    fechaExpiracion: t.fecha_expiracion || null,
-                    equipoId: t.equipo_id || null,
-                    tiposSeleccionados: t.tipos_trabajo || [],
-                    componentesSeleccionados: t.componentes_trabajo || [],
-                    ubicacion: t.ubicacion || null,
-                    subtitulo: t.subtitulo || null,
-                    fechaInicioPermiso: t.fecha_inicio_permiso || null,
-                    espacioConfinado: !!t.espacio_confinado,
-                    vigiaId: t.vigia_id || null,
-                    vigiaNombre: t.vigia_nombre || null,
-                    orden: t.orden || 0
-                })));
-            })
-        );
-        if (pendingTrabajadores) fetches.push(
-            supabaseClient.from('trabajadores').select('*').then(({ data }) => {
-                estado.trabajadores = data || [];
-            })
-        );
-        if (pendingInsumos && insumosFeatureState.tablasRemotas.insumos) fetches.push(
-            supabaseClient.from(tablasDb.insumos).select('*').order('codigo', { ascending: true }).then(({ data }) => {
-                estado.insumos = (data || []).map((item) => normalizarRegistroInsumo(item)).sort(ordenarCatalogoInsumos);
-                window.localDB?.insumos.clear().catch(() => {});
-                if (data?.length) window.localDB?.insumos.bulk(estado.insumos).catch(() => {});
-            })
-        );
-        if (pendingSolicitudesInsumos && insumosFeatureState.tablasRemotas.solicitudes) fetches.push(
-            supabaseClient.from(tablasDb.solicitudesInsumos).select('*').order('created_at', { ascending: false }).then(({ data }) => {
-                estado.solicitudesInsumos = (data || []).map((item) => normalizarSolicitudInsumo(item));
-                window.localDB?.solicitudes_insumos.clear().catch(() => {});
-                if (data?.length) window.localDB?.solicitudes_insumos.bulk(estado.solicitudesInsumos).catch(() => {});
-            })
-        );
-        if (pendingMovimientosInventario && insumosFeatureState.tablasRemotas.movimientos) fetches.push(
-            supabaseClient.from(tablasDb.movimientosInventario).select('*').order('fecha', { ascending: false }).limit(200).then(({ data }) => {
-                estado.movimientosInventario = (data || []).map((item) => normalizarMovimientoInventario(item));
-                window.localDB?.movimientos_inventario.clear().catch(() => {});
-                if (data?.length) window.localDB?.movimientos_inventario.bulk(estado.movimientosInventario).catch(() => {});
-            })
-        );
-        if (pendingHistorial && tablasDb.historial) fetches.push(
-            supabaseClient.from(tablasDb.historial).select('*').order('created_at', { ascending: false }).limit(200).then(({ data }) => {
-                estado.historialTareas = data || [];
-                if (data?.length) window.localDB?.historial.bulk(data).catch(() => {});
-            })
-        );
-        if (pendingMediciones && tablasDb.mediciones) fetches.push(
-            supabaseClient.from(tablasDb.mediciones).select('*').order('fecha', { ascending: false }).limit(200).then(({ data }) => {
-                estado.historialMediciones = (data || []).map(_decodificarNotasMedicion);
-                if (data?.length) window.localDB?.mediciones.bulk(data).catch(() => {});
-            })
-        );
-        if (pendingHorasExtra) fetches.push(
-            supabaseClient.from('horas_extra').select('*').then(({ data }) => {
-                if (Array.isArray(data)) {
-                    estado.horasExtra = data;
-                    window.localDB?.horas_extra.bulk(data).catch(() => {});
-                }
-            }).catch(() => {})
-        );
-        if (pendingEquipos) fetches.push(
-            fetchAllEquipos().then((equipos) => { estado.equipos = equipos || []; })
-        );
-        pendingTareas = false;
-        pendingTrabajadores = false;
-        pendingInsumos = false;
-        pendingSolicitudesInsumos = false;
-        pendingMovimientosInventario = false;
-        pendingHistorial = false;
-        pendingMediciones = false;
-        pendingHorasExtra = false;
-        pendingEquipos = false;
-        await Promise.all(fetches);
-        if (estado.usuarioActual === 'trabajador' && estado.trabajadorLogueado?.id) {
-            const actualizado = estado.trabajadores.find(t => String(t.id) === String(estado.trabajadorLogueado.id));
-            if (actualizado) estado.trabajadorLogueado = actualizado;
-            actualizarVisibilidadModulosPredictivos();
-            actualizarBadgeRutasTrabajador();
+        realtimeTimer = null;
+        if (flushEnCurso) { flushPendiente = true; return; }
+        flushEnCurso = true;
+        try {
+            const fetches = [];
+            if (pendingTareas) fetches.push(
+                supabaseClient.from('tareas').select('*').then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.tareas = _aplicarTransicionesLocalesTareas((data || []).map(t => ({
+                        id: t.id, tipo: t.tipo,
+                        liderId: t.lider_id, liderNombre: t.lider_nombre,
+                        ayudantesIds: t.ayudantes_ids || [], ayudantesNombres: t.ayudantes_nombres || [],
+                        estadoTarea: t.estado_tarea, otNumero: t.ot_numero,
+                        horaAsignacion: t.hora_asignacion,
+                        fechaAsignacion: t.created_at || null,
+                        estadoEjecucion: t.estado_ejecucion || 'activo',
+                        fechaExpiracion: t.fecha_expiracion || null,
+                        equipoId: t.equipo_id || null,
+                        tiposSeleccionados: t.tipos_trabajo || [],
+                        componentesSeleccionados: t.componentes_trabajo || [],
+                        ubicacion: t.ubicacion || null,
+                        subtitulo: t.subtitulo || null,
+                        fechaInicioPermiso: t.fecha_inicio_permiso || null,
+                        espacioConfinado: !!t.espacio_confinado,
+                        vigiaId: t.vigia_id || null,
+                        vigiaNombre: t.vigia_nombre || null,
+                        orden: t.orden || 0
+                    })));
+                })
+            );
+            if (pendingTrabajadores) fetches.push(
+                supabaseClient.from('trabajadores').select('*').then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.trabajadores = data || [];
+                })
+            );
+            if (pendingInsumos && insumosFeatureState.tablasRemotas.insumos) fetches.push(
+                supabaseClient.from(tablasDb.insumos).select('*').order('codigo', { ascending: true }).then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.insumos = (data || []).map((item) => normalizarRegistroInsumo(item)).sort(ordenarCatalogoInsumos);
+                    window.localDB?.insumos.clear().catch(() => {});
+                    if (data?.length) window.localDB?.insumos.bulk(estado.insumos).catch(() => {});
+                })
+            );
+            if (pendingSolicitudesInsumos && insumosFeatureState.tablasRemotas.solicitudes) fetches.push(
+                supabaseClient.from(tablasDb.solicitudesInsumos).select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.solicitudesInsumos = (data || []).map((item) => normalizarSolicitudInsumo(item));
+                    window.localDB?.solicitudes_insumos.clear().catch(() => {});
+                    if (data?.length) window.localDB?.solicitudes_insumos.bulk(estado.solicitudesInsumos).catch(() => {});
+                })
+            );
+            if (pendingMovimientosInventario && insumosFeatureState.tablasRemotas.movimientos) fetches.push(
+                supabaseClient.from(tablasDb.movimientosInventario).select('*').order('fecha', { ascending: false }).limit(200).then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.movimientosInventario = (data || []).map((item) => normalizarMovimientoInventario(item));
+                    window.localDB?.movimientos_inventario.clear().catch(() => {});
+                    if (data?.length) window.localDB?.movimientos_inventario.bulk(estado.movimientosInventario).catch(() => {});
+                })
+            );
+            if (pendingHistorial && tablasDb.historial) fetches.push(
+                supabaseClient.from(tablasDb.historial).select('*').order('created_at', { ascending: false }).limit(200).then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.historialTareas = data || [];
+                    if (data?.length) window.localDB?.historial.bulk(data).catch(() => {});
+                })
+            );
+            if (pendingMediciones && tablasDb.mediciones) fetches.push(
+                supabaseClient.from(tablasDb.mediciones).select('*').order('fecha', { ascending: false }).limit(200).then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    estado.historialMediciones = (data || []).map(_decodificarNotasMedicion);
+                    if (data?.length) window.localDB?.mediciones.bulk(data).catch(() => {});
+                })
+            );
+            if (pendingHorasExtra) fetches.push(
+                supabaseClient.from('horas_extra').select('*').then(({ data, error }) => {
+                    if (error) throw error;
+                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
+                    if (Array.isArray(data)) {
+                        estado.horasExtra = data;
+                        window.localDB?.horas_extra.bulk(data).catch(() => {});
+                    }
+                }).catch(() => {})
+            );
+            if (pendingEquipos) fetches.push(
+                fetchAllEquipos().then((equipos) => { estado.equipos = equipos || []; })
+            );
+            pendingTareas = false;
+            pendingTrabajadores = false;
+            pendingInsumos = false;
+            pendingSolicitudesInsumos = false;
+            pendingMovimientosInventario = false;
+            pendingHistorial = false;
+            pendingMediciones = false;
+            pendingHorasExtra = false;
+            pendingEquipos = false;
+            const resultados = await Promise.allSettled(fetches);
+            resultados.filter(r => r.status === 'rejected').forEach(r => console.warn('[realtime] Se conservan los datos anteriores:', r.reason));
+            if (!resultados.some(r => r.status === 'fulfilled')) return;
+            if (estado.usuarioActual === 'trabajador' && estado.trabajadorLogueado?.id) {
+                const actualizado = estado.trabajadores.find(t => String(t.id) === String(estado.trabajadorLogueado.id));
+                if (actualizado) estado.trabajadorLogueado = actualizado;
+                actualizarVisibilidadModulosPredictivos();
+                actualizarBadgeRutasTrabajador();
+            }
+            evaluarNotificacionesPlanify();
+            solicitarRenderRealtimeNoIntrusivo();
+        } catch (error) {
+            console.warn('[realtime] Error al actualizar:', error);
+        } finally {
+            flushEnCurso = false;
+            if (flushPendiente) {
+                flushPendiente = false;
+                scheduleFlush();
+            }
         }
-        evaluarNotificacionesPlanify();
-        solicitarRenderRealtimeNoIntrusivo();
     }
 
     function scheduleFlush() {
-        clearTimeout(realtimeTimer);
+        if (flushEnCurso) { flushPendiente = true; return; }
+        if (realtimeTimer !== null) return;
         realtimeTimer = setTimeout(flushRealtime, 300);
     }
 
-    supabaseClient
+    realtimeChannel = supabaseClient
         .channel('schema-db-changes')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'tareas' }, () => {
             pendingTareas = true;
@@ -5050,6 +5089,7 @@ function suspenderRenderRealtime() {
 }
 function reanudarRenderRealtime() {
     operacionesMasivasEnCurso = Math.max(0, operacionesMasivasEnCurso - 1);
+    intentarAplicarRealtimePendiente();
 }
 
 function hayUIBloqueandoRealtime() {
@@ -5106,6 +5146,11 @@ function _mostrarPillCambios() {
         gap: '0.5rem'
     });
     pill.addEventListener('click', () => {
+        if (operacionesMasivasEnCurso > 0 || hayUIBloqueandoRealtime()) {
+            mostrarToastNotificacion('Edición en curso', 'Termina de editar o cierra el formulario antes de aplicar los cambios.', { type: 'warning', duration: 3000 });
+            return;
+        }
+        if (!window.confirm('Actualizar la vista puede descartar datos sin guardar. ¿Aplicar los cambios nuevos?')) return;
         _ocultarPillCambios();
         pendingRealtimeRender = false;
         clearTimeout(realtimeResumeTimer);
@@ -5118,8 +5163,7 @@ function _mostrarPillCambios() {
 function _ocultarPillCambios() {
     const pill = document.getElementById('planify-pending-pill');
     if (!pill) return;
-    pill.style.transform = 'translateX(-50%) translateY(-80px)';
-    setTimeout(() => pill.remove(), 280);
+    pill.remove();
 }
 
 function renderizarVistaActualPreservandoViewport() {
@@ -5129,70 +5173,22 @@ function renderizarVistaActualPreservandoViewport() {
     window.requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
 }
 
+// Una notificación remota nunca debe destruir formularios, archivos ni selecciones.
+// La vista se actualiza al navegar o al aplicar explícitamente el aviso.
 function intentarAplicarRealtimePendiente() {
-    if (!pendingRealtimeRender) return;
-    if (operacionesMasivasEnCurso > 0) return;
-    if (document.hidden) {
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = null;
-        return;
-    }
-    if (hayUIBloqueandoRealtime()) {
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
-        _mostrarPillCambios();
-        return;
-    }
-
-    pendingRealtimeRender = false;
-    clearTimeout(realtimeResumeTimer);
-    realtimeResumeTimer = null;
-    _ocultarPillCambios();
-    renderizarVistaActualPreservandoViewport();
+    if (!pendingRealtimeRender || operacionesMasivasEnCurso > 0 || document.hidden) return;
+    _mostrarPillCambios();
 }
 
 function solicitarRenderRealtimeNoIntrusivo() {
-    // Lote en curso: se anota el cambio y se pinta una sola vez al terminar.
-    if (operacionesMasivasEnCurso > 0) {
-        pendingRealtimeRender = true;
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = null;
-        return;
-    }
-    if (document.hidden) {
-        pendingRealtimeRender = true;
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = null;
-        return;
-    }
-    if (hayUIBloqueandoRealtime()) {
-        pendingRealtimeRender = true;
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 900);
-        _mostrarPillCambios();
-        return;
-    }
-
-    pendingRealtimeRender = false;
+    pendingRealtimeRender = true;
     clearTimeout(realtimeResumeTimer);
     realtimeResumeTimer = null;
-    _ocultarPillCambios();
-    renderizarVistaActualPreservandoViewport();
+    intentarAplicarRealtimePendiente();
 }
 
-['focusout', 'pointerup', 'keyup', 'visibilitychange'].forEach((eventName) => {
-    document.addEventListener(eventName, () => {
-        if (!pendingRealtimeRender) return;
-        clearTimeout(realtimeResumeTimer);
-        realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 120);
-    }, true);
-});
-
-window.addEventListener('focus', () => {
-    if (!pendingRealtimeRender) return;
-    clearTimeout(realtimeResumeTimer);
-    realtimeResumeTimer = setTimeout(intentarAplicarRealtimePendiente, 120);
-});
+document.addEventListener('visibilitychange', intentarAplicarRealtimePendiente);
+window.addEventListener('focus', intentarAplicarRealtimePendiente);
 
 async function renderInsumosView() {
     mainContent.innerHTML = '<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando inventario...</p></div></div>';
@@ -6718,6 +6714,38 @@ window.marcarSalidaTrabajador = async function(id) {
     await updateTrabajadorDisponibilidad(id, false);
     mostrarModalHorasExtra(id);
 };
+
+// El período depende de la fecha trabajada, no de la fecha de aprobación.
+function periodoPagoHorasExtra(fecha) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(fecha || ''));
+    if (!match) return null;
+    const [, anio, mes, dia] = match.map(Number);
+    if (anio < 1000 || mes < 1 || mes > 12) return null;
+    const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+    if (dia < 1 || dia > ultimoDia) return null;
+    const primerPeriodo = dia <= 9;
+    const pago = primerPeriodo
+        ? new Date(Date.UTC(anio, mes - 1, ultimoDia))
+        : new Date(Date.UTC(anio, mes, 7));
+    return { periodo: primerPeriodo ? 'fin-mes' : 'mes-siguiente', fechaPago: pago.toISOString().slice(0, 10) };
+}
+
+function resumirPagosHorasExtra(registros, mes, trabajadorId = '') {
+    const resumen = {
+        'fin-mes': { aprobadas: 0, pendientes: 0 },
+        'mes-siguiente': { aprobadas: 0, pendientes: 0 }
+    };
+    for (const registro of registros) {
+        if (trabajadorId && registro.trabajador_id !== trabajadorId) continue;
+        if (!String(registro.fecha || '').startsWith(mes + '-')) continue;
+        const pago = periodoPagoHorasExtra(registro.fecha);
+        const horas = Number(registro.horas);
+        if (!pago || !Number.isFinite(horas) || horas <= 0) continue;
+        if (registro.estado === 'aprobado') resumen[pago.periodo].aprobadas += horas;
+        else if (!registro.estado || registro.estado === 'pendiente') resumen[pago.periodo].pendientes += horas;
+    }
+    return resumen;
+}
 
 // ── HORAS EXTRA: guardar registro ────────────────────────────────────────────
 async function guardarHorasExtra(trabajadorId, fecha, horas, motivo) {
@@ -8869,6 +8897,7 @@ async function renderHorasExtraAdminView() {
     let filtroEstado = 'todos';
     let filtroTrabajador = '';
     let filtroMes = '';
+    let filtroPeriodo = '';
     let textoBusqueda = '';
     let aprobandoTodas = false;
 
@@ -8885,6 +8914,7 @@ async function renderHorasExtraAdminView() {
         if (filtroEstado !== 'todos' && registro.estado !== filtroEstado) return false;
         if (filtroTrabajador && registro.trabajador_id !== filtroTrabajador) return false;
         if (filtroMes && !(registro.fecha || '').startsWith(filtroMes)) return false;
+        if (filtroPeriodo && periodoPagoHorasExtra(registro.fecha)?.periodo !== filtroPeriodo) return false;
         if (textoBusqueda) {
             const texto = normalizar([
                 registro.nombreTrabajador,
@@ -8931,6 +8961,31 @@ async function renderHorasExtraAdminView() {
         if (statTrab) statTrab.textContent = String(trabajadoresConSolicitudes);
         if (statVisible) statVisible.textContent = `${filtrados.length} registro(s) visibles`;
 
+        const mesPago = filtroMes || mesActual;
+        const resumenPagos = resumirPagosHorasExtra(enriched, mesPago, filtroTrabajador);
+        const pagos = document.getElementById('he-resumen-pagos');
+        if (pagos) pagos.innerHTML = ['fin-mes', 'mes-siguiente'].map((periodo, indice) => {
+            const fecha = periodoPagoHorasExtra(mesPago + (indice === 0 ? '-01' : '-10'));
+            const resumen = resumenPagos[periodo];
+            const conPendientes = resumen.pendientes > 0;
+            return `<article class="he-pay-card he-pay-card--${periodo}">
+                <div class="he-pay-card-head">
+                    <span class="he-pay-card-icon"><i class="fa-solid ${indice === 0 ? 'fa-calendar-day' : 'fa-calendar-week'}" aria-hidden="true"></i></span>
+                    <div>
+                        <div class="he-pay-card-title">${indice === 0 ? 'Días 01 al 09' : 'Días 10 al último'}</div>
+                        <div class="he-pay-card-sub">Se paga ${indice === 0 ? 'a fin de mes' : 'el mes siguiente'}</div>
+                    </div>
+                </div>
+                <div class="he-pay-card-value">${formatHoras(resumen.aprobadas)}<span> hrs aprobadas</span></div>
+                <div class="he-pay-card-foot">
+                    <span class="he-pay-card-date"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i> Pago previsto: <strong>${formatFecha(fecha?.fechaPago)}</strong></span>
+                    <span class="he-pay-chip${conPendientes ? ' is-pending' : ''}"><i class="fa-solid ${conPendientes ? 'fa-hourglass-half' : 'fa-check'}" aria-hidden="true"></i> ${conPendientes ? `${formatHoras(resumen.pendientes)} hrs pendientes` : 'Sin pendientes'}</span>
+                </div>
+            </article>`;
+        }).join('');
+        const mesResumen = document.getElementById('he-mes-resumen');
+        if (mesResumen) mesResumen.textContent = mesPago;
+
         if (!tabla) return;
         if (!filtrados.length) {
             tabla.innerHTML = `<tr><td colspan="6" style="padding:2rem;"><div class="empty-state empty-state--compact"><div><strong>Sin registros para este filtro</strong><p>Ajusta el estado, trabajador, mes o busqueda para revisar otras solicitudes.</p></div></div></td></tr>`;
@@ -8953,6 +9008,7 @@ async function renderHorasExtraAdminView() {
                     </td>
                     <td data-label="Fecha">
                         <div style="font-weight:700; color:#0f172a;">${formatFecha(registro.fecha)}</div>
+                        <div class="overtime-note">Pago previsto: ${formatFecha(periodoPagoHorasExtra(registro.fecha)?.fechaPago)}</div>
                         <div class="overtime-note">${registro.created_at ? new Date(registro.created_at).toLocaleDateString('es-CL') : 'Sin fecha de carga'}</div>
                     </td>
                     <td data-label="Horas">
@@ -9036,7 +9092,20 @@ async function renderHorasExtraAdminView() {
                 </div>
             </section>
 
-            <section class="panel">
+            <section class="panel he-pay-panel">
+                <div class="he-section-head">
+                    <div>
+                        <h2>Conteo por período de pago</h2>
+                        <p class="overtime-note">Según el mes y trabajador filtrados (sin mes, el actual). Excluye rechazadas. Las fechas son la programación, no un pago realizado.</p>
+                    </div>
+                    <span class="he-month-badge"><i class="fa-regular fa-calendar" aria-hidden="true"></i> Mes trabajado <strong id="he-mes-resumen"></strong></span>
+                </div>
+                <div id="he-resumen-pagos" class="he-pay-grid"></div>
+            </section>
+            <section class="panel he-filter-panel">
+                <div class="he-section-head he-section-head--compact">
+                    <h2><i class="fa-solid fa-filter" aria-hidden="true"></i> Filtros</h2>
+                </div>
                 <div class="overtime-filter-grid">
                     <div class="form-group">
                         <label for="he-busqueda">Busqueda</label>
@@ -9059,16 +9128,26 @@ async function renderHorasExtraAdminView() {
                         <label for="he-filtro-mes">Mes</label>
                         <input type="month" id="he-filtro-mes" class="form-control">
                     </div>
-                    <div class="he-bulk-actions">
-                    <button type="button" id="btn-he-aprobar-todas" class="btn btn-outline" style="border-color:#bbf7d0;color:#15803d;background:#f0fdf4;" title="Aprobar las solicitudes pendientes que coinciden con los filtros">
-                        <i class="fa-solid fa-check-double" aria-hidden="true"></i> Aprobar todas
-                    </button>
-                    <button id="btn-he-eliminar-todo" class="btn btn-outline" style="border-color:#fecaca;color:#dc2626;background:#fff5f5;">
-                        <i class="fa-solid fa-trash-can"></i> Eliminar todas
-                    </button>
+                    <div class="form-group">
+                        <label for="he-filtro-periodo">Período de pago</label>
+                        <select id="he-filtro-periodo" class="form-control">
+                            <option value="">Ambos períodos</option>
+                            <option value="fin-mes">01 al 09 · fin de mes</option>
+                            <option value="mes-siguiente">10 al último día · día 7 siguiente</option>
+                        </select>
                     </div>
                 </div>
-                <p id="he-bulk-status" role="status" aria-live="polite" style="margin:.75rem 0 0;color:var(--text-muted);font-size:.85rem;">Aprobar todas se aplica a las pendientes de los filtros actuales.</p>
+                <div class="he-bulk-bar">
+                    <p id="he-bulk-status" role="status" aria-live="polite"><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Aprobar todas se aplica a las pendientes de los filtros actuales.</p>
+                    <div class="he-bulk-actions">
+                        <button type="button" id="btn-he-aprobar-todas" class="btn btn-outline he-btn-approve" title="Aprobar las solicitudes pendientes que coinciden con los filtros">
+                            <i class="fa-solid fa-check-double" aria-hidden="true"></i> Aprobar todas
+                        </button>
+                        <button type="button" id="btn-he-eliminar-todo" class="btn btn-outline he-btn-danger">
+                            <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Eliminar todas
+                        </button>
+                    </div>
+                </div>
             </section>
 
             <section class="panel" style="padding:0;">
@@ -9091,6 +9170,10 @@ async function renderHorasExtraAdminView() {
         </div>
     `;
 
+    document.getElementById('he-filtro-periodo')?.addEventListener('change', (event) => {
+        filtroPeriodo = event.target.value || '';
+        renderTabla();
+    });
     document.getElementById('he-filtro-estado')?.addEventListener('change', (event) => {
         filtroEstado = event.target.value || 'todos';
         renderTabla();
@@ -19039,6 +19122,7 @@ function vistaNavDestino(id) {
 }
 
 function renderizarVistaActual() {
+    _ocultarPillCambios();
     pendingRealtimeRender = false;
     clearTimeout(realtimeResumeTimer);
     realtimeResumeTimer = null;
@@ -20242,6 +20326,7 @@ function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
                 <textarea id="excu5-coment" class="form-control" rows="2" placeholder="Comentarios adicionales (opcional)" style="font-size:0.88rem; resize:vertical;"></textarea>
             </div>
         </div>`;
+    window.mountExcitatrizOCR?.(container.querySelector('#exc-u5-panel'));
 }
 
 // Panel especializado para Excitatriz / Escobillas / Carbones.
