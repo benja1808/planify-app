@@ -24,9 +24,21 @@
     }
     function equipmentHtml(eq) {
         const matches=core.candidates(eq,routes());
-        return `<article class="vib-import-equipment"><h3>${esc(eq.nombre)} <small>${esc(eq.unidad)}${eq.ot ? ` · OT ${esc(eq.ot)}` : ' · Sin OT en el archivo'}</small></h3><p class="vib-import-route">${matches.length===1 ? esc(matches[0].nombre) : matches.length ? 'Varias rutas posibles: se resolverá al asignar la OT.' : 'Ruta pendiente de identificar.'}</p><ul>${eq.componentes.map(c=>`<li><div><strong>${esc(c.nombre)}</strong><code>${esc(c.ubicacion_tecnica)}</code>${c.observacionOperaciones?`<p>${esc(c.observacionOperaciones)}</p>`:''}</div><span class="vib-availability ${c.disponible?'':'unavailable'}">${c.disponible?'A medir':'No disponible'}</span></li>`).join('')}</ul></article>`;
+        return `<article class="vib-import-equipment"><h3>${esc(eq.nombre)} <small>${esc(eq.unidad)}${eq.ot ? ` · OT ${esc(eq.ot)}` : ' · Sin OT en el archivo'}</small></h3><p class="vib-import-route">${matches.length===1 ? esc(matches[0].nombre) : matches.length ? 'Varias rutas posibles: se resolverá al asignar la OT.' : 'Ruta pendiente de identificar.'}</p><ul>${eq.componentes.map(c=>`<li><div><strong>${esc(c.nombre)}</strong><code>${esc(c.ubicacion_tecnica)}</code>${c.observacionOperaciones?`<p>${esc(c.observacionOperaciones)}</p>`:''}</div><span class="vib-availability ${c.disponible?'':'unavailable'}">${c.disponibilidadPendiente?'Disponibilidad pendiente':c.disponible?'A medir':'No disponible'}</span></li>`).join('')}</ul></article>`;
     }
     function recoverImport(dialog,pages,error) {
+        if(error.code==='BLANK_AVAILABILITY')return new Promise(resolve=>{
+            const body=dialog.overlay.querySelector('.vib-import-body');
+            body.innerHTML='<h3>Disponibilidad sin completar</h3><p>Se encontraron ubicaciones técnicas, pero hay celdas de disponibilidad vacías. Elige cómo tratar esas filas. Las que ya dicen Sí o No conservarán su valor.</p><label>Filas con disponibilidad vacía<select id="vib-blank-status" class="form-control"><option value="">Selecciona una opción</option><option value="pending">Completar disponibilidad después</option><option value="yes">Incluir como componentes a medir</option><option value="no">Marcar como no disponibles</option></select></label><p id="vib-blank-error" role="alert"></p><button type="button" class="btn btn-primary" id="vib-blank-review">Revisar equipos</button>';
+            const cancel=()=>resolve(null);dialog.overlay.addEventListener('vib-close',cancel,{once:true});
+            body.querySelector('#vib-blank-review').onclick=async()=>{
+                const choice=body.querySelector('select').value;
+                if(!choice){body.querySelector('#vib-blank-error').textContent='Selecciona cómo tratar las disponibilidades vacías.';return;}
+                dialog.overlay.removeEventListener('vib-close',cancel);
+                try{resolve(core.parsePages(pages,{blankAvailability:choice==='pending'?'pending':choice==='yes'}));}
+                catch(nextError){resolve(await recoverImport(dialog,pages,nextError));}
+            };
+        });
         return new Promise(resolve=>{
             const body=dialog.overlay.querySelector('.vib-import-body');
             const labels=['Ubicación *','Activo *','Componente *','Ubicación técnica *','Disponibilidad *','OT (opcional)','Observaciones (opcional)'];
@@ -82,7 +94,7 @@
                 const fileDate=/(\d{2})-(\d{2})-(\d{4})/.exec(file.name);
                 const target=targetId?getEjecucionActiva(-2,targetId):null;
                 const day=target?.componentesEstado?.__vibDiaria?.fecha || (fileDate?`${fileDate[3]}-${fileDate[2]}-${fileDate[1]}`:PlanifyVibDiaria.date());
-                dialog.overlay.querySelector('.vib-import-body').innerHTML=`<p>${esc(file.name)}</p><div class="vib-import-summary"><strong>${equipment.length} equipos</strong><span>${available} componentes a medir</span><span>${components.length-available} no disponibles</span></div><label>Fecha de la jornada<input id="vib-import-date" class="form-control" type="date" value="${esc(day)}" ${target?'disabled':''}></label><label>Destino<select id="vib-import-target" class="form-control"></select></label><p>Se conservarán las observaciones de Operaciones. Los componentes ya existentes no se duplicarán. Se completarán las OT que estén vacías; las OT diferentes requerirán revisión.</p><div>${equipment.map(equipmentHtml).join('')}</div><p id="vib-import-error" role="alert"></p><button type="button" class="btn btn-primary" id="vib-import-confirm">Importar planificación</button>`;
+                dialog.overlay.querySelector('.vib-import-body').innerHTML=`<p>${esc(file.name)}</p><div class="vib-import-summary"><strong>${equipment.length} equipos</strong><span>${available} componentes a medir</span><span>${components.filter(c=>!c.disponible && !c.disponibilidadPendiente).length} no disponibles</span><span>${components.filter(c=>c.disponibilidadPendiente).length} por completar</span></div><label>Fecha de la jornada<input id="vib-import-date" class="form-control" type="date" value="${esc(day)}" ${target?'disabled':''}></label><label>Destino<select id="vib-import-target" class="form-control"></select></label><p>Se conservarán las observaciones de Operaciones. Los componentes ya existentes no se duplicarán. Se completarán las OT que estén vacías; las OT diferentes requerirán revisión.</p><div>${equipment.map(equipmentHtml).join('')}</div><p id="vib-import-error" role="alert"></p><button type="button" class="btn btn-primary" id="vib-import-confirm">Importar planificación</button>`;
                 const dateInput=dialog.overlay.querySelector('#vib-import-date');
                 const select=dialog.overlay.querySelector('#vib-import-target');
                 const destinations=()=>{
@@ -143,14 +155,33 @@
             }catch(e){error.textContent=e.message;}
         };
     }
+    function completeAvailability(id,eqIdx) {
+        if(!esRolGestion())return;
+        const eq=getEjecucionActiva(-2,id)?.requerimientoEquipos?.[eqIdx];if(!eq)return;
+        const dialog=modal('Completar disponibilidad',eq.componentes.map((c,ci)=>c.disponibilidadPendiente?`<label>${esc(c.nombre)} · ${esc(c.ubicacion_tecnica)}<select class="form-control" data-component="${ci}" data-code="${esc(c.ubicacion_tecnica)}"><option value="pending">Completar después</option><option value="yes">Sí · A medir</option><option value="no">No disponible</option></select></label>`:'').join('')+'<p role="alert" id="vib-availability-error"></p><button class="btn btn-primary" id="vib-availability-save">Guardar disponibilidad</button>');
+        dialog.overlay.querySelector('#vib-availability-save').onclick=()=>{
+            const latest=getEjecucionActiva(-2,id);
+            const equipment=latest?.requerimientoEquipos?.[eqIdx];
+            const selections=[...dialog.overlay.querySelectorAll('[data-component]')];
+            if(!equipment || selections.some(s=>equipment.componentes[Number(s.dataset.component)]?.ubicacion_tecnica!==s.dataset.code)){
+                dialog.overlay.querySelector('#vib-availability-error').textContent='La planificación cambió. Cierra esta ventana y vuelve a abrirla.';return;
+            }
+            selections.forEach(s=>{
+                const comp=equipment.componentes[Number(s.dataset.component)];
+                if(s.value==='pending' || !comp.disponibilidadPendiente)return;
+                comp.disponible=s.value==='yes';comp.disponibilidadPendiente=false;
+            });
+            setEjecucionActiva(-2,latest,{skipLinks:true});dialog.close();window.rutasAbrirDetalle(-2,id);
+        };
+    }
     function equipmentBadge(ej,eq,eqIdx) {
         if(Number(ej?.rutaIdx)!==-2)return '';
         const linked=eq.enlace && window.RouteExecutionStore.get(eq.enlace.ejecucionId);
         const route=eq.rutaSugerida!=null?routes().find(r=>r.idx===eq.rutaSugerida):null;
-        return `<div class="vib-equipment-ot">${route?`<small>${esc(route.nombre)}</small>`:''}<span>${eq.ot?`OT ${esc(eq.ot)} · ${linked?'Enlazada':eq.enlace?'Ruta cerrada o no disponible':'Sin enlazar'}`:'Sin OT asignada'}</span>${esRolGestion()?`<button class="btn btn-outline" type="button" onclick="VibDailyImport.editOt('${esc(ej.id)}',${eqIdx})">${eq.ot?'Editar OT':'+ OT'}</button>`:''}</div>`;
+        return `<div class="vib-equipment-ot">${route?`<small>${esc(route.nombre)}</small>`:''}<span>${eq.ot?`OT ${esc(eq.ot)} · ${linked?'Enlazada':eq.enlace?'Ruta cerrada o no disponible':'Sin enlazar'}`:'Sin OT asignada'}</span>${esRolGestion()?`<button class="btn btn-outline" type="button" onclick="VibDailyImport.editOt('${esc(ej.id)}',${eqIdx})">${eq.ot?'Editar OT':'+ OT'}</button>${eq.componentes.some(c=>c.disponibilidadPendiente)?`<button class="btn btn-outline" type="button" onclick="VibDailyImport.completeAvailability('${esc(ej.id)}',${eqIdx})">Completar disponibilidad</button>`:''}`:''}</div>`;
     }
-    function unavailable(comp){return `<div class="vib-unavailable"><strong>${esc(comp.nombre)}</strong><code>${esc(comp.ubicacion_tecnica)}</code><span>No disponible · Fuera del pendiente diario</span><p>${esc(comp.observacionOperaciones || 'Sin observaciones de Operaciones.')}</p></div>`;}
+    function unavailable(comp){return `<div class="vib-unavailable"><strong>${esc(comp.nombre)}</strong><code>${esc(comp.ubicacion_tecnica)}</code><span>${comp.disponibilidadPendiente?'Disponibilidad pendiente · Completar después':'No disponible · Fuera del pendiente diario'}</span><p>${esc(comp.observacionOperaciones || 'Sin observaciones de Operaciones.')}</p></div>`;}
     const closedLink = eq => !!eq?.enlace && !window.RouteExecutionStore.get(eq.enlace.ejecucionId);
     function closedComponent(comp,med){return `<div class="vib-unavailable"><strong>${esc(comp.nombre)}</strong><code>${esc(comp.ubicacion_tecnica)}</code><p>La ruta enlazada está cerrada o no está disponible. Se conserva el avance registrado.</p>${med?`<p>Vibración: ${esc(med.vibracion ?? '—')} · Temperatura: ${esc(med.temperatura ?? '—')}</p>`:''}</div>`;}
-    window.VibDailyImport={importPdf,editOt,equipmentBadge,unavailable,closedLink,closedComponent};
+    window.VibDailyImport={importPdf,editOt,completeAvailability,equipmentBadge,unavailable,closedLink,closedComponent};
 })();

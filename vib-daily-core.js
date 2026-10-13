@@ -44,7 +44,7 @@
         if(!groups.size)throw new Error('Agrega al menos una fila de equipos.');
         return [...groups.values()];
     }
-    function parsePages(pages) {
+    function parsePages(pages, options = {}) {
         let centers, hasOt = false;
         const rows = [], seen = new Set();
         for (const page of pages) {
@@ -66,9 +66,8 @@
             if (!centers) throw new Error('No se reconoce la tabla de entrega. Usa el PDF con ubicación, activo, componente, ubicación técnica y disponibilidad.');
             const col = item => centers.reduce((best,c,i)=>Math.abs(c-item.x)<Math.abs(centers[best]-item.x)?i:best,0);
             const offset=hasOt?1:0;
-            const anchors = items.filter(i=>col(i)===5+offset && /^(SI|NO)$/.test(norm(i.s))).sort((a,b)=>b.y-a.y);
-            const codes = items.filter(i=>col(i)===3+offset && /^\d{4}-/.test(i.s));
-            if (codes.length !== anchors.length || (!anchors.length && items.length)) throw new Error('Hay filas sin disponibilidad o sin ubicación técnica. Revisa el PDF antes de importarlo.');
+            const anchors = items.filter(i=>col(i)===3+offset && /^\d{4}-/.test(i.s)).sort((a,b)=>b.y-a.y);
+            if (!anchors.length) throw new Error('No se encontraron ubicaciones técnicas legibles en esta página. Revisa el PDF antes de importarlo.');
             // Compact tables can put the first row within 28 points of the header.
             // Bound it by the lowest header line instead of including "TRABAJO" as an OT.
             const headerLines = items.filter(i => i.y > anchors[0]?.y && /^(ORDEN\b|O\.?\s*T\.?(?:\s|$)|TRABAJO\b|UBICACION\b|ACTIVO\b|COMPONENTE\b|TECNICA\b|CRITICIDAD\b|DISPONIBILIDAD\b|ENTREGA\b|OBSERVACIONES\b|OPERACIONES\b)/.test(norm(i.s)));
@@ -83,9 +82,15 @@
                 if(ot && !/^[A-Z0-9-]+$/i.test(ot))throw new Error('No se pudo leer una OT. Revisa la columna Orden de trabajo.');
                 const code=ut(values[3]);
                 if (!/^\d{4}-[A-Z0-9-]+$/.test(code) || !values[0] || !values[1] || !values[2]) throw new Error('Una fila no pudo leerse completa. No se importó ningún equipo.');
+                const status=norm(values[5]);
+                if(!status && typeof options.blankAvailability!=='boolean' && options.blankAvailability!=='pending') {
+                    const error=new Error('Hay filas con ubicación técnica, pero su disponibilidad está vacía. Indica cómo importarlas.');
+                    error.code='BLANK_AVAILABILITY';throw error;
+                }
+                if(status && !/^(SI|NO)$/.test(status))throw new Error(`Disponibilidad no reconocida para ${code}: ${values[5]}. Debe ser Sí o No.`);
                 if (seen.has(code)) throw new Error(`Ubicación técnica repetida en el archivo: ${code}. Revisa el documento.`);
                 seen.add(code);
-                rows.push({ot,unidad:values[0],activo:values[1],nombre:values[2],ubicacion_tecnica:code,disponible:norm(anchor.s)==='SI',observacionOperaciones:values[6]});
+                rows.push({ot,unidad:values[0],activo:values[1],nombre:values[2],ubicacion_tecnica:code,disponible:status?status==='SI':options.blankAvailability===true,disponibilidadPendiente:!status && options.blankAvailability==='pending',observacionOperaciones:values[6]});
             });
         }
         if (!rows.length) throw new Error('El PDF no contiene texto de equipos legible. Los documentos escaneados necesitan reconocimiento de texto.');

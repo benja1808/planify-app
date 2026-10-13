@@ -15205,6 +15205,7 @@ function _normalizarEquipoRequerimiento(eq) {
     const componentes = (Array.isArray(eq?.componentes) ? eq.componentes : [])
         .map((comp, idx) => ({
             disponible: comp?.disponible !== false,
+            disponibilidadPendiente: comp?.disponibilidadPendiente === true,
             observacionOperaciones: comp?.observacionOperaciones || '',
             nombre: comp?.nombre || comp?.componente || `Componente ${idx + 1}`,
             ubicacion_tecnica: comp?.ubicacion_tecnica || comp?.kks || '',

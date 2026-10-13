@@ -4,6 +4,17 @@ const core=require('./vib-daily-core.js');
 const item=(str,x,y)=>({str,width:0,transform:[1,0,0,1,x,y]});
 const header=['UBICACIÓN','ACTIVO','COMPONENTE','UBICACIÓN','Criticidad','DISPONIBILIDAD DE','OBSERVACIONES'].map((s,i)=>item(s,50+i*100,500));
 const row=(y,code,status,observation='')=>['UNIDAD 1','BOMBA A','MOTOR',code,'',status,observation].map((s,i)=>item(s,50+i*100,y));
+test('blank PDF availability requests an explicit choice and preserves existing Yes/No values',()=>{
+    const pages=[{width:700,items:[...header,...row(400,'2893-01-A--M01',''),...row(350,'2893-01-B--M01','NO'),...row(300,'2893-01-C--M01','SI')]}];
+    assert.throws(()=>core.parsePages(pages),e=>e.code==='BLANK_AVAILABILITY');
+    assert.deepEqual(core.parsePages(pages,{blankAvailability:true})[0].componentes.map(c=>c.disponible),[true,false,true]);
+    assert.deepEqual(core.parsePages(pages,{blankAvailability:false})[0].componentes.map(c=>c.disponible),[false,false,true]);
+    const pending=core.parsePages(pages,{blankAvailability:'pending'})[0].componentes;
+    assert.deepEqual(pending.map(c=>c.disponibilidadPendiente),[true,false,false]);
+    assert.deepEqual(pending.map(c=>c.disponible),[false,false,true]);
+    const invalid=[{width:700,items:[...header,...row(400,'2893-01-A--M01','PENDIENTE')]}];
+    assert.throws(()=>core.parsePages(invalid,{blankAvailability:true}),/Disponibilidad no reconocida/);
+});
 const recoveryMapping={unidad:3,activo:2,nombre:1,ubicacion_tecnica:0,disponible:4,ot:5,observacionOperaciones:6};
 const recoveryRow='2893-01-ABC01-AP101--M01\tMotor\tBomba\tUnidad 1\tSí\t001234\tRevisar antes de medir';
 test('guided recovery imports reordered columns and preserves OT, exact KKS and observations',()=>{
