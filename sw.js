@@ -1,5 +1,5 @@
 // Service Worker — Planify Offline v5
-const CACHE_NAME = 'planify-offline-v70';
+const CACHE_NAME = 'planify-offline-v73';
 
 // En localhost no cacheamos nada — siempre red directa
 const IS_LOCAL = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -80,6 +80,8 @@ self.addEventListener('fetch', event => {
   if (IS_LOCAL) return;
 
   const url = new URL(event.request.url);
+  // Do not cache private sessions, maintenance records or signed photographs.
+  if (url.pathname.includes('/api/maintenance/') || url.pathname.includes('/auth/v1/') || url.pathname.includes('/mantenimiento') || url.pathname.includes('/maintenance-login')) return;
 
   // ① Supabase API → NetworkFirst (datos frescos, caché como fallback)
   if (url.hostname.includes('supabase.co')) {

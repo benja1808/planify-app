@@ -9,6 +9,7 @@ const supabaseClient = window.supabase
 
 // Exponer en window para que syncQueue.js pueda accederlo
 window.supabaseClient = supabaseClient;
+if (window.supabase && window.MaintenanceCloud) window.MaintenanceCloud.configure(supabaseUrl, supabaseKey);
 
 // ── Helper de escritura offline-safe ────────────────────────────────────────
 // Mapea tabla Supabase → store de localDB
@@ -2376,6 +2377,7 @@ async function guardarTareaFinalizada({
         idsALiberar.includes(w.id) ? { ...w, ocupado: false } : w
     );
     estado.historialTareas = [registroHistorial, ...estado.historialTareas];
+    _borrarBorradorEscobillas(`tarea-${id}`);
     renderizarVistaActual();
 
     // Persistir tareas y trabajadores (offline-safe)
@@ -2827,6 +2829,7 @@ window.abrirEditorHistorial = function(registroId) {
     modal.style.display = 'flex';
     const closeFn = () => { modal.style.display = 'none'; };
     modal.querySelector('#ed-hist-close').addEventListener('click', closeFn);
+    modal.querySelector('#ed-hist-form').addEventListener('submit', event => event.preventDefault());
     modal.querySelector('#ed-hist-cancel').addEventListener('click', closeFn);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeFn(); }, { once: true });
 
@@ -3249,6 +3252,8 @@ window.editarMedicionesExcitatriz = function(registroId) {
     const setv = (id, v) => { const el = panel.querySelector(id); if (el && v) el.value = v; };
     setv('#excu5-hum', header.hum); setv('#excu5-tamb', header.temp); setv('#excu5-gen', header.gen);
     setv('#excu5-vcampo', header.vcampo); setv('#excu5-icampo', header.icampo);
+    // Después de precargar: un borrador sin guardar es más reciente que el registro.
+    _activarBorradorEscobillas(panel, `hist-${registroId}`);
 };
 
 // Guarda las mediciones editadas en el registro de historial (local + Supabase).
@@ -3266,6 +3271,7 @@ window.guardarMedicionesExcitatriz = async function(registroId) {
     } catch (e) {
         console.warn('[excitatriz] no se pudo guardar acciones:', e?.message);
     }
+    _borrarBorradorEscobillas(`hist-${registroId}`);
     document.getElementById('modal-editar-excitatriz')?.remove();
     if (typeof renderTermografiaDetalle === 'function' && vistaTermografiaEstado?.registroId === registroId) {
         renderTermografiaDetalle(registroId);
@@ -4910,6 +4916,12 @@ let realtimeResumeTimer = null;
 // ── Force refresh: re-baja todo y re-renderiza ──────────────────────────────
 window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
     if (window._planifyRefreshing) return;
+    if (hayUIBloqueandoRealtime()) {
+        solicitarRenderRealtimeNoIntrusivo();
+        mostrarToastNotificacion('Edición en curso', 'Termina de editar antes de actualizar la vista.', { type: 'warning', duration: 3000 });
+        return;
+    }
+    const vistaAlIniciar = vistaActual;
     window._planifyRefreshing = true;
     try {
         if (!navigator.onLine || !window.supabaseClient) {
@@ -4955,7 +4967,8 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
             estado.equipos = equiposRes.value || [];
         }
         try { evaluarNotificacionesPlanify?.(); } catch {}
-        renderizarVistaActual();
+        if (vistaActual === vistaAlIniciar && !hayUIBloqueandoRealtime()) renderizarVistaActual();
+        else solicitarRenderRealtimeNoIntrusivo();
         mostrarToastNotificacion('Actualizado', 'Datos sincronizados.', { type: 'success', duration: 1500 });
     } catch (err) {
         console.error('[refresh]', err);
@@ -5027,11 +5040,13 @@ window.forzarRefrescoPlanify = async function forzarRefrescoPlanify() {
     }
 
     document.addEventListener('touchstart', (e) => {
+        pulling = false; pulled = 0;
+        if (hayUIBloqueandoRealtime()) return;
         if (window.scrollY > 2) return;
         if (e.touches.length !== 1) return;
         // No activar si el touch empieza dentro de un overlay/modal
         const target = e.target;
-        if (target?.closest?.('.modal-overlay-base, #asign-drawer, #asign-backdrop, #planify-toast-stack')) return;
+        if (target?.closest?.('input,textarea,select,button,a,[contenteditable],form,[role="dialog"],.modal,.modal-overlay-base,.vib-import-overlay,#asign-drawer,#asign-backdrop,#planify-toast-stack')) return;
         startY = e.touches[0].clientY;
         pulling = true;
         pulled = 0;
@@ -5093,10 +5108,55 @@ function reanudarRenderRealtime() {
     intentarAplicarRealtimePendiente();
 }
 
+// Campos con datos escritos y aún no guardados (valor distinto al renderizado).
+// Excluye buscadores y filtros: cambiarlos no es "datos por perder".
+const CAMPOS_EDITABLES_SELECTOR = 'textarea, input:not([type]), input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="datetime-local"], input[type="tel"], input[type="email"]';
+function esCampoDeFiltro(campo) {
+    const ref = `${campo.id || ''} ${campo.name || ''} ${campo.className || ''} ${campo.placeholder || ''}`.toLowerCase();
+    return /busc|busq|búsq|search|filtro|filter/.test(ref) || campo.dataset?.noDirty !== undefined
+        // Con oninput/onchange en línea el campo se guarda solo (ej. observaciones de ruta).
+        || campo.hasAttribute('oninput') || campo.hasAttribute('onchange');
+}
+function camposSinGuardar(raiz = document) {
+    if (!raiz?.querySelectorAll) return [];
+    return [...raiz.querySelectorAll(CAMPOS_EDITABLES_SELECTOR)].filter(campo =>
+        !campo.disabled && !campo.readOnly && campo.value !== campo.defaultValue && !esCampoDeFiltro(campo)
+    );
+}
+function hayDatosSinGuardar(raiz = document) {
+    return camposSinGuardar(raiz).length > 0;
+}
+
+// Tocar el fondo oscuro de una ventana la cierra en varios formularios
+// (captura de vibración, asignaciones, horas extra...). Si hay datos escritos,
+// confirmar antes: en el celular es fácil tocar fuera por accidente.
+document.addEventListener('click', (event) => {
+    const fondo = event.target;
+    if (!(fondo instanceof HTMLElement) || fondo === document.body || fondo.id === 'main-content') return;
+    if (window.getComputedStyle(fondo).position !== 'fixed') return;
+    if (!hayDatosSinGuardar(fondo)) return;
+    if (window.confirm('Tienes datos escritos sin guardar en esta ventana. ¿Cerrarla y descartarlos?')) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+}, true);
+
+// Última defensa ante una recarga real (gesto del navegador, F5 con Shift,
+// botón atrás): el navegador pide confirmación si hay datos sin guardar.
+window.addEventListener('beforeunload', (event) => {
+    if (!hayDatosSinGuardar()) return;
+    event.preventDefault();
+    event.returnValue = '';
+});
+
 function hayUIBloqueandoRealtime() {
     const activeElement = document.activeElement;
     const tag = (activeElement?.tagName || '').toLowerCase();
     if (document.hidden) return true;
+    if (['input','select','textarea'].includes(tag) || activeElement?.isContentEditable) return true;
+    // Datos escritos en la vista aunque el foco ya no esté en el campo.
+    if (hayDatosSinGuardar()) return true;
+    // El formulario sigue abierto aunque el foco pase a un botón.
+    if ([...document.querySelectorAll('form,[role="dialog"],.modal,.vib-import-overlay')].some(esElementoVisibleUI)) return true;
     // Solo bloquear si el usuario realmente está escribiendo o en un textarea.
     // Un <select> o un input de búsqueda ya poblado no debería bloquear el refresh.
     if (tag === 'textarea' || activeElement?.isContentEditable) return true;
@@ -5194,7 +5254,9 @@ window.addEventListener('focus', intentarAplicarRealtimePendiente);
 async function renderInsumosView() {
     mainContent.innerHTML = '<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando inventario...</p></div></div>';
 
+    const cargaActual = mainContent.firstElementChild;
     await refrescarDatosInsumos({ preferRemote: true });
+    if (mainContent.firstElementChild !== cargaActual) return;
 
     const trabajador = obtenerTrabajadorActual();
     const esAdmin = esRolGestion();
@@ -6405,7 +6467,9 @@ async function renderMisHorasView() {
             </div>
         </div>`;
 
+    const cargaActual = mainContent.firstElementChild;
     const registros = await cargarHorasExtraTrabajador(trabajador.id);
+    if (mainContent.firstElementChild !== cargaActual) return;
     const contenedor = document.getElementById('mis-horas-contenido');
     if (!contenedor) return;
 
@@ -6685,8 +6749,26 @@ async function restaurarSesionPersistida() {
     try { data = JSON.parse(raw); } catch (e) { return false; }
     if (!data || !data.rol) return false;
 
-    if (data.rol === 'admin' || data.rol === 'administrador' || data.rol === 'visita') {
-        accederApp(data.rol);
+    if (data.rol === 'visita') {
+        accederApp('visita');
+        return true;
+    }
+    if (data.rol === 'admin' || data.rol === 'administrador') {
+        // En el sitio publicado la sesión debe traer un token emitido por el
+        // servidor; el rol escrito en el navegador por sí solo no basta.
+        if (!ES_HOST_LOCAL) {
+            // Transición: mientras el login con PIN no esté instalado en
+            // Supabase, las sesiones antiguas (sin token) siguen valiendo.
+            if (!data.token) {
+                if (await accesoPinServidorInstalado() === true) { _volverAlLogin(); return false; }
+                accederApp(data.rol);
+                return true;
+            }
+            const rolServidor = await validarTokenSesionServidor(data.token);
+            // Sin red (undefined) se confía en la sesión para trabajar offline.
+            if (rolServidor !== undefined && rolServidor !== data.rol) { _volverAlLogin(); return false; }
+        }
+        accederApp(data.rol, null, { token: data.token || null });
         return true;
     }
     if (data.rol === 'trabajador' && data.trabajadorId) {
@@ -6710,6 +6792,11 @@ async function restaurarSesionPersistida() {
 }
 
 window.cerrarSesionPlanify = async function() {
+    let token = null;
+    try { token = JSON.parse(localStorage.getItem('planify_session') || 'null')?.token || null; } catch (e) { /* noop */ }
+    if (token && supabaseClient) {
+        supabaseClient.rpc('planify_cerrar_sesion', { p_token: token }).then(() => {}, () => {});
+    }
     if (window.MaintenanceCloud) await window.MaintenanceCloud.signOut().catch(() => {});
     _volverAlLogin();
 };
@@ -6985,7 +7072,9 @@ async function renderHorasExtraAdminView() {
         <div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div>
     </div>`;
 
+    const cargaActual = mainContent.firstElementChild;
     const todos = await cargarTodasHorasExtra();
+    if (mainContent.firstElementChild !== cargaActual) return;
     const trabajadores = estado.trabajadores || [];
     const mesActual = new Date().toISOString().slice(0, 7);
 
@@ -8876,7 +8965,9 @@ function renderHistorialView() {
 async function renderHorasExtraAdminView() {
     mainContent.innerHTML = `<div class="fade-in" style="max-width:1180px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div></div>`;
 
+    const cargaActual = mainContent.firstElementChild;
     const todos = await cargarTodasHorasExtra();
+    if (mainContent.firstElementChild !== cargaActual) return;
     const trabajadores = estado.trabajadores || [];
     const hoy = new Date();
     const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
@@ -9918,7 +10009,9 @@ async function renderMisHorasView() {
 
     mainContent.innerHTML = `<div class="fade-in overtime-view" style="max-width:980px; margin:0 auto;"><div class="panel" style="text-align:center; padding:2rem;"><p style="color:var(--text-muted);">Cargando horas extra...</p></div></div>`;
 
+    const cargaActual = mainContent.firstElementChild;
     const registros = await cargarHorasExtraTrabajador(trabajador.id);
+    if (mainContent.firstElementChild !== cargaActual) return;
     const hoy = new Date();
     const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
     const formatHoras = (valor) => new Intl.NumberFormat('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(Number(valor || 0));
@@ -16011,6 +16104,7 @@ function renderTrabajadorRutaDetalle() {
     // ── BODY (componentes) renderer ─────────────────────────────────────
     const renderEquipoBody = (eq, eqIdx) => {
         const ejActual = ejFresca();
+        if (esRutaRequerimientos(idx)) eq = obtenerRutaVibracion(idx, ejActual)?.equipos?.find(item=>item.id===eq.id) || eq;
         const comps = eq.componentes || [];
         return `
             <div class="trab-eq-body" style="border-top:1px solid #f1f5f9;">
@@ -16302,10 +16396,10 @@ function renderTrabajadorRutaDetalle() {
                 }
             });
 
-            // Guardar observación al perder foco
+            // Persistir mientras escribe: reconstruir el acordeón no debe perder el texto.
             const obs = item.querySelector('.trab-comp-obs');
             if (obs) {
-                obs.addEventListener('blur', () => {
+                obs.addEventListener('input', () => {
                     const ejCur = getEjecucionActiva(idx, ej.id);
                     if (!ejCur) return;
                     ejCur.observaciones = ejCur.observaciones || {};
@@ -16602,7 +16696,7 @@ function renderRutasView() {
         refrescarRutasEjecucionesDesdeSupabase().then(nuevas => {
             _rutasRefrescoEnVuelo = false;
             if (vistaActual === 'rutas' && JSON.stringify(getTodasEjecucionesRutas()) !== cacheAntes) {
-                renderRutasView();
+                solicitarRenderRealtimeNoIntrusivo();
             }
         }).catch(() => { _rutasRefrescoEnVuelo = false; });
     }
@@ -18125,7 +18219,10 @@ window.rutasAbrirFichaEquipo = function(equipoId) {
     }
 };
 function renderHorarioEquipoRequerimiento(idx, ej, eq) {
-    if (!ej || !esRutaRequerimientos(idx)) return '';
+    // Los horarios corresponden exclusivamente a la ruta de Requerimientos.
+    // Las planificaciones diarias y los trabajos adicionales también reutilizan
+    // equipos flexibles, pero no deben mostrar estos campos.
+    if (!ej || Number(idx) !== RUTA_REQUERIMIENTOS_IDX) return '';
     return `<div style="display:flex;gap:0.75rem;flex-wrap:wrap;padding:0.5rem 0;">
         ${[['horaInicio','Hora inicio'],['horaFin','Hora fin']].map(([campo,label])=>`<label style="font-size:0.8rem;">${label}<input type="time" class="form-control" value="${escapeHtml(eq[campo] || '')}" data-ejecucion="${escapeHtml(ej.id)}" data-equipo="${escapeHtml(eq.id)}" data-campo="${campo}" onchange="window.rutasGuardarHorarioEquipo(${Number(idx)},this)"></label>`).join('')}
         <small style="align-self:end;color:#64748b;">Si la hora fin es menor que la de inicio, corresponde al día siguiente.</small>
@@ -19205,11 +19302,11 @@ function renderizarVistaActual() {
             renderEquiposView();
             break;
         case 'mantenimiento':
-            if (estado.usuarioActual === 'admin' && ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) {
+            if (['admin', 'administrador', 'trabajador'].includes(estado.usuarioActual)) {
                 window.MaintenanceCloud.configure(supabaseUrl, supabaseKey);
                 window.PlanifyMantenimiento.render(mainContent, estado.equipos.map(e => ({ ...e, unidad: e.unidad || _unidadEquipoDedup(e) })));
             } else {
-                mainContent.textContent = 'Mantenimiento está disponible para el planificador en localhost.';
+                mainContent.textContent = 'Ingresa con tu cuenta para acceder a Mantenimiento.';
             }
             break;
         case 'tiristores':
@@ -20366,6 +20463,98 @@ function _buildPanelEscobillasCompleto(container, tarea, unidadNum, cfg) {
     window.mountExcitatrizOCR?.(container.querySelector('#exc-u5-panel'));
 }
 
+// Borrador local de la planilla de excitatriz. En Android, abrir la cámara
+// (lector de planilla por foto) puede cerrar el navegador y recargar la página:
+// sin borrador se perdían todas las temperaturas y corrientes ya escritas.
+const BORRADOR_ESCOB_PREFIJO = 'planify_borrador_excitatriz:';
+const BORRADOR_ESCOB_VIGENCIA_MS = 3 * 24 * 60 * 60 * 1000;
+const BORRADOR_ESCOB_CAMPOS = ['excu5-hum', 'excu5-tamb', 'excu5-gen', 'excu5-vcampo', 'excu5-icampo', 'excu5-coment'];
+
+function _borrarBorradorEscobillas(clave) {
+    if (!clave) return;
+    try { localStorage.removeItem(BORRADOR_ESCOB_PREFIJO + clave); } catch (e) { /* noop */ }
+}
+
+function _activarBorradorEscobillas(panel, clave) {
+    if (!panel || !clave) return;
+    const storageKey = BORRADOR_ESCOB_PREFIJO + clave;
+    const leerPanel = () => {
+        const filas = {};
+        panel.querySelectorAll('.escu5-row').forEach(row => {
+            const temp = row.querySelector('.escu5-temp')?.value || '';
+            const corr = row.querySelector('.escu5-corr')?.value || '';
+            const alta = !!row.querySelector('.escu5-alta')?.checked;
+            const norm = !!row.querySelector('.escu5-norm')?.checked;
+            if (temp || corr || alta || norm) filas[row.dataset.pos] = { temp, corr, alta, norm };
+        });
+        const campos = {};
+        BORRADOR_ESCOB_CAMPOS.forEach(id => {
+            const valor = panel.querySelector(`#${id}`)?.value || '';
+            if (valor) campos[id] = valor;
+        });
+        return { filas, campos };
+    };
+    const guardar = () => {
+        const datos = leerPanel();
+        try {
+            if (!Object.keys(datos.filas).length && !Object.keys(datos.campos).length) localStorage.removeItem(storageKey);
+            else localStorage.setItem(storageKey, JSON.stringify({ ...datos, at: Date.now() }));
+        } catch (e) { /* almacenamiento lleno o privado */ }
+    };
+
+    let borrador = null;
+    try { borrador = JSON.parse(localStorage.getItem(storageKey) || 'null'); } catch (e) { borrador = null; }
+    if (borrador && Date.now() - (borrador.at || 0) > BORRADOR_ESCOB_VIGENCIA_MS) {
+        _borrarBorradorEscobillas(clave);
+        borrador = null;
+    }
+    if (borrador) {
+        let recuperados = 0;
+        Object.entries(borrador.filas || {}).forEach(([pos, f]) => {
+            const row = panel.querySelector(`.escu5-row[data-pos="${CSS.escape(pos)}"]`);
+            if (!row) return;
+            if (f.temp) { row.querySelector('.escu5-temp').value = f.temp; recuperados++; }
+            if (f.corr) { row.querySelector('.escu5-corr').value = f.corr; recuperados++; }
+            row.querySelector('.escu5-alta').checked = !!f.alta;
+            row.querySelector('.escu5-norm').checked = !!f.norm;
+        });
+        Object.entries(borrador.campos || {}).forEach(([id, valor]) => {
+            const campo = panel.querySelector(`#${id}`);
+            if (campo) { campo.value = valor; recuperados++; }
+        });
+        const aviso = document.createElement('div');
+        aviso.setAttribute('role', 'status');
+        aviso.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;font-size:0.8rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:0.55rem 0.7rem;margin-bottom:0.8rem;';
+        const hora = new Date(borrador.at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        aviso.innerHTML = `<span><i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> Se recuperó un borrador sin guardar (${recuperados} dato(s), ${hora}). Revísalo y guarda para terminar.</span>`;
+        const descartar = document.createElement('button');
+        descartar.type = 'button';
+        descartar.className = 'btn btn-outline';
+        descartar.style.cssText = 'font-size:0.75rem;padding:0.3rem 0.65rem;';
+        descartar.textContent = 'Descartar borrador';
+        descartar.addEventListener('click', () => {
+            if (!confirm('¿Descartar el borrador y vaciar la planilla?')) return;
+            panel.querySelectorAll('.escu5-temp, .escu5-corr').forEach(i => { i.value = ''; });
+            panel.querySelectorAll('.escu5-alta, .escu5-norm').forEach(i => { i.checked = false; });
+            BORRADOR_ESCOB_CAMPOS.forEach(id => { const c = panel.querySelector(`#${id}`); if (c) c.value = ''; });
+            _borrarBorradorEscobillas(clave);
+            aviso.remove();
+        });
+        aviso.appendChild(descartar);
+        panel.prepend(aviso);
+    }
+
+    // Guardar en cada cambio (síncrono: la recarga puede llegar sin aviso)
+    // y también al ocultarse la página, justo antes de abrir la cámara.
+    panel.addEventListener('input', guardar);
+    panel.addEventListener('change', guardar);
+    const alOcultar = () => {
+        if (!panel.isConnected) { document.removeEventListener('visibilitychange', alOcultar); return; }
+        if (document.visibilityState === 'hidden') guardar();
+    };
+    document.addEventListener('visibilitychange', alOcultar);
+}
+
 // Panel especializado para Excitatriz / Escobillas / Carbones.
 // Métricas globales de la unidad + lista de escobillas con anormalidades.
 function _buildPanelEscobillas(container, tarea) {
@@ -20381,6 +20570,7 @@ function _buildPanelEscobillas(container, tarea) {
     const unidadNum = obtenerUnidadTarea(tarea);
     if (ESCOB_PLANILLA_COMPLETA[unidadNum]) {
         _buildPanelEscobillasCompleto(container, tarea, unidadNum, ESCOB_PLANILLA_COMPLETA[unidadNum]);
+        if (tarea?.id) _activarBorradorEscobillas(container.querySelector('#exc-u5-panel'), `tarea-${tarea.id}`);
         return;
     }
 
@@ -24931,36 +25121,74 @@ document.getElementById('btn-login-visita')?.addEventListener('click', () => acc
 document.getElementById('btn-submit-pin')?.addEventListener('click', validarPin);
 pinInput?.addEventListener('keypress', (e) => { if (e.key === 'Enter') validarPin(); });
 
+// Los PIN de Planificador, Administrador e ITO se validan en Supabase
+// (supabase/migrations/20261013120000_login_pin_servidor.sql): el navegador
+// nunca conoce el PIN y recibe un token de sesión que se verifica al recargar.
+const ES_HOST_LOCAL = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname);
+
+async function iniciarSesionPinServidor(rol, pin) {
+    if (!navigator.onLine) throw new Error('Necesitas conexión a internet para ingresar con PIN.');
+    if (!supabaseClient) throw new Error('No hay conexión con el servidor. Recarga la página.');
+    const { data, error } = await supabaseClient.rpc('planify_login', { p_rol: rol, p_pin: pin });
+    if (error) {
+        if (error.code === 'PGRST202' || /planify_login/i.test(error.message || '')) {
+            throw new Error('El acceso con PIN aún no está configurado en el servidor.');
+        }
+        throw new Error('No se pudo validar el PIN. Intenta nuevamente.');
+    }
+    if (!data?.ok || !data.token) throw new Error(data?.error || 'PIN incorrecto.');
+    return data.token;
+}
+
+// true = las funciones de login existen en Supabase; false = aún no se corrió
+// la migración; undefined = no se pudo consultar (sin red).
+async function accesoPinServidorInstalado() {
+    if (!navigator.onLine || !supabaseClient) return undefined;
+    try {
+        const { error } = await supabaseClient.rpc('planify_validar_sesion', { p_token: '' });
+        if (!error) return true;
+        return error.code === 'PGRST202' ? false : undefined;
+    } catch (e) {
+        return undefined;
+    }
+}
+
+// null = sesión inválida o vencida; undefined = no se pudo consultar (sin red).
+async function validarTokenSesionServidor(token) {
+    if (!token || !navigator.onLine || !supabaseClient) return undefined;
+    try {
+        const { data, error } = await supabaseClient.rpc('planify_validar_sesion', { p_token: token });
+        if (error) return undefined;
+        return data || null;
+    } catch (e) {
+        return undefined;
+    }
+}
+
 async function validarPin() {
     const pin = pinInput?.value || '';
-    if (['127.0.0.1','localhost','[::1]'].includes(location.hostname) && ['admin','administrador'].includes(pinLoginTarget)) {
-        const button = document.getElementById('btn-submit-pin');
-        if (button?.disabled) return;
-        if (button) button.disabled = true;
-        try {
+    const button = document.getElementById('btn-submit-pin');
+    if (button?.disabled) return;
+    if (button) button.disabled = true;
+    const err = document.getElementById('pin-error');
+    if (err) err.style.display = 'none';
+    try {
+        let token = null;
+        if (ES_HOST_LOCAL && ['admin', 'administrador'].includes(pinLoginTarget)) {
+            // En el PC, el servidor local valida el PIN y abre Mantenimiento.
             await window.MaintenanceCloud.signIn(pinLoginTarget, pin);
-            accederApp(pinLoginTarget);
-            pinModal.style.display = 'none';
-            if (pinInput) pinInput.value = '';
-            pinLoginTarget = 'admin';
-        } catch(error) {
-            const err = document.getElementById('pin-error');
-            if (err) { err.textContent = error.message; err.style.display = 'block'; }
-            if (pinInput) { pinInput.value = ''; pinInput.focus(); }
-        } finally { if (button) button.disabled = false; }
-        return;
-    }
-    // Planner/admin credentials are validated only by the server.
-    const pinEsperado = pinLoginTarget === 'ito' ? '2011' : null;
-    if (pin === pinEsperado) {
-        accederApp(pinLoginTarget);
+        } else {
+            token = await iniciarSesionPinServidor(pinLoginTarget, pin);
+        }
+        accederApp(pinLoginTarget, null, { token });
         pinModal.style.display = 'none';
         if (pinInput) pinInput.value = '';
         pinLoginTarget = 'admin';
-    } else {
-        const err = document.getElementById('pin-error');
-        if (err) err.style.display = 'block';
+    } catch (error) {
+        if (err) { err.textContent = error.message || 'PIN incorrecto.'; err.style.display = 'block'; }
         if (pinInput) { pinInput.value = ''; pinInput.focus(); }
+    } finally {
+        if (button) button.disabled = false;
     }
 }
 
@@ -25057,6 +25285,11 @@ async function validarWorkerLogin() {
         return;
     }
 
+    // Mantenimiento usa una sesión individual validada por el servidor.
+    try {
+        window.MaintenanceCloud.configure(supabaseUrl, supabaseKey);
+        await window.MaintenanceCloud.signInWorker(rutInput, pinInput);
+    } catch (_) { /* El módulo permite reintentar sin bloquear el check-in. */ }
     await updateTrabajadorDisponibilidad(trabajador.id, true);
     estado.trabajadores = estado.trabajadores.map(t =>
         t.id === trabajador.id ? { ...t, disponible: true } : t
@@ -25068,14 +25301,15 @@ async function validarWorkerLogin() {
     accederApp('trabajador', { ...trabajador, disponible: true });
 }
 
-function accederApp(rol, trabajadorObj = null) {
+function accederApp(rol, trabajadorObj = null, { token = null } = {}) {
     estado.usuarioActual = rol;
     estado.trabajadorLogueado = trabajadorObj;
     // Persistir sesión para sobrevivir F5 / recarga
     try {
         localStorage.setItem('planify_session', JSON.stringify({
             rol,
-            trabajadorId: trabajadorObj?.id || null
+            trabajadorId: trabajadorObj?.id || null,
+            ...(token ? { token } : {})
         }));
     } catch (e) { /* localStorage puede fallar en privado */ }
     loginOverlay.style.display = 'none';
@@ -25088,7 +25322,7 @@ function accederApp(rol, trabajadorObj = null) {
         'nav-control':            ['admin', 'administrador'],
         'nav-dashboard':          ['admin', 'trabajador'],
         'nav-equipos':            ['admin', 'administrador', 'trabajador', 'ito'],
-        'nav-mantenimiento':      ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? ['admin'] : [],
+        'nav-mantenimiento':      ['admin', 'administrador', 'trabajador'],
         'nav-tiristores':         ['visita'],
         'nav-semanal':            ['admin'],
         'nav-rutas':              ['admin', 'administrador', 'trabajador'],
@@ -25175,10 +25409,10 @@ function accederApp(rol, trabajadorObj = null) {
             const vistaGuardada = localStorage.getItem('planify_vista');
             if (vistaGuardada) {
                 const permitidoAdmin = ['control','dashboard','semanal','rutas','avisos-sap','historial','trabajadores','equipos','mantenimiento','horas_extra_admin','insumos','perfil','mis_horas'];
-                const permitidoAdministrador = ['control','rutas','avisos-sap','horas_extra_admin'];
+                const permitidoAdministrador = ['mantenimiento','control','rutas','avisos-sap','horas_extra_admin'];
                 const permitidoTrabajador = esBrandonTir
-                    ? ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle']
-                    : ['dashboard','semanal','rutas','termografia','perfil','mis_horas','insumos','trabajador-rutas','trabajador-ruta-detalle'];
+                    ? ['dashboard','semanal','rutas','termografia','tiristor-u5','perfil','mis_horas','insumos','mantenimiento','trabajador-rutas','trabajador-ruta-detalle']
+                    : ['dashboard','semanal','rutas','termografia','perfil','mis_horas','insumos','mantenimiento','trabajador-rutas','trabajador-ruta-detalle'];
                 const permitidoVisita = ['tiristores'];
                 const permitidoIto = ['ito'];
                 const lista = rol === 'admin' ? permitidoAdmin

@@ -43,3 +43,14 @@ test('failed photo deletion never deletes metadata',async()=>{
     const {api,events}=setup(false,true);await assert.rejects(api.deleteJob({id:'test',photos:[{path:'test/a.png'}]}),/remove failed/);
     assert.deepEqual(events,['deleting','remove']);
 });
+
+test('web uses an isolated authenticated client without the localhost gateway',async()=>{
+ const calls=[];
+ const client={auth:{getSession:async()=>({data:{session:{user:{id:'worker'}}}})}};
+ const context={location:{origin:'https://planifyappl.netlify.app',hostname:'planifyappl.netlify.app'},window:{supabase:{createClient:(url,key,options)=>{calls.push({url,options});return client;}}},fetch:()=>{throw Error('Local gateway must not be called');}};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/supabase-store.js','utf8'),context);
+ const api=context.window.MaintenanceCloud;api.configure('https://project.supabase.co','public');
+ assert.equal((await api.session()).id,'worker');
+ assert.equal(calls[0].url,'https://project.supabase.co');
+ assert.equal(calls[0].options.auth.storageKey,'planify-maintenance-auth');
+});

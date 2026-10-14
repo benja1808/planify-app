@@ -22,9 +22,20 @@
         host.innerHTML = `<section class="maint fade-in"><header class="maint-intro"><div><span class="maint-eyebrow">Gestión de intervenciones</span><h1>Mantenimiento</h1><p>Trabajos y evidencia fotográfica, organizados por unidad y equipo.</p></div><span class="maint-badge"><i class="fa-solid fa-lock" aria-hidden="true"></i> Fotografías privadas</span></header><div class="maint-state" role="status" aria-live="polite"><div class="maint-state-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></div><span class="maint-eyebrow">${label}</span><h2>${title}</h2><p>${description}</p><div class="maint-actions">${kind === 'loading' ? '' : kind === 'login' ? '<button type="button" class="btn btn-primary" id="maint-relogin">Ingresar con mi PIN <span aria-hidden="true">→</span></button>' : '<button type="button" class="btn btn-primary" id="maint-retry">Volver a intentar</button>'}${kind !== 'loading' ? '<button type="button" class="btn btn-outline" id="maint-exit">Volver al planificador</button>' : ''}</div></div><div id="maint-error" class="maint-error" role="alert"></div><div class="maint-context"><span><i class="fa-solid fa-industry" aria-hidden="true"></i> 5 unidades</span><span><i class="fa-regular fa-images" aria-hidden="true"></i> Evidencia fotográfica</span><span><i class="fa-solid fa-folder-open" aria-hidden="true"></i> Historial de trabajos</span></div></section>`;
         on('maint-relogin', 'click', () => window.cerrarSesionPlanify());
         on('maint-retry', 'click', () => paint());
-        on('maint-exit', 'click', () => { generation++; document.getElementById('nav-control')?.click(); });
+        on('maint-exit', 'click', () => { generation++; document.getElementById(currentUser?.role === 'trabajador' ? 'nav-dashboard' : 'nav-control')?.click(); });
     }
-    function loginMarkup() { stateMarkup('login'); }
+    function loginMarkup() {
+        stateMarkup('login');
+        const button = host.querySelector('#maint-relogin');
+        button.outerHTML = `<form id="maint-login"><label>RUT<input id="maint-rut" autocomplete="username" required></label><label>PIN de Planify<input id="maint-pin" type="password" inputmode="numeric" autocomplete="current-password" pattern="[0-9]{4}" maxlength="4" required></label><button class="btn btn-primary" type="submit">Ingresar a Mantenimiento</button></form>`;
+        on('maint-login','submit',async event => {
+            event.preventDefault();
+            const button=event.target.querySelector('button');
+            button.disabled=true;
+            try { await cloud.signInWorker(host.querySelector('#maint-rut').value,host.querySelector('#maint-pin').value); await paint(); }
+            finally { button.disabled=false; }
+        });
+    }
     function notice(error) {
         const node = host.querySelector('#maint-error');
         if (node) node.textContent = /failed to fetch|network|fetch failed/i.test(error.message || '') ? 'No se pudo conectar. Comprueba tu conexión y vuelve a intentarlo.' : error.message || String(error);
@@ -71,7 +82,7 @@
             if (equipmentId) { equipmentId = ''; filter = ''; }
             else if (adding) { adding = false; }
             else if (unit) { unit = ''; }
-            else { generation++; document.getElementById('nav-control')?.click(); return; }
+            else { generation++; document.getElementById(currentUser?.role === 'trabajador' ? 'nav-dashboard' : 'nav-control')?.click(); return; }
             return paint();
         });
         on('maint-home', 'click', () => { unit = ''; equipmentId = ''; adding = false; return paint(); });
@@ -113,10 +124,22 @@
         return `<section class="maint-panel"><div class="maint-row"><strong>Almacenamiento Nube</strong><span>${mb(used)} de 1 GB · ${(used / LIMIT * 100).toFixed(1)} %</span></div><progress aria-label="Almacenamiento utilizado en la nube" value="${used}" max="${LIMIT}"></progress><p>${mb(Math.max(0, LIMIT-used))} disponibles. Capacidad total: 1 GB.</p>
         <h2 class="maint-form-title">Registrar una intervención</h2><p>Describe el trabajo y adjunta las fotografías del equipo.</p><form id="maint-job"><label for="maint-category">Categoría</label><select id="maint-category">${CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select><label for="maint-title">¿De qué son las imágenes?</label><input id="maint-title" required maxlength="180" placeholder="Ej.: Inspección del sello mecánico"><label for="maint-work">Trabajos realizados</label><textarea id="maint-work" required maxlength="10000" placeholder="Describe la intervención y los hallazgos"></textarea><label for="maint-files">Fotografías</label><input id="maint-files" type="file" accept="image/jpeg,image/png,image/webp" multiple required><p id="maint-selected" aria-live="polite">Selecciona una o más fotografías JPG, PNG o WebP.</p><div class="maint-actions"><button class="btn btn-primary" id="maint-save">Guardar en la nube</button></div></form></section>
         <div class="maint-row"><h2>Registros del equipo</h2><select id="maint-filter" aria-label="Filtrar registros" style="width:auto"><option value="">Todas las categorías</option>${CATEGORIES.map(c => `<option ${c === filter ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-        ${records.length ? records.map(j => `<article class="maint-panel"><div class="maint-row"><h2>${esc(j.title)}</h2><small>${esc(j.category)} · ${new Date(j.date).toLocaleDateString('es-CL')}</small></div><p style="white-space:pre-wrap">${esc(j.work)}</p><p>${j.status !== 'ready' ? 'Carga incompleta o eliminación pendiente. Elimina este registro para liberar espacio.' : ''}</p><div class="maint-photos">${(j.status === 'ready' ? j.photos : []).map(p => { const url = p.url || '';  return `<figure><img src="${esc(url)}" alt="${esc(p.name)}" loading="lazy"><figcaption>${esc(p.name)}</figcaption></figure>`; }).join('')}</div><div class="maint-actions"><button class="btn btn-outline" data-zip="${j.id}" ${j.status !== 'ready' ? 'disabled' : ''}>Descargar carpeta ZIP</button><button class="btn maint-danger" data-delete="${j.id}">Eliminar de la nube</button></div></article>`).join('') : '<div class="maint-empty"><i class="fa-regular fa-images maint-icon" aria-hidden="true"></i><h2>No hay registros para esta selección</h2><p>Registra una intervención o selecciona otra categoría para consultar los trabajos.</p></div>'}`;
+        ${records.length ? records.map(j => `<article class="maint-panel"><div class="maint-row"><h2>${esc(j.title)}</h2><small>${esc(j.category)} · ${new Date(j.date).toLocaleDateString('es-CL')}</small></div><p style="white-space:pre-wrap">${esc(j.work)}</p><p>${j.status !== 'ready' ? 'Carga incompleta o eliminación pendiente. Elimina este registro para liberar espacio.' : ''}</p><div class="maint-photos">${(j.status === 'ready' ? j.photos : []).map(p => { const url = p.url || '';  return `<figure><img src="${esc(url)}" alt="${esc(p.name)}" loading="lazy"><figcaption>${esc(p.name)}</figcaption></figure>`; }).join('')}</div><div class="maint-actions"><button class="btn btn-outline" data-zip="${j.id}" ${j.status !== 'ready' ? 'disabled' : ''}>Descargar carpeta ZIP</button>${!currentUser.id || currentUser.id === j.created_by ? `<button class="btn maint-danger" data-delete="${j.id}">Eliminar de la nube</button>` : ''}</div></article>`).join('') : '<div class="maint-empty"><i class="fa-regular fa-images maint-icon" aria-hidden="true"></i><h2>No hay registros para esta selección</h2><p>Registra una intervención o selecciona otra categoría para consultar los trabajos.</p></div>'}`;
     }
     function bindDetail(current, jobs) {
-        on('maint-filter', 'change', e => { filter = e.target.value; return paint(); });
+        on('maint-filter', 'change', e => {
+            const form = host.querySelector('#maint-job');
+            const editing = form && [...form.querySelectorAll('input,textarea,select')].some(field =>
+                field.type === 'file' ? field.files.length > 0 :
+                field.tagName === 'SELECT' ? field.selectedIndex !== Math.max(0, [...field.options].findIndex(option => option.defaultSelected)) :
+                field.value !== field.defaultValue);
+            if (editing) {
+                e.target.value = filter;
+                notice(new Error('Guarda la intervención antes de cambiar el filtro. Se conservaron los datos y fotografías seleccionadas.'));
+                return;
+            }
+            filter = e.target.value; return paint();
+        });
         on('maint-files', 'change', e => {
             const files = [...e.target.files], size = files.reduce((n,f) => n+f.size,0);
             host.querySelector('#maint-selected').textContent = `${files.length} fotografías seleccionadas · ${mb(size)}`;
@@ -158,7 +181,6 @@
     }
     window.PlanifyMantenimiento = {
         render(target, equipment) {
-            if (!['localhost','127.0.0.1','[::1]'].includes(location.hostname)) return;
             host = target;
             const seen = new Set();
             catalog = (equipment || []).map(e => ({sourceId: String(e.id), name: e.activo || e.nombre || '', unit: unitOf(e.unidad || e.ubicacion), kks:e.kks || ''})).filter(e => {

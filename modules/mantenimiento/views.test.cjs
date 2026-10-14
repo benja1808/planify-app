@@ -3,10 +3,10 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const fs = require('node:fs');
 const source = fs.readFileSync(__dirname + '/mantenimiento.js', 'utf8');
-async function render(session, load) {
+async function render(session, load, hostname='localhost') {
     const handlers = {};
     const host = {innerHTML: '', querySelector: id => ({addEventListener: (event, action) => {handlers[id] = action;}}), querySelectorAll: () => []};
-    const context = {window: {MaintenanceCloud: {session, load}}, location: {hostname:'localhost'}, document: {body:{dataset:{view:'mantenimiento'}}}, URL:{revokeObjectURL(){}}, setTimeout};
+    const context = {window: {MaintenanceCloud: {session, load}}, location: {hostname}, document: {body:{dataset:{view:'mantenimiento'}}}, URL:{revokeObjectURL(){}}, setTimeout};
     vm.runInNewContext(source, context);
     context.window.PlanifyMantenimiento.render(host, []);
     await new Promise(resolve => setImmediate(resolve));
@@ -44,4 +44,10 @@ test('overview includes five units and actual summary counts', async () => {
     const {host} = await render(async () => ({}), async () => ({equipment:[{id:'one',unit:'U1',name:'Bomba'}], jobs:[],usage:{used:0}}));
     assert.equal((host.innerHTML.match(/data-unit=/g) || []).length, 5);
     assert.match(host.innerHTML, /Equipos incorporados<\/span><strong>1/);
+});
+
+test('worker maintenance renders on the published web host', async () => {
+ const {host} = await render(async () => ({id:'worker',role:'trabajador'}), async () => ({equipment:[],jobs:[],usage:{used:0}}), 'planifyappl.netlify.app');
+ assert.equal((host.innerHTML.match(/data-unit=/g) || []).length,5);
+ assert.match(host.innerHTML,/Mantenimiento/);
 });

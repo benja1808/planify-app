@@ -577,6 +577,7 @@
             </div>
         `;
         modal.classList.add('is-open');
+        modal.querySelector('#form-aviso-create')?.addEventListener('submit', event => event.preventDefault());
         modal.querySelectorAll('[data-close-create]').forEach(b => b.addEventListener('click', () => modal.classList.remove('is-open')));
 
         // Live: cuando cambia el UT, resolver el equipo

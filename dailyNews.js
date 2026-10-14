@@ -231,6 +231,14 @@
         return persistirInformeNovedadesDiarias();
     }
 
+    // Abrir la cámara deja la página en segundo plano y Android puede cerrarla:
+    // guardar de inmediato lo que esperaba el temporizador del borrador.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden' && dailyNewsSaveTimer) {
+            flushGuardadoInformeNovedades().catch(() => {});
+        }
+    });
+
     async function asegurarInformeNovedadesCargado() {
         if (!estado.informeNovedadesDiarias) {
             await cargarInformeNovedadesDiarias();

@@ -24,6 +24,14 @@
     padding: 0;
 }
 
+/* Desactiva el "deslizar para recargar" nativo del navegador: recargaba la
+   página completa y se perdían formularios a medio llenar. La app tiene su
+   propio gesto de actualizar, que respeta la edición en curso. */
+html,
+body {
+    overscroll-behavior-y: contain;
+}
+
 body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background-color: var(--dark-bg);

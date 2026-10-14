@@ -1,7 +1,7 @@
 /* Separate Supabase Auth session: does not alter Planify's existing anonymous client. */
 (() => {
     'use strict';
-    let client;
+    let client, direct, projectUrl, publicKey;
     const bucket = () => client.storage.from('mantenimiento');
     function unwrap(result) { if (result.error) throw result.error; return result.data; }
     async function rows(table) {
@@ -16,13 +16,28 @@
     const mapJob = j => ({...j, equipmentId:j.equipment_id});
     const api = {
         configure(url, key) {
-            if (!client) client = window.supabase.createClient(location.origin + '/api/maintenance/supabase', key, {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:(url,options)=>fetch(url,{...options,credentials:'same-origin'})}});
+            projectUrl = url; publicKey = key;
+            if (!direct) direct = window.supabase.createClient(url,key,{auth:{storageKey:'planify-maintenance-auth',persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+            if (!client) client = direct;
         },
         async session() {
+            const {data} = await direct.auth.getSession();
+            if (data.session) { client=direct; return {id:data.session.user.id,role:'trabajador'}; }
+            if (!['localhost','127.0.0.1','[::1]'].includes(location.hostname)) return null;
             const response = await fetch('/api/maintenance/session', {credentials:'same-origin',cache:'no-store'});
             if (response.status === 401) return null;
             if (!response.ok) throw new Error('Inicia Planify con el servidor de Mantenimiento.');
+            client = window.supabase.createClient(location.origin + '/api/maintenance/supabase', publicKey, {auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:(url,options)=>fetch(url,{...options,credentials:'same-origin'})}});
             return response.json();
+        },
+        async signInWorker(rut,pin) {
+            await direct.auth.signOut({scope:'local'});
+            const response=await fetch(projectUrl+'/functions/v1/maintenance-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:publicKey},body:JSON.stringify({rut,pin})});
+            const result=await response.json();
+            if (!response.ok) throw new Error(result.message || 'No se pudo validar el acceso.');
+            const {error}=await direct.auth.setSession(result);
+            if(error) throw error;
+            client=direct;
         },
         async signIn(role,pin) {
             const response = await fetch('/api/maintenance/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,pin})});
@@ -30,7 +45,7 @@
             if (!response.ok) throw new Error(result.message || 'No se pudo validar el PIN.');
             return result;
         },
-        async signOut() { await fetch('/api/maintenance/logout',{method:'POST'}); },
+        async signOut() { if(direct) await direct.auth.signOut(); if(['localhost','127.0.0.1','[::1]'].includes(location.hostname)) await fetch('/api/maintenance/logout',{method:'POST'}); client=direct; },
         async usage() { return unwrap(await client.rpc('mantenimiento_consumo')); },
         async load(equipmentId) {
             const [equipment, jobs, usage] = await Promise.all([rows('mantenimiento_equipos'),rows('mantenimiento_trabajos'),api.usage()]);

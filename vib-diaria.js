@@ -7,8 +7,11 @@
         [EXTRA]: {nombre:'Trabajos adicionales',unidad:'EXTRA',frecuencia:'REQ',plan:'',equipos:[],esRequerimientos:true}
     };
     function title(e) {
-        const day = e.componentesEstado?.__vibDiaria?.fecha || e.fechaInicio;
-        return Number(e.rutaIdx) === PLAN ? `Plan ${formatearFechaCortaDia(day)}${e.ot ? ` · OT ${e.ot}` : ''}` : `OT ${e.ot || 'Sin asignar'}`;
+        const daily = e.componentesEstado?.__vibDiaria || {};
+        const day = daily.fecha || e.fechaInicio;
+        return Number(e.rutaIdx) === PLAN
+            ? (daily.nombre || `Plan ${formatearFechaCortaDia(day)}${e.ot ? ` · OT ${e.ot}` : ''}`)
+            : `OT ${e.ot || 'Sin asignar'}`;
     }
     function render() {
         const extra = getEjecucionesDeRuta(EXTRA), plans = getEjecucionesDeRuta(PLAN);
