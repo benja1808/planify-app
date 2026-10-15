@@ -66,6 +66,9 @@ function createGateway(config, upstream = fetch, dependencies = {}) {
             if (!session) {send(res,401,{message:'Vuelve a ingresar a Planify con tu PIN.'}); return true;}
             if (url.pathname === '/api/maintenance/session' && req.method === 'GET') {send(res,200,{role:session.role}); return true;}
             const targetPath=url.pathname.slice(PREFIX.length);
+            if (targetPath === '/rest/v1/mantenimiento_equipos' && req.method !== 'GET' && !['admin','administrador'].includes(session.role)) {
+                send(res,403,{message:'Solo el planificador puede incorporar, abrir o cerrar equipos.'}); return true;
+            }
             if (!url.pathname.startsWith(PREFIX+'/') || !allowed(targetPath) || !['GET','POST','PATCH','DELETE'].includes(req.method)) {send(res,403,{message:'Operación no permitida.'}); return true;}
             const chunks=[]; let size=0;
             for await (const c of req) {size+=c.length; if(size>22*1024*1024) throw new Error('Archivo demasiado grande.'); chunks.push(c);}

@@ -5,12 +5,13 @@ const fs = require('node:fs');
 const source = fs.readFileSync(__dirname + '/mantenimiento.js', 'utf8');
 async function render(session, load, hostname='localhost') {
     const handlers = {};
-    const host = {innerHTML: '', querySelector: id => ({addEventListener: (event, action) => {handlers[id] = action;}}), querySelectorAll: () => []};
+    const unitButton = {dataset:{unit:'U1'}}, equipmentButton = {dataset:{equipment:'one'}};
+    const host = {innerHTML: '', querySelector: id => ({addEventListener: (event, action) => {handlers[id] = action;}}), querySelectorAll: selector => selector === '[data-unit]' ? [unitButton] : selector === '[data-equipment]' ? [equipmentButton] : []};
     const context = {window: {MaintenanceCloud: {session, load}}, location: {hostname}, document: {body:{dataset:{view:'mantenimiento'}}}, URL:{revokeObjectURL(){}}, setTimeout};
     vm.runInNewContext(source, context);
     context.window.PlanifyMantenimiento.render(host, []);
     await new Promise(resolve => setImmediate(resolve));
-    return {host, handlers, context};
+    return {host, handlers, context, unitButton, equipmentButton};
 }
 test('network failure offers retry instead of requesting a new PIN', async () => {
     let failed = true;
@@ -51,3 +52,17 @@ test('worker maintenance renders on the published web host', async () => {
  assert.equal((host.innerHTML.match(/data-unit=/g) || []).length,5);
  assert.match(host.innerHTML,/Mantenimiento/);
 });
+
+for (const role of ['trabajador','admin','ito']) {
+ for (const open of [false,true]) {
+  test(role+' sees correct controls for '+(open?'open':'closed')+' equipment',async()=>{
+   const view=await render(async()=>({id:role,role}),async()=>({equipment:[{id:'one',unit:'U1',name:'Bomba',is_open:open}],jobs:[],usage:{used:0}}));
+   view.unitButton.onclick(); await new Promise(r=>setImmediate(r));
+   assert.equal(view.host.innerHTML.includes('id="maint-add"'),role==='admin');
+   view.equipmentButton.onclick(); await new Promise(r=>setImmediate(r));
+   assert.equal(view.host.innerHTML.includes('id="maint-toggle"'),role==='admin');
+   assert.equal(view.host.innerHTML.includes('id="maint-job"'),open);
+   assert.match(view.host.innerHTML,/Registros del equipo/);
+  });
+ }
+}

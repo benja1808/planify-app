@@ -14,7 +14,7 @@ Deno.serve(async req => {
     const admin = createClient(url,Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,{auth:{persistSession:false,autoRefreshToken:false}});
     const {data:worker,error} = await admin.rpc('mantenimiento_validar_trabajador',{p_rut:rut,p_pin:pin,p_ip:req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'});
     if (error) return reply(503,{message:'No se pudo validar el acceso. Intenta nuevamente.'});
-    if (!worker) return reply(401,{message:'RUT o PIN incorrecto, o demasiados intentos. Intenta nuevamente en 15 minutos.'});
+    if (!worker) return reply(401,{message:'RUT o PIN incorrecto. El PIN es tu día y mes de nacimiento (DDMM).'});
     // generateLink never sends mail. Only server-validated workers receive a session.
     const {data:link,error:linkError} = await admin.auth.admin.generateLink({type:'magiclink',email:`maintenance-${worker}@planify.invalid`});
     if (linkError || !link.user || !link.properties?.hashed_token) throw new Error('generate-link:'+(linkError?.code || 'missing-data'));

@@ -66,6 +66,9 @@
             }
             return mapEquipment(unwrap(result));
         },
+        async setEquipmentOpen(id, open) {
+            return mapEquipment(unwrap(await client.from('mantenimiento_equipos').update({is_open:open}).eq('id',id).select().single()));
+        },
         async saveJob(job, onProgress) {
             const photos = job.photos.map((p,i) => ({name:p.name,size:p.blob.size,mime:p.blob.type,path:`${job.id}/${i}-${crypto.randomUUID()}.${{'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[p.blob.type]}`}));
             unwrap(await client.rpc('mantenimiento_reservar',{payload:{id:job.id,equipment_id:job.equipmentId,category:job.category,title:job.title,work:job.work,photos}}));

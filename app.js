@@ -1982,6 +1982,15 @@ function configurarRealtime() {
             pendingHorasExtra = true;
             scheduleFlush();
         })
+        // Avance de rutas capturado por otro técnico en la misma OT: se combina
+        // con lo local (sin perder pendientes) y se avisa si la vista está abierta.
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rutas_ejecuciones' }, () => {
+            clearTimeout(window._rutasRealtimeTimer);
+            window._rutasRealtimeTimer = setTimeout(async () => {
+                try { await refrescarRutasEjecucionesDesdeSupabase(); } catch (e) { return; }
+                if (['rutas', 'trabajador-rutas', 'trabajador-ruta-detalle'].includes(vistaActual)) solicitarRenderRealtimeNoIntrusivo();
+            }, 800);
+        })
         .subscribe();
 }
 
@@ -5155,8 +5164,11 @@ function hayUIBloqueandoRealtime() {
     if (['input','select','textarea'].includes(tag) || activeElement?.isContentEditable) return true;
     // Datos escritos en la vista aunque el foco ya no esté en el campo.
     if (hayDatosSinGuardar()) return true;
-    // El formulario sigue abierto aunque el foco pase a un botón.
-    if ([...document.querySelectorAll('form,[role="dialog"],.modal,.vib-import-overlay')].some(esElementoVisibleUI)) return true;
+    // Una ventana (modal) abierta cuenta como edición aunque el foco pase a un botón.
+    // Un <form> fijo de la vista (p. ej. "Registrar una intervención" en
+    // Mantenimiento) no: vacío no hay nada que perder, y con datos ya lo
+    // detecta hayDatosSinGuardar().
+    if ([...document.querySelectorAll('[role="dialog"],.modal,.vib-import-overlay')].some(esElementoVisibleUI)) return true;
     // Solo bloquear si el usuario realmente está escribiendo o en un textarea.
     // Un <select> o un input de búsqueda ya poblado no debería bloquear el refresh.
     if (tag === 'textarea' || activeElement?.isContentEditable) return true;
@@ -5238,6 +5250,9 @@ function renderizarVistaActualPreservandoViewport() {
 // La vista se actualiza al navegar o al aplicar explícitamente el aviso.
 function intentarAplicarRealtimePendiente() {
     if (!pendingRealtimeRender || operacionesMasivasEnCurso > 0 || document.hidden) return;
+    // Vistas que cargan sus propios datos y no muestran lo que llega por realtime
+    // (tareas, horas extra, insumos...): ahí el aviso no aporta nada.
+    if (typeof vistaActual !== 'undefined' && ['mantenimiento'].includes(vistaActual)) return;
     _mostrarPillCambios();
 }
 
@@ -9957,15 +9972,35 @@ function renderTrabajadoresView() {
     const eliminarTrabajador = async (trabajadorId) => {
         const trabajador = estado.trabajadores.find((item) => item.id === trabajadorId);
         if (!trabajador) return;
-        const tareasAsignadas = estado.tareas.filter((tarea) =>
-            tarea.liderId === trabajadorId || (tarea.ayudantesIds || []).includes(trabajadorId)
-        );
-        if (tareasAsignadas.length > 0) {
-            mostrarToastTrabajadores(`No puedes eliminar a ${trabajador.nombre} mientras tenga tareas activas o semanales asignadas.`, 'danger');
+        const describirTarea = (tarea) => [tarea.tipo, tarea.subtitulo, tarea.otNumero ? `OT ${tarea.otNumero}` : '']
+            .filter(Boolean).join(' · ');
+        // Como líder no se puede quitar: la tarea quedaría sin responsable.
+        const comoLider = estado.tareas.filter((tarea) => tarea.liderId === trabajadorId);
+        if (comoLider.length > 0) {
+            alert(`${trabajador.nombre} es líder de ${comoLider.length} tarea(s). Reasigna el líder antes de eliminarlo:\n\n`
+                + comoLider.map((tarea) => `• ${describirTarea(tarea)}`).join('\n'));
             return;
         }
-        if (!confirm(`Eliminar a ${trabajador.nombre} del maestro de personal?`)) return;
+        // Como ayudante se puede quitar de las tareas antes de eliminarlo
+        // (personas que ya no están y quedaron en planificaciones antiguas).
+        const comoAyudante = estado.tareas.filter((tarea) => (tarea.ayudantesIds || []).includes(trabajadorId));
+        const mensaje = comoAyudante.length
+            ? `${trabajador.nombre} figura como ayudante en ${comoAyudante.length} tarea(s):\n\n`
+                + comoAyudante.map((tarea) => `• ${describirTarea(tarea)}`).join('\n')
+                + `\n\nSe quitará de esas tareas y se eliminará del maestro de personal. ¿Continuar?`
+            : `Eliminar a ${trabajador.nombre} del maestro de personal?`;
+        if (!confirm(mensaje)) return;
         try {
+            for (const tarea of comoAyudante) {
+                const idsPrevios = tarea.ayudantesIds || [];
+                const nombresPrevios = tarea.ayudantesNombres || [];
+                const conservar = idsPrevios.map((id, i) => ({ id, nombre: estado.trabajadores.find((item) => item.id === id)?.nombre || nombresPrevios[i] || '' }))
+                    .filter((ayudante) => ayudante.id !== trabajadorId);
+                const ayudantesIds = conservar.map((ayudante) => ayudante.id);
+                const ayudantesNombres = conservar.map((ayudante) => ayudante.nombre).filter(Boolean);
+                await _db.update('tareas', tarea.id, { ayudantes_ids: ayudantesIds, ayudantes_nombres: ayudantesNombres });
+                estado.tareas = estado.tareas.map((item) => item.id === tarea.id ? { ...item, ayudantesIds, ayudantesNombres } : item);
+            }
             await _db.delete('trabajadores', trabajadorId);
             estado.trabajadores = estado.trabajadores.filter((item) => item.id !== trabajadorId);
             if (trabajadorEnEdicion?.id === trabajadorId) cerrarModalNuevoTrabajador();
@@ -14787,12 +14822,34 @@ async function _enviarEjecucionASupabase(rutaIdx, ej) {
         err && (err.code === '42703' || /column .*(tecnicos_ids|tecnicos_nombres).* does not exist/i.test(err.message || ''));
 
     if (!ej._new) {
-        let { error } = await window.supabaseClient.from('rutas_ejecuciones').update(payload).eq('id', ej.id).eq('estado', 'activa').select('id').single();
-        if (error && _esErrorColumnaFaltante(error)) {
-            console.warn('[rutas] tecnicos_ids no existe todavía — push sin ellos. Corre el SQL de migración.');
-            ({ error } = await window.supabaseClient.from('rutas_ejecuciones').update(_stripTecnicos(payload)).eq('id', ej.id).eq('estado', 'activa').select('id').single());
+        // Varias personas pueden capturar la misma OT: se envían solo los
+        // cambios de este dispositivo y el servidor los aplica sobre lo que ya
+        // tiene, sin borrar lo que subieron los demás.
+        const sync = window.RouteExecutionSync;
+        const cambios = sync.diff(ej, ej._base);
+        if (sync.isEmpty(cambios)) { window.RouteExecutionStore.acknowledged(ej.id, ej._revision); return; }
+        const camposSimples = Object.keys(cambios.campos);
+        if (camposSimples.length) {
+            const columnas = {};
+            if (camposSimples.includes('ot')) columnas.ot = payload.ot;
+            if (camposSimples.includes('fechaInicio')) columnas.fecha_inicio = payload.fecha_inicio;
+            if (camposSimples.includes('fechaCierre')) columnas.fecha_cierre = payload.fecha_cierre;
+            if (camposSimples.includes('estado')) columnas.estado = payload.estado;
+            if (camposSimples.some(k => /tecnicos|lider|ayudante/i.test(k))) {
+                Object.assign(columnas, { lider_id: payload.lider_id, lider_nombre: payload.lider_nombre, ayudante_id: payload.ayudante_id,
+                    ayudante_nombre: payload.ayudante_nombre, tecnicos_ids: payload.tecnicos_ids, tecnicos_nombres: payload.tecnicos_nombres });
+            }
+            if (Object.keys(columnas).length) {
+                let { error } = await window.supabaseClient.from('rutas_ejecuciones').update(columnas).eq('id', ej.id).eq('estado', 'activa').select('id').single();
+                if (error && _esErrorColumnaFaltante(error)) {
+                    ({ error } = await window.supabaseClient.from('rutas_ejecuciones').update(_stripTecnicos(columnas)).eq('id', ej.id).eq('estado', 'activa').select('id').single());
+                }
+                if (error) throw error;
+            }
         }
-        if (error) throw error;
+        const fila = await _aplicarCambiosMapasEjecucion(ej.id, cambios);
+        window.RouteExecutionStore.confirmServer(ej.id, ej._revision, _mapearFilaEjecucion(fila), cambios);
+        return;
     } else {
         let { data, error } = await window.supabaseClient.from('rutas_ejecuciones').upsert([{ ...payload, id: ej.id }], { onConflict: 'id' }).select('id').single();
         if (error && _esErrorColumnaFaltante(error)) {
@@ -14802,6 +14859,83 @@ async function _enviarEjecucionASupabase(rutaIdx, ej) {
         if (error) throw error;
     }
     window.RouteExecutionStore.acknowledged(ej.id, ej._revision);
+}
+
+const MAPAS_EJECUCION_COLUMNAS = { componentesEstado: 'componentes_estado', componentesAt: 'componentes_at', observaciones: 'observaciones', mediciones: 'mediciones' };
+
+// Aplica en el servidor los cambios por componente y devuelve la fila resultante,
+// que incluye lo que otros dispositivos subieron entretanto.
+async function _aplicarCambiosMapasEjecucion(id, cambios) {
+    const sb = window.supabaseClient;
+    const pSet = {}, pDel = {};
+    Object.entries(MAPAS_EJECUCION_COLUMNAS).forEach(([campo, columna]) => {
+        if (cambios.set[campo]) pSet[columna] = cambios.set[campo];
+        if (cambios.del[campo]) pDel[columna] = cambios.del[campo];
+    });
+    // 1) Función atómica en Supabase (supabase/migrations/20261015120000_rutas_ejecucion_cambios.sql).
+    if (typeof sb.rpc === 'function') {
+        const { data, error } = await sb.rpc('rutas_ejecucion_aplicar', { p_id: String(id), p_set: pSet, p_del: pDel });
+        if (!error) {
+            const fila = Array.isArray(data) ? data[0] : data;
+            if (!fila) throw new Error('Esta OT ya fue cerrada o cancelada. Actualiza las rutas.');
+            return fila;
+        }
+        if (error.code !== 'PGRST202') throw error;
+    }
+    // 2) Respaldo mientras la función no esté instalada: leer, combinar y escribir
+    //    (con control por updated_at cuando existe, para reintentar si alguien escribió entremedio).
+    for (let intento = 0; intento < 4; intento++) {
+        const { data: actual, error: errLectura } = await sb.from('rutas_ejecuciones').select('*').eq('id', id).single();
+        if (errLectura) throw errLectura;
+        if (actual.estado && actual.estado !== 'activa') throw new Error('Esta OT ya fue cerrada o cancelada. Actualiza las rutas.');
+        if (!Object.keys(pSet).length && !Object.keys(pDel).length) return actual;
+        const combinada = { ...actual };
+        const columnas = {};
+        Object.values(MAPAS_EJECUCION_COLUMNAS).forEach(columna => {
+            if (!pSet[columna] && !pDel[columna]) return;
+            const valor = { ...(actual[columna] || {}), ...(pSet[columna] || {}) };
+            (pDel[columna] || []).forEach(k => { delete valor[k]; });
+            combinada[columna] = valor;
+            columnas[columna] = valor;
+        });
+        let consulta = sb.from('rutas_ejecuciones').update(columnas).eq('id', id).eq('estado', 'activa');
+        if (actual.updated_at) consulta = consulta.eq('updated_at', actual.updated_at);
+        const { error } = await consulta.select('id').single();
+        if (!error) return combinada;
+        if (error.code !== 'PGRST116') throw error;   // 0 filas: alguien escribió entremedio → reintentar
+    }
+    throw new Error('Otra persona está guardando esta OT. Se reintentará automáticamente.');
+}
+
+// Fila de rutas_ejecuciones → objeto de ejecución de la app.
+function _mapearFilaEjecucion(row) {
+    // Si la fila trae tecnicos_ids (formato nuevo), lo usamos.
+    // Si no, lo armamos desde lider/ayudante (compat retro).
+    const tecnicosIds = Array.isArray(row.tecnicos_ids) && row.tecnicos_ids.length
+        ? row.tecnicos_ids.filter(Boolean)
+        : [row.lider_id, row.ayudante_id].filter(Boolean);
+    const tecnicosNombres = Array.isArray(row.tecnicos_nombres) && row.tecnicos_nombres.length
+        ? row.tecnicos_nombres.filter(Boolean)
+        : [row.lider_nombre, row.ayudante_nombre].filter(Boolean);
+    const mapped = {
+        rutaIdx: row.ruta_idx,
+        id: row.id,
+        ot: row.ot,
+        fechaInicio: row.fecha_inicio,
+        liderId: row.lider_id,
+        liderNombre: row.lider_nombre,
+        ayudanteId: row.ayudante_id,
+        ayudanteNombre: row.ayudante_nombre,
+        tecnicosIds: tecnicosIds,
+        tecnicosNombres: tecnicosNombres,
+        componentesEstado: row.componentes_estado || {},
+        componentesAt: row.componentes_at || {},
+        observaciones: row.observaciones || {},
+        mediciones: row.mediciones || {},
+        estado: row.estado
+    };
+    if (esRutaRequerimientos(row.ruta_idx)) normalizarEjecucionRequerimientos(mapped);
+    return mapped;
 }
 
 // Trae todas las ejecuciones ACTIVAS desde Supabase y refresca el cache local.
@@ -14826,39 +14960,7 @@ async function _refrescarTodasEjecuciones() {
             if (!page || page.length < 500) break;
         }
         // Conservar todas las OT, sin colapsarlas por ruta.
-        const remotas = [];
-        for (const row of data || []) {
-            // Si la fila trae tecnicos_ids (formato nuevo), lo usamos.
-            // Si no, lo armamos desde lider/ayudante (compat retro).
-            const tecnicosIds = Array.isArray(row.tecnicos_ids) && row.tecnicos_ids.length
-                ? row.tecnicos_ids.filter(Boolean)
-                : [row.lider_id, row.ayudante_id].filter(Boolean);
-            const tecnicosNombres = Array.isArray(row.tecnicos_nombres) && row.tecnicos_nombres.length
-                ? row.tecnicos_nombres.filter(Boolean)
-                : [row.lider_nombre, row.ayudante_nombre].filter(Boolean);
-
-            const mapped = {
-                rutaIdx: row.ruta_idx,
-                id: row.id,
-                ot: row.ot,
-                fechaInicio: row.fecha_inicio,
-                liderId: row.lider_id,
-                liderNombre: row.lider_nombre,
-                ayudanteId: row.ayudante_id,
-                ayudanteNombre: row.ayudante_nombre,
-                tecnicosIds: tecnicosIds,
-                tecnicosNombres: tecnicosNombres,
-                componentesEstado: row.componentes_estado || {},
-                componentesAt: row.componentes_at || {},
-                observaciones: row.observaciones || {},
-                mediciones: row.mediciones || {},
-                estado: row.estado
-            };
-            if (esRutaRequerimientos(row.ruta_idx)) {
-                normalizarEjecucionRequerimientos(mapped);
-            }
-            remotas.push(mapped);
-        }
+        const remotas = (data || []).map(_mapearFilaEjecucion);
         window.RouteExecutionStore.merge(remotas, snapshot);
         // Lo que baja de Supabase puede venir con el orden viejo de componentes
         // (Bomba antes que Motor); lo dejamos alineado con el seed actual.
