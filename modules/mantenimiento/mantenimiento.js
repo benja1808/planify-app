@@ -10,7 +10,7 @@
     let host, catalog = [], unit = '', equipmentId = '', adding = false, filter = '', generation = 0;
     let urls = [];
     const cloud = window.MaintenanceCloud;
-    let currentUser = null;
+    let currentUser = null, stateTimer = null;
     const canManage = () => ['admin','administrador'].includes(currentUser?.role);
     function stateMarkup(kind = 'login') {
         const states = {
@@ -53,6 +53,7 @@
     }
     async function paint() {
         const version = ++generation;
+        clearTimeout(stateTimer);
         stateMarkup('loading');
         const active = () => version === generation && document.body.dataset.view === 'mantenimiento';
         try { currentUser = await cloud.session(); } catch(error) { if (active()) stateMarkup('connection'); return; }
@@ -123,16 +124,45 @@
     function detailMarkup(current, jobs, used) {
         const records = jobs.filter(j => j.equipmentId === current.id && (!filter || j.category === filter)).sort((a,b) => b.date.localeCompare(a.date));
         return `<section class="maint-panel"><div class="maint-row"><strong>Almacenamiento Nube</strong><span>${mb(used)} de 1 GB · ${(used / LIMIT * 100).toFixed(1)} %</span></div><progress aria-label="Almacenamiento utilizado en la nube" value="${used}" max="${LIMIT}"></progress><p>${mb(Math.max(0, LIMIT-used))} disponibles. Capacidad total: 1 GB.</p>
-        <div class="maint-row"><p><strong>${current.is_open ? 'Abierto para registrar trabajos y fotografías' : 'Equipo cerrado'}</strong></p>${canManage() ? `<button type="button" class="btn btn-outline" id="maint-toggle">${current.is_open ? 'Cerrar equipo' : 'Abrir equipo'}</button>` : ''}</div>
-        ${current.is_open ? `<h2 class="maint-form-title">Registrar una intervención</h2><p>Describe el trabajo y adjunta las fotografías del equipo.</p><form id="maint-job"><label for="maint-category">Categoría</label><select id="maint-category">${CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select><label for="maint-title">¿De qué son las imágenes?</label><input id="maint-title" required maxlength="180" placeholder="Ej.: Inspección del sello mecánico"><label for="maint-work">Trabajos realizados</label><textarea id="maint-work" required maxlength="10000" placeholder="Describe la intervención y los hallazgos"></textarea><label for="maint-files">Fotografías</label><input id="maint-files" type="file" accept="image/jpeg,image/png,image/webp" multiple required><p id="maint-selected" aria-live="polite">Selecciona una o más fotografías JPG, PNG o WebP.</p><div class="maint-actions"><button class="btn btn-primary" id="maint-save">Guardar en la nube</button></div></form>` : '<p>El planificador debe abrir este equipo para habilitar nuevos trabajos y fotografías. El historial sigue disponible.</p>'}</section>
+        <div class="maint-row"><p><strong id="maint-open-label">${current.is_open ? 'Abierto para registrar trabajos y fotografías' : 'Equipo cerrado'}</strong></p>${canManage() ? `<button type="button" class="btn btn-outline" id="maint-toggle">${current.is_open ? 'Cerrar equipo' : 'Abrir equipo'}</button>` : ''}</div>
+        <div id="maint-editor" ${current.is_open ? '' : 'hidden'}><h2 class="maint-form-title">Registrar una intervención</h2><p>Describe el trabajo y adjunta las fotografías del equipo.</p><form id="maint-job"><label for="maint-category">Categoría</label><select id="maint-category">${CATEGORIES.map(c => `<option>${c}</option>`).join('')}</select><label for="maint-title">¿De qué son las imágenes?</label><input id="maint-title" required maxlength="180" placeholder="Ej.: Inspección del sello mecánico"><label for="maint-work">Trabajos realizados</label><textarea id="maint-work" required maxlength="10000" placeholder="Describe la intervención y los hallazgos"></textarea><label for="maint-files">Fotografías</label><input id="maint-files" type="file" accept="image/jpeg,image/png,image/webp" multiple required><p id="maint-selected" aria-live="polite">Selecciona una o más fotografías JPG, PNG o WebP.</p><div class="maint-actions"><button class="btn btn-primary" id="maint-save">Guardar en la nube</button></div></form></div><p id="maint-closed" ${current.is_open ? 'hidden' : ''}>El planificador debe abrir este equipo para habilitar nuevos trabajos y fotografías. El historial sigue disponible.</p></section>
         <div class="maint-row"><h2>Registros del equipo</h2><select id="maint-filter" aria-label="Filtrar registros" style="width:auto"><option value="">Todas las categorías</option>${CATEGORIES.map(c => `<option ${c === filter ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
         ${records.length ? records.map(j => `<article class="maint-panel"><div class="maint-row"><h2>${esc(j.title)}</h2><small>${esc(j.category)} · ${new Date(j.date).toLocaleDateString('es-CL')}</small></div><p style="white-space:pre-wrap">${esc(j.work)}</p><p>${j.status !== 'ready' ? 'Carga incompleta o eliminación pendiente. Elimina este registro para liberar espacio.' : ''}</p><div class="maint-photos">${(j.status === 'ready' ? j.photos : []).map(p => { const url = p.url || '';  return `<figure><img src="${esc(url)}" alt="${esc(p.name)}" loading="lazy"><figcaption>${esc(p.name)}</figcaption></figure>`; }).join('')}</div><div class="maint-actions"><button class="btn btn-outline" data-zip="${j.id}" ${j.status !== 'ready' ? 'disabled' : ''}>Descargar carpeta ZIP</button>${!currentUser.id || currentUser.id === j.created_by ? `<button class="btn maint-danger" data-delete="${j.id}">Eliminar de la nube</button>` : ''}</div></article>`).join('') : '<div class="maint-empty"><i class="fa-regular fa-images maint-icon" aria-hidden="true"></i><h2>No hay registros para esta selección</h2><p>Registra una intervención o selecciona otra categoría para consultar los trabajos.</p></div>'}`;
     }
     function bindDetail(current, jobs) {
+        const version = generation;
+        let checking = false, saving = false;
+        function applyOpenState(open) {
+            current.is_open = open;
+            host.querySelector('#maint-open-label').textContent = open ? 'Abierto para registrar trabajos y fotografías' : 'Equipo cerrado';
+            host.querySelector('#maint-closed').hidden = open;
+            // Preserve the same inputs and FileList when another device closes the equipment.
+            const form = host.querySelector('#maint-job');
+            const draft = [...form.querySelectorAll('input,textarea')].some(f => f.type === 'file' ? f.files.length : f.value);
+            host.querySelector('#maint-editor').hidden = !open && !draft;
+            host.querySelector('#maint-save').disabled = !open || saving;
+            const toggle = host.querySelector('#maint-toggle');
+            if (toggle) toggle.textContent = open ? 'Cerrar equipo' : 'Abrir equipo';
+        }
+        async function checkState() {
+            if (version !== generation || document.body.dataset.view !== 'mantenimiento') return;
+            if (checking) return;
+            checking = true;
+            try {
+                const latest = await cloud.equipmentState(current.id);
+                if (version === generation && document.body.dataset.view === 'mantenimiento' && latest.is_open !== current.is_open) applyOpenState(latest.is_open);
+            } catch (_) { /* Preserve drafts on temporary network errors; server still enforces state. */ }
+            finally {
+                checking = false;
+                if (version === generation && document.body.dataset.view === 'mantenimiento') stateTimer = setTimeout(checkState, 5000);
+            }
+        }
+        if (cloud.equipmentState) stateTimer = setTimeout(checkState, 5000);
+
         on('maint-toggle', 'click', async e => {
             if (!canManage()) return;
             e.target.disabled = true;
-            try { await cloud.setEquipmentOpen(current.id, !current.is_open); await paint(); }
+            try { const updated = await cloud.setEquipmentOpen(current.id, !current.is_open); applyOpenState(updated.is_open); }
             finally { e.target.disabled = false; }
         });
         on('maint-filter', 'change', e => {
@@ -154,7 +184,8 @@
         });
         on('maint-job', 'submit', async e => {
             e.preventDefault();
-            const button = host.querySelector('#maint-save'); button.disabled = true;
+            if (!current.is_open) throw new Error('El equipo está cerrado. Espera a que el planificador lo abra.');
+            const button = host.querySelector('#maint-save'); button.disabled = true; saving = true;
             try {
                 const files = [...host.querySelector('#maint-files').files];
                 const title = host.querySelector('#maint-title').value.trim(), work = host.querySelector('#maint-work').value.trim();
@@ -164,7 +195,7 @@
                 const job = { id: crypto.randomUUID(), equipmentId: current.id, category: host.querySelector('#maint-category').value, title, work, date: new Date().toISOString(), photos: files.map(f => ({name:f.name,blob:f})) };
                 await cloud.saveJob(job, message => { button.textContent = message; });
                 await paint();
-            } finally { button.disabled = false; button.textContent = 'Guardar en la nube'; }
+            } finally { saving = false; button.disabled = !current.is_open; button.textContent = 'Guardar en la nube'; }
         });
         host.querySelectorAll('[data-delete]').forEach(b => b.onclick = async () => {
             if (!confirm('¿Eliminar este registro y sus fotografías de la nube? Comprueba primero que el ZIP descargado esté completo. Esta acción no se puede deshacer.')) return;

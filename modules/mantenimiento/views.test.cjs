@@ -7,7 +7,7 @@ async function render(session, load, hostname='localhost') {
     const handlers = {};
     const unitButton = {dataset:{unit:'U1'}}, equipmentButton = {dataset:{equipment:'one'}};
     const host = {innerHTML: '', querySelector: id => ({addEventListener: (event, action) => {handlers[id] = action;}}), querySelectorAll: selector => selector === '[data-unit]' ? [unitButton] : selector === '[data-equipment]' ? [equipmentButton] : []};
-    const context = {window: {MaintenanceCloud: {session, load}}, location: {hostname}, document: {body:{dataset:{view:'mantenimiento'}}}, URL:{revokeObjectURL(){}}, setTimeout};
+    const context = {window: {MaintenanceCloud: {session, load}}, location: {hostname}, document: {body:{dataset:{view:'mantenimiento'}}}, URL:{revokeObjectURL(){}}, setTimeout, clearTimeout};
     vm.runInNewContext(source, context);
     context.window.PlanifyMantenimiento.render(host, []);
     await new Promise(resolve => setImmediate(resolve));
@@ -61,8 +61,22 @@ for (const role of ['trabajador','admin','ito']) {
    assert.equal(view.host.innerHTML.includes('id="maint-add"'),role==='admin');
    view.equipmentButton.onclick(); await new Promise(r=>setImmediate(r));
    assert.equal(view.host.innerHTML.includes('id="maint-toggle"'),role==='admin');
-   assert.equal(view.host.innerHTML.includes('id="maint-job"'),open);
+   assert.equal(view.host.innerHTML.includes('id="maint-editor" hidden'),!open);
    assert.match(view.host.innerHTML,/Registros del equipo/);
   });
  }
 }
+
+test('remote closure and reopening preserve selected photos and typed work', async()=>{
+ const src=source.slice(source.indexOf('function bindDetail(current, jobs) {'),source.indexOf("on('maint-toggle'",source.indexOf('function bindDetail(current, jobs) {')))+'}';
+ let timer; const photo={name:'foto.jpg'}; const fields=[{type:'file',files:[photo]},{type:'text',value:'Trabajo en curso'}];
+ const nodes={'#maint-job':{querySelectorAll:()=>fields},'#maint-open-label':{},'#maint-closed':{},'#maint-editor':{},'#maint-save':{},'#maint-toggle':{}};
+ let open=false;
+ const ctx={generation:1,document:{body:{dataset:{view:'mantenimiento'}}},host:{querySelector:id=>nodes[id]},cloud:{equipmentState:async()=>({is_open:open})},setTimeout:fn=>{timer=fn},stateTimer:null};
+ vm.runInNewContext(src+';this.bind=bindDetail;',ctx);
+ ctx.bind({id:'one',is_open:true},[]);
+ await timer(); assert.equal(nodes['#maint-save'].disabled,true);assert.equal(nodes['#maint-editor'].hidden,false);
+ assert.equal(fields[0].files[0],photo);assert.equal(fields[1].value,'Trabajo en curso');
+ open=true;await timer();assert.equal(nodes['#maint-save'].disabled,false);
+ assert.equal(fields[0].files[0],photo);
+});

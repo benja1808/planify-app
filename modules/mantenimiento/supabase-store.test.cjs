@@ -54,3 +54,14 @@ test('web uses an isolated authenticated client without the localhost gateway',a
  assert.equal(calls[0].url,'https://project.supabase.co');
  assert.equal(calls[0].options.auth.storageKey,'planify-maintenance-auth');
 });
+
+test('restored web planner exchanges the validated token and keeps the management role', async()=>{
+ let session=null, sent;
+ const client={auth:{getSession:async()=>({data:{session}}),setSession:async()=>{session={user:{id:'planner',app_metadata:{maintenance_role:'admin',maintenance_planner_session:'hash'}}};return {};}}};
+ const context={window:{supabase:{createClient:()=>client}},location:{hostname:'planifyappl.netlify.app'},localStorage:{getItem:()=>JSON.stringify({rol:'admin',token:'session-token'})},fetch:async(url,options)=>{sent={url,body:JSON.parse(options.body)};return {ok:true,json:async()=>({access_token:'access',refresh_token:'refresh'})};}};
+ vm.runInNewContext(fs.readFileSync(__dirname+'/supabase-store.js','utf8'),context);
+ const api=context.window.MaintenanceCloud;api.configure('https://project.supabase.co','public');
+ assert.equal((await api.session()).role,'admin');
+ assert.equal(sent.body.token,'session-token');
+ assert.match(sent.url,/maintenance-planner-login$/);
+});

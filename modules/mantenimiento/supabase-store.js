@@ -21,8 +21,18 @@
             if (!client) client = direct;
         },
         async session() {
-            const {data} = await direct.auth.getSession();
-            if (data.session) { client=direct; return {id:data.session.user.id,role:'trabajador'}; }
+            let saved;
+            try { saved = JSON.parse(localStorage.getItem('planify_session') || 'null'); } catch (_) {}
+            let {data} = await direct.auth.getSession();
+            if (saved?.token && ['admin','administrador'].includes(saved.rol || saved.role) && !data.session?.user.app_metadata?.maintenance_planner_session) {
+                await api.signInPlanner(saved.token);
+                ({data} = await direct.auth.getSession());
+            }
+            if (data.session) {
+                client=direct;
+                const role = data.session.user.app_metadata?.maintenance_role;
+                return {id:data.session.user.id,role:['admin','administrador'].includes(role) ? role : 'trabajador'};
+            }
             if (!['localhost','127.0.0.1','[::1]'].includes(location.hostname)) return null;
             const response = await fetch('/api/maintenance/session', {credentials:'same-origin',cache:'no-store'});
             if (response.status === 401) return null;
@@ -38,6 +48,17 @@
             const {error}=await direct.auth.setSession(result);
             if(error) throw error;
             client=direct;
+        },
+        async signInPlanner(token) {
+            const response = await fetch(projectUrl+'/functions/v1/maintenance-planner-login',{method:'POST',headers:{'Content-Type':'application/json',apikey:publicKey},body:JSON.stringify({token})});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'No se pudo abrir Mantenimiento.');
+            const {error} = await direct.auth.setSession(result);
+            if (error) throw error;
+            client=direct;
+        },
+        async equipmentState(id) {
+            return unwrap(await client.from('mantenimiento_equipos').select('id,is_open').eq('id',id).single());
         },
         async signIn(role,pin) {
             const response = await fetch('/api/maintenance/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({role,pin})});

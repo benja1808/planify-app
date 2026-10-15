@@ -25281,6 +25281,7 @@ async function validarPin() {
             await window.MaintenanceCloud.signIn(pinLoginTarget, pin);
         } else {
             token = await iniciarSesionPinServidor(pinLoginTarget, pin);
+            if (['admin', 'administrador'].includes(pinLoginTarget)) await window.MaintenanceCloud.signInPlanner(token);
         }
         accederApp(pinLoginTarget, null, { token });
         pinModal.style.display = 'none';
