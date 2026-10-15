@@ -95,14 +95,38 @@ function isLocal(req) {
         return !req.headers.origin || new URL(req.headers.origin).host === req.headers.host;
     } catch { return false; }
 }
+// Sitio publicado: solo desde los orígenes permitidos y con límite de lecturas,
+// para que nadie más pueda gastar la cuota de Gemini con este servidor.
+const allowedOrigins = () => String(process.env.EXCITATRIZ_OCR_ORIGINS || 'https://planifyap.netlify.app')
+    .split(',').map(o => o.trim().replace(/\/+$/, '')).filter(Boolean);
+function isAllowedRemote(req) {
+    const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+    return !!origin && allowedOrigins().includes(origin);
+}
+const LIMIT_PER_HOUR = 20, LIMIT_PER_DAY = 200;
+const usage = { perClient: new Map(), dayStart: 0, dayCount: 0 };
+function takeQuota(req, now = Date.now()) {
+    const client = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim() || 'unknown';
+    if (now - usage.dayStart >= 24 * 3600e3) { usage.dayStart = now; usage.dayCount = 0; usage.perClient.clear(); }
+    const recent = (usage.perClient.get(client) || []).filter(t => now - t < 3600e3);
+    if (recent.length >= LIMIT_PER_HOUR) return 'Llegaste al límite de lecturas por hora. Intenta más tarde.';
+    if (usage.dayCount >= LIMIT_PER_DAY) return 'Se alcanzó el límite diario de lecturas. Intenta mañana.';
+    recent.push(now); usage.perClient.set(client, recent); usage.dayCount += 1;
+    return null;
+}
 let busy = false;
 async function handle(req, res) {
     const send = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
-    if (!isLocal(req)) return send(403, { error: 'Esta primera versión del lector está habilitada solo en el servidor local.' });
+    const local = isLocal(req);
+    if (!local && !isAllowedRemote(req)) return send(403, { error: 'El lector solo está habilitado para Planify.' });
     if (busy) return send(429, { error: 'Hay una lectura en curso. Espera a que termine.' });
+    if (!local) {
+        const limit = takeQuota(req);
+        if (limit) return send(429, { error: limit });
+    }
     busy = true;
     try { send(200, await extract(await readImageBody(req))); }
     catch (error) { send(error.status || 400, { error: error.message, providerStatus: error.providerStatus, provider: error.provider, model: error.model }); }
     finally { busy = false; }
 }
-module.exports = { extract, validateImage, readImageBody, isLocal, handle };
+module.exports = { extract, validateImage, readImageBody, isLocal, isAllowedRemote, takeQuota, handle };

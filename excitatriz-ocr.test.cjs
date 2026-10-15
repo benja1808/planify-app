@@ -97,3 +97,23 @@ test('configuration, provider errors, truncation and refusal are actionable erro
         await assert.rejects(extract({ unit: 4, image }, { provider: 'openai', apiKey: 'test', fetchImpl: async () => result }));
     }
 });
+
+test('el sitio publicado puede leer; otros orígenes no', () => {
+    const { isAllowedRemote } = require('./excitatriz-ocr-server.cjs');
+    const req = origin => ({ socket: { remoteAddress: '10.0.0.1' }, headers: { host: 'planify-backend.onrender.com', ...(origin ? { origin } : {}) } });
+    assert.equal(isAllowedRemote(req('https://planifyap.netlify.app')), true);
+    assert.equal(isAllowedRemote(req('https://planifyap.netlify.app/')), true);
+    assert.equal(isAllowedRemote(req('https://evil.example')), false);
+    assert.equal(isAllowedRemote(req('https://planifyap.netlify.app.evil.example')), false);
+    assert.equal(isAllowedRemote(req(null)), false);
+});
+
+test('límite de lecturas por conexión y por hora', () => {
+    const { takeQuota } = require('./excitatriz-ocr-server.cjs');
+    const req = ip => ({ socket: { remoteAddress: '10.0.0.9' }, headers: { 'x-forwarded-for': `${ip}, 10.0.0.1` } });
+    const t0 = Date.parse('2026-10-15T12:00:00Z');
+    for (let i = 0; i < 20; i++) assert.equal(takeQuota(req('1.1.1.1'), t0 + i), null);
+    assert.match(takeQuota(req('1.1.1.1'), t0 + 30), /por hora/);
+    assert.equal(takeQuota(req('2.2.2.2'), t0 + 31), null);              // otra conexión sigue pudiendo
+    assert.equal(takeQuota(req('1.1.1.1'), t0 + 3600e3 + 40), null);     // pasada la hora, vuelve a poder
+});
