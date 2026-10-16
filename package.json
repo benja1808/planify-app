@@ -9,7 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "start:maintenance": "node maintenance-server.cjs",
-    "test": "node -c app.js && node -c server.js && node -c excitatriz-ocr.js && node --test ui-stability.test.cjs insumos-permissions.test.cjs overtime-payments.test.cjs realtime.test.cjs equipment-components.test.cjs route-executions.test.cjs worker-status.test.cjs vib-daily.test.cjs excitatriz-ocr.test.cjs"
+    "test": "node -c app.js && node -c server.js && node -c excitatriz-ocr.js && node --test ui-stability.test.cjs insumos-permissions.test.cjs insumos-sync.test.cjs overtime-payments.test.cjs realtime.test.cjs equipment-components.test.cjs route-executions.test.cjs worker-status.test.cjs vib-daily.test.cjs excitatriz-ocr.test.cjs"
   },
   "keywords": [],
   "author": "",

@@ -106,7 +106,8 @@
       if (operacion === 'INSERT') {
         ({ error } = await window.supabaseClient.from(tabla).insert([payload]));
         if (error?.code === '23505' || /duplicate key/i.test(error?.message || '')) {
-          ({ error } = await window.supabaseClient.from(tabla).upsert([payload]));
+          ({ error } = await window.supabaseClient.from(tabla).upsert([payload],
+            tabla === 'solicitudes_insumos' ? { onConflict: 'id', ignoreDuplicates: true } : undefined));
         }
       } else if (operacion === 'UPDATE') {
         const { id, data, ...rest } = payload || {};

@@ -6,6 +6,11 @@ function setup(management, approver) {
     const item = { id: 'item', stock_actual: 8 };
     const movements = [];
     const context = vm.createContext({
+        navigator: { onLine: true },
+        supabaseClient: { rpc: async (name, args) => ({ data: {
+            insumo: { ...item, stock_actual: args.p_despues },
+            movimiento: { creado_por: args.p_actor, stock_antes: args.p_antes, stock_despues: args.p_despues }
+        } }) },
         esRolGestion: () => management,
         obtenerTrabajadorActual: () => ({ puede_aprobar_insumos: approver }),
         obtenerInsumoPorId: () => item,
@@ -19,7 +24,7 @@ function setup(management, approver) {
         crypto: { randomUUID: () => 'movement' }
     });
     vm.runInContext(src.slice(src.indexOf('function usuarioPuedeAprobarInsumos()'), src.indexOf('function usuarioSolicitanteActualId()')), context);
-    vm.runInContext(src.slice(src.indexOf('async function ajustarStockInsumo('), src.indexOf('async function eliminarInsumoCatalogo(')), context);
+    vm.runInContext(src.slice(src.indexOf('function exigirConexionInsumos('), src.indexOf('async function eliminarInsumoCatalogo(')), context);
     return { context, item, movements };
 }
 test('approvers and management can set total stock to zero with an attributed movement', async () => {

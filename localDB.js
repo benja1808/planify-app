@@ -93,11 +93,12 @@
     return promisify(store.put(item));
   }
 
-  async function upsertMany(storeName, items) {
+  async function upsertMany(storeName, items, replace = false) {
     const db = await abrirDB();
     return new Promise((resolve, reject) => {
       const tx    = db.transaction(storeName, 'readwrite');
       const store = tx.objectStore(storeName);
+      if (replace) store.clear();
       items.forEach(item => store.put(item));
       tx.oncomplete = () => resolve();
       tx.onerror    = e  => reject(e.target.error);
@@ -222,6 +223,7 @@
       get:              (id)         => getById('solicitudes_insumos', id),
       upsert:           (item)       => upsert('solicitudes_insumos', item),
       bulk:             (items)      => upsertMany('solicitudes_insumos', items),
+      replace:          (items)      => upsertMany('solicitudes_insumos', items, true),
       delete:           (id)         => eliminar('solicitudes_insumos', id),
       clear:            ()           => limpiar('solicitudes_insumos'),
       getByTrabajador:  (id)         => getByIndex('solicitudes_insumos', 'trabajador_id', id),

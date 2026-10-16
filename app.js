@@ -424,6 +424,42 @@ function esErrorTablaNoExiste(error) {
     );
 }
 
+// Recorrer hasta una página vacía también soporta límites del servidor menores a 500.
+async function fetchAllSolicitudesInsumos() {
+    const registros = [];
+    while (true) {
+        const { data, error } = await supabaseClient.from(tablasDb.solicitudesInsumos)
+            .select('*').order('id').range(registros.length, registros.length + 499);
+        if (error) throw error;
+        if (!Array.isArray(data)) throw new Error('Respuesta inválida al cargar solicitudes');
+        if (!data.length) return registros;
+        registros.push(...data);
+    }
+}
+
+function idsSolicitudesPendientesEnCola(items = []) {
+    return new Set(items
+        .filter(item => item?.tabla === tablasDb.solicitudesInsumos && item?.operacion === 'INSERT' && item?.payload?.id)
+        .map(item => String(item.payload.id)));
+}
+
+function combinarSolicitudesInsumos(remotas, locales, idsPendientes = new Set()) {
+    const registros = new Map(locales
+        .filter(item => idsPendientes.has(String(item.id)))
+        .map(item => [String(item.id), normalizarSolicitudInsumo({ ...item, pendienteSincronizacion: true, confirmadoRemoto: false })]));
+    remotas.forEach(item => registros.set(String(item.id), normalizarSolicitudInsumo({ ...item, pendienteSincronizacion: false, confirmadoRemoto: true })));
+    return [...registros.values()].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+}
+
+async function obtenerIdsSolicitudesPendientesEnCola() {
+    if (!window.localDB?.cola) return new Set();
+    const [pendientes, errores] = await Promise.all([
+        window.localDB.cola.getPendientes().catch(() => []),
+        window.localDB.cola.getErrores().catch(() => [])
+    ]);
+    return idsSolicitudesPendientesEnCola([...(pendientes || []), ...(errores || [])]);
+}
+
 async function fetchAllEquipos() {
     const pageSize = 1000;
     let all = [];
@@ -717,6 +753,8 @@ function normalizarRegistroInsumo(item = {}, fallback = {}) {
 function normalizarSolicitudInsumo(item = {}) {
     return {
         id: item.id || crypto.randomUUID(),
+        pendienteSincronizacion: item.pendienteSincronizacion === true,
+        confirmadoRemoto: item.confirmadoRemoto === true,
         trabajador_id: item.trabajador_id || item.user_id || item.userId || null,
         insumo_id: item.insumo_id || item.insumoId || null,
         cantidad: enteroSeguro(item.cantidad, 0),
@@ -1515,12 +1553,14 @@ async function refrescarDatosInsumos({ preferRemote = true } = {}) {
     let catalogoLocal = [];
     let solicitudesLocal = [];
     let movimientosLocal = [];
+    let solicitudesPendientesCola = new Set();
 
     if (window.localDB) {
-        [catalogoLocal, solicitudesLocal, movimientosLocal] = await Promise.all([
+        [catalogoLocal, solicitudesLocal, movimientosLocal, solicitudesPendientesCola] = await Promise.all([
             window.localDB.insumos.getAll().catch(() => []),
             window.localDB.solicitudes_insumos.getAll().catch(() => []),
-            window.localDB.movimientos_inventario.getAll().catch(() => [])
+            window.localDB.movimientos_inventario.getAll().catch(() => []),
+            obtenerIdsSolicitudesPendientesEnCola()
         ]);
     }
 
@@ -1552,22 +1592,12 @@ async function refrescarDatosInsumos({ preferRemote = true } = {}) {
         }
 
         if (insumosFeatureState.tablasRemotas.solicitudes) {
-            const { data, error } = await supabaseClient
-                .from(tablasDb.solicitudesInsumos)
-                .select('*')
-                .order('created_at', { ascending: false });
+            const { data, error } = await fetchAllSolicitudesInsumos()
+                .then(data => ({ data }), error => ({ error }));
             if (!error && Array.isArray(data)) {
-                const merged = new Map();
-                data.map((item) => normalizarSolicitudInsumo(item)).forEach((item) => {
-                    merged.set(String(item.id), item);
-                });
-                solicitudes.forEach((item) => {
-                    if (!merged.has(String(item.id))) merged.set(String(item.id), item);
-                });
-                solicitudes = [...merged.values()];
+                solicitudes = combinarSolicitudesInsumos(data, solicitudes, solicitudesPendientesCola);
                 if (window.localDB) {
-                    await window.localDB.solicitudes_insumos.clear().catch(() => {});
-                    if (solicitudes.length) await window.localDB.solicitudes_insumos.bulk(solicitudes).catch(() => {});
+                    await window.localDB.solicitudes_insumos.replace(solicitudes);
                 }
             }
         }
@@ -1851,12 +1881,10 @@ function configurarRealtime() {
                 })
             );
             if (pendingSolicitudesInsumos && insumosFeatureState.tablasRemotas.solicitudes) fetches.push(
-                supabaseClient.from(tablasDb.solicitudesInsumos).select('*').order('created_at', { ascending: false }).then(({ data, error }) => {
-                    if (error) throw error;
-                    if (!Array.isArray(data)) throw new Error('Respuesta realtime inválida');
-                    estado.solicitudesInsumos = (data || []).map((item) => normalizarSolicitudInsumo(item));
-                    window.localDB?.solicitudes_insumos.clear().catch(() => {});
-                    if (data?.length) window.localDB?.solicitudes_insumos.bulk(estado.solicitudesInsumos).catch(() => {});
+                Promise.all([fetchAllSolicitudesInsumos(), obtenerIdsSolicitudesPendientesEnCola()]).then(async ([data, idsPendientes]) => {
+                    // No eliminar solicitudes locales que todavía no llegaron al servidor.
+                    estado.solicitudesInsumos = combinarSolicitudesInsumos(data, estado.solicitudesInsumos, idsPendientes);
+                    await window.localDB?.solicitudes_insumos.replace(estado.solicitudesInsumos);
                 })
             );
             if (pendingMovimientosInventario && insumosFeatureState.tablasRemotas.movimientos) fetches.push(
@@ -4573,41 +4601,49 @@ async function sincronizarMovimientoRemoto(movimiento) {
     return true;
 }
 
-async function actualizarConfiguracionInsumo(insumoId, patch = {}) {
-    const actual = obtenerInsumoPorId(insumoId);
-    if (!actual) throw new Error('Insumo no encontrado.');
-    const nuevo = normalizarRegistroInsumo({ ...actual, ...patch }, actual);
-    await persistirInsumoLocal(nuevo);
-    await sincronizarInsumoRemoto(nuevo);
-    return nuevo;
+function exigirConexionInsumos() {
+    if (!navigator.onLine || !supabaseClient) throw new Error('Conéctate a internet para guardar este cambio.');
 }
 
-async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '', tipoMovimiento = null) {
+async function actualizarConfiguracionInsumo(insumoId, patch = {}) {
+    if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para editar insumos.');
+    exigirConexionInsumos();
+    const campos = ['nombre', 'marca', 'unidad', 'stock_inicial', 'stock_minimo', 'categoria', 'ubicacion', 'observaciones', 'activo', 'codigo'];
+    const cambios = Object.fromEntries(Object.entries(patch).filter(([key]) => campos.includes(key)));
+    if ('nombre' in cambios) {
+        cambios.nombre = String(cambios.nombre || '').trim();
+        if (!cambios.nombre) throw new Error('Ingresa un nombre para el insumo.');
+    }
+    const { data, error } = await supabaseClient.from(tablasDb.insumos)
+        .update(cambios).eq('id', insumoId).select('*').single();
+    if (error) throw error;
+    if (!data) throw new Error('El servidor no confirmó el cambio.');
+    await persistirInsumoLocal(data);
+    return data;
+}
+
+async function ajustarStockInsumo(insumoId, nuevoStock, motivo = '', tipoMovimiento = null, nombre = null) {
     if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para ajustar el stock.');
+    exigirConexionInsumos();
     const insumo = obtenerInsumoPorId(insumoId);
     if (!insumo) throw new Error('Insumo no encontrado.');
     const antes = enteroSeguro(insumo.stock_actual, 0);
-    const despues = enteroSeguro(nuevoStock, antes);
-    if (antes === despues) return { insumo, movimiento: null };
-    const delta = despues - antes;
-    const actualizado = { ...insumo, stock_actual: despues };
-    await persistirInsumoLocal(actualizado);
-    await sincronizarInsumoRemoto(actualizado);
-
-    const movimiento = normalizarMovimientoInventario({
-        id: crypto.randomUUID(),
-        insumo_id: insumoId,
-        tipo: tipoMovimiento || (delta > 0 ? 'entrada' : 'ajuste'),
-        cantidad: Math.abs(delta),
-        creado_por: nombreAprobadorActual(),
-        motivo: motivo || (delta > 0 ? 'Ingreso manual' : 'Ajuste manual'),
-        stock_antes: antes,
-        stock_despues: despues,
-        fecha: new Date().toISOString()
+    const despues = Number(nuevoStock);
+    if (!Number.isSafeInteger(despues) || despues < 0) throw new Error('Stock inválido.');
+    const nombreNormalizado = nombre == null ? null : String(nombre).trim();
+    if (nombreNormalizado === '') throw new Error('Ingresa un nombre para el insumo.');
+    if (antes === despues && (nombreNormalizado == null || nombreNormalizado === insumo.nombre)) return { insumo, movimiento: null };
+    const { data, error } = await supabaseClient.rpc('ajustar_insumo_seguro', {
+        p_id: insumoId, p_antes: antes, p_despues: despues,
+        p_tipo: tipoMovimiento || (despues > antes ? 'entrada' : 'ajuste'),
+        p_motivo: motivo || 'Ajuste manual', p_actor: nombreAprobadorActual(),
+        p_nombre: nombreNormalizado
     });
-    await registrarMovimientoInventarioLocal(movimiento);
-    await sincronizarMovimientoRemoto(movimiento);
-    return { insumo: actualizado, movimiento };
+    if (error) throw error;
+    if (!data?.insumo) throw new Error('El servidor no confirmó el ajuste.');
+    await persistirInsumoLocal(data.insumo);
+    if (data.movimiento) await registrarMovimientoInventarioLocal(data.movimiento);
+    return data;
 }
 
 async function registrarMovimientoManual(insumoId, tipo, cantidad, motivo = '') {
@@ -4623,14 +4659,28 @@ async function registrarMovimientoManual(insumoId, tipo, cantidad, motivo = '') 
 }
 
 async function eliminarInsumoCatalogo(insumoId) {
-    const insumo = obtenerInsumoPorId(insumoId);
-    if (!insumo) return;
-    const actualizado = { ...insumo, activo: false };
-    await persistirInsumoLocal(actualizado);
-    await sincronizarInsumoRemoto(actualizado);
+    return actualizarConfiguracionInsumo(insumoId, { activo: false });
+}
+
+async function crearInsumoConfirmado(insumo) {
+    if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para crear insumos.');
+    exigirConexionInsumos();
+    const payload = normalizarRegistroInsumo(insumo);
+    const { data, error } = await supabaseClient.from(tablasDb.insumos)
+        .insert([payload]).select('*').single();
+    if (error) throw error;
+    if (!data) throw new Error('El servidor no confirmó la creación del insumo.');
+    await persistirInsumoLocal(data);
+    return data;
 }
 
 async function guardarSolicitudInsumo(trabajadorId, insumoId, cantidad) {
+    if (!trabajadorId || !estado.trabajadores.some(item => String(item.id) === String(trabajadorId))) {
+        throw new Error('Selecciona una persona válida para la solicitud.');
+    }
+    if (!usuarioPuedeAprobarInsumos() && String(trabajadorId) !== String(usuarioSolicitanteActualId())) {
+        throw new Error('No tienes permiso para solicitar a nombre de otra persona.');
+    }
     const solicitud = normalizarSolicitudInsumo({
         id: crypto.randomUUID(),
         trabajador_id: trabajadorId,
@@ -4644,134 +4694,118 @@ async function guardarSolicitudInsumo(trabajadorId, insumoId, cantidad) {
         created_at: new Date().toISOString()
     });
 
-    await persistirSolicitudInsumoLocal(solicitud);
-
+    const { pendienteSincronizacion, confirmadoRemoto, ...payload } = solicitud;
+    let sincronizada = false;
     if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
-        const payload = {
-            id: solicitud.id,
-            trabajador_id: solicitud.trabajador_id,
-            insumo_id: solicitud.insumo_id,
-            cantidad: solicitud.cantidad,
-            estado: solicitud.estado,
-            aprobado_por: solicitud.aprobado_por,
-            fecha_solicitud: solicitud.fecha_solicitud,
-            fecha_aprobacion: solicitud.fecha_aprobacion,
-            observaciones: solicitud.observaciones
-        };
-        const { error } = await supabaseClient.from(tablasDb.solicitudesInsumos).insert([payload]);
-        if (error) console.warn('[insumos] No se pudo sincronizar la solicitud:', error.message);
+        try {
+            const { error } = await supabaseClient.from(tablasDb.solicitudesInsumos).insert([payload]);
+            if (error) throw error;
+            sincronizada = true;
+        } catch (error) {
+            console.warn('[insumos] Solicitud pendiente de sincronización:', error.message);
+        }
     }
+    if (!sincronizada) {
+        if (!window.localDB || !window.syncQueue?.add) {
+            throw new Error('No se pudo enviar ni guardar la solicitud en este dispositivo. Intenta nuevamente.');
+        }
+        // La cola debe quedar persistida antes de confirmar el guardado al usuario.
+        await window.syncQueue.add(tablasDb.solicitudesInsumos, 'INSERT', payload);
+    }
+    solicitud.pendienteSincronizacion = !sincronizada;
+    solicitud.confirmadoRemoto = sincronizada;
+    await persistirSolicitudInsumoLocal(solicitud);
 
     actualizarBadgeInsumos();
 
     return solicitud;
 }
 
-async function aprobarSolicitudInsumo(solicitudId) {
+async function reenviarSolicitudInsumo(solicitudId) {
     const solicitud = obtenerSolicitudInsumoPorId(solicitudId);
-    const insumo = obtenerInsumoPorId(solicitud?.insumo_id);
-    if (!solicitud || !insumo || solicitud.estado !== 'pendiente') return;
-
-    const ahora = new Date().toISOString();
-    const actualizada = {
-        ...solicitud,
-        estado: 'aprobada',
-        aprobado_por: nombreAprobadorActual(),
-        fecha_aprobacion: ahora,
-        observaciones: null,
-        created_at: solicitud.created_at || ahora
-    };
-    await persistirSolicitudInsumoLocal(actualizada);
-
-    const insumoActualizado = {
-        ...insumo,
-        stock_actual: enteroSeguro(insumo.stock_actual, 0) - enteroSeguro(solicitud.cantidad, 0)
-    };
-    await persistirInsumoLocal(insumoActualizado);
-
-    const usaTriggerRemoto = navigator.onLine
-        && insumosFeatureState.tablasRemotas.insumos
-        && insumosFeatureState.tablasRemotas.solicitudes
-        && insumosFeatureState.tablasRemotas.movimientos;
-
-    if (!usaTriggerRemoto) {
-        await registrarMovimientoInventarioLocal({
-            id: crypto.randomUUID(),
-            insumo_id: solicitud.insumo_id,
-            tipo: 'salida',
-            cantidad: solicitud.cantidad,
-            referencia_id: solicitud.id,
-            creado_por: nombreAprobadorActual(),
-            fecha: ahora,
-            created_at: ahora
-        });
+    if (!solicitud || !solicitud.pendienteSincronizacion || solicitud.estado !== 'pendiente') return;
+    if (!usuarioPuedeAprobarInsumos() && String(solicitud.trabajador_id) !== String(usuarioSolicitanteActualId())) {
+        throw new Error('Solo el solicitante o un aprobador puede reenviar esta solicitud.');
     }
+    if (!navigator.onLine || !supabaseClient) throw new Error('Conéctate a internet para reenviar la solicitud.');
+    const { pendienteSincronizacion, confirmadoRemoto, ...payload } = normalizarSolicitudInsumo(solicitud);
+    // Si el primer envío sí llegó, conservar su estado actual, incluso si ya fue aprobado.
+    const { error } = await supabaseClient.from(tablasDb.solicitudesInsumos)
+        .upsert([payload], { onConflict: 'id', ignoreDuplicates: true });
+    if (error) throw error;
+    const { data, error: errorLectura } = await supabaseClient.from(tablasDb.solicitudesInsumos)
+        .select('*').eq('id', solicitudId).single();
+    if (errorLectura) throw errorLectura;
+    await persistirSolicitudInsumoLocal({ ...data, pendienteSincronizacion: false, confirmadoRemoto: true });
+}
 
-    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
-        const { error } = await supabaseClient
-            .from(tablasDb.solicitudesInsumos)
-            .update({
-                estado: 'aprobada',
-                aprobado_por: actualizada.aprobado_por,
-                fecha_aprobacion: ahora,
-                observaciones: null
-            })
-            .eq('id', solicitudId);
-        if (error) console.warn('[insumos] No se pudo aprobar remotamente:', error.message);
-    }
-
+async function resolverSolicitudInsumo(solicitudId, nuevoEstado, observaciones = null) {
+    if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para resolver solicitudes.');
+    exigirConexionInsumos();
+    const { data, error } = await supabaseClient.from(tablasDb.solicitudesInsumos)
+        .update({ estado: nuevoEstado, aprobado_por: nombreAprobadorActual(),
+            fecha_aprobacion: new Date().toISOString(), observaciones })
+        .eq('id', solicitudId).eq('estado', 'pendiente').select('*').single();
+    if (error) throw new Error(`No se pudo resolver la solicitud. Puede haber sido resuelta por otra persona. ${error.message || ''}`);
+    if (!data) throw new Error('El servidor no confirmó la solicitud.');
+    await persistirSolicitudInsumoLocal({ ...data, confirmadoRemoto: true, pendienteSincronizacion: false });
+    await refrescarDatosInsumos();
     actualizarBadgeInsumos();
+    return data;
+}
+
+async function aprobarSolicitudInsumo(solicitudId) {
+    return resolverSolicitudInsumo(solicitudId, 'aprobada');
 }
 
 async function rechazarSolicitudInsumo(solicitudId, observaciones) {
-    const solicitud = obtenerSolicitudInsumoPorId(solicitudId);
-    if (!solicitud || solicitud.estado !== 'pendiente') return;
+    return resolverSolicitudInsumo(solicitudId, 'rechazada', observaciones);
+}
 
-    const ahora = new Date().toISOString();
-    const actualizada = {
-        ...solicitud,
-        estado: 'rechazada',
-        aprobado_por: nombreAprobadorActual(),
-        fecha_aprobacion: ahora,
-        observaciones,
-        created_at: solicitud.created_at || ahora
-    };
-    await persistirSolicitudInsumoLocal(actualizada);
+async function eliminarSolicitudInsumoSegura(id) {
+    return eliminarSolicitudesInsumoSeguras([id]);
+}
 
-    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.solicitudes) {
-        const { error } = await supabaseClient
-            .from(tablasDb.solicitudesInsumos)
-            .update({
-                estado: 'rechazada',
-                aprobado_por: actualizada.aprobado_por,
-                fecha_aprobacion: ahora,
-                observaciones
-            })
-            .eq('id', solicitudId);
-        if (error) console.warn('[insumos] No se pudo rechazar remotamente:', error.message);
-    }
-
-    actualizarBadgeInsumos();
+async function eliminarSolicitudesInsumoSeguras(ids) {
+    if (!esRolGestion()) throw new Error('No tienes permiso para eliminar solicitudes.');
+    exigirConexionInsumos();
+    const idsUnicos = [...new Set((ids || []).map(String).filter(Boolean))];
+    const { data, error } = await supabaseClient.rpc('eliminar_solicitudes_insumo_seguras', { p_ids: idsUnicos });
+    if (error) throw error;
+    if (!data || !Array.isArray(data.insumos)) throw new Error('El servidor no confirmó la eliminación completa.');
+    // Solo retirar la copia local después de confirmar toda la transacción.
+    for (const id of idsUnicos) await window.localDB?.solicitudes_insumos.delete(id);
+    const idsSet = new Set(idsUnicos);
+    estado.solicitudesInsumos = estado.solicitudesInsumos.filter(item => !idsSet.has(String(item.id)));
+    const movimientos = estado.movimientosInventario.filter(item => idsSet.has(String(item.referencia_id)));
+    for (const movimiento of movimientos) await window.localDB?.movimientos_inventario.delete(movimiento.id);
+    estado.movimientosInventario = estado.movimientosInventario.filter(item => !idsSet.has(String(item.referencia_id)));
+    for (const insumo of (data.insumos || [])) await persistirInsumoLocal(insumo);
+    return data;
 }
 
 async function actualizarPermisoAprobadorInsumos(trabajadorId, puedeAprobar) {
     const trabajador = estado.trabajadores.find((item) => String(item.id) === String(trabajadorId));
-    if (!trabajador) return;
+    if (!trabajador) throw new Error('Trabajador no encontrado.');
+    if (!esRolGestion()) throw new Error('No tienes permiso para cambiar aprobadores.');
+    exigirConexionInsumos();
+    if (!insumosFeatureState.aprobadoresPersistentes) throw new Error('El servidor no admite permisos de aprobador.');
 
-    const actualizado = { ...trabajador, puede_aprobar_insumos: puedeAprobar };
+    const { data, error } = await supabaseClient
+        .from('trabajadores')
+        .update({ puede_aprobar_insumos: puedeAprobar })
+        .eq('id', trabajadorId)
+        .select('*')
+        .single();
+    if (error) throw error;
+    if (!data) throw new Error('El servidor no confirmó el cambio de permiso.');
+
+    const actualizado = { ...trabajador, ...data };
     estado.trabajadores = estado.trabajadores.map((item) =>
         String(item.id) === String(trabajadorId) ? actualizado : item
     );
     if (estado.trabajadorLogueado?.id === trabajadorId) estado.trabajadorLogueado = actualizado;
-    await window.localDB?.trabajadores.upsert(actualizado).catch(() => {});
-
-    if (navigator.onLine && supabaseClient && insumosFeatureState.aprobadoresPersistentes) {
-        const { error } = await supabaseClient
-            .from('trabajadores')
-            .update({ puede_aprobar_insumos: puedeAprobar })
-            .eq('id', trabajadorId);
-        if (error) console.warn('[insumos] No se pudo actualizar permiso remoto:', error.message);
-    }
+    await window.localDB?.trabajadores.upsert(actualizado);
 }
 
 function obtenerValorFilaInventario(fila, alias = []) {
@@ -4809,10 +4843,16 @@ function extraerFilasInventarioDesdeLibro(libro) {
 async function importarCatalogoInsumosDesdeExcel(file) {
     if (!file) throw new Error('Selecciona un archivo Excel primero.');
     if (!window.XLSX) throw new Error('SheetJS no esta disponible en el navegador.');
+    exigirConexionInsumos();
+    if (!insumosFeatureState.tablasRemotas.insumos) throw new Error('El catálogo remoto no está disponible.');
+
+    const { data: catalogoRemoto, error: errorCatalogo } = await supabaseClient
+        .from(tablasDb.insumos).select('*').order('codigo', { ascending: true });
+    if (errorCatalogo) throw errorCatalogo;
 
     const workbook = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
     const filas = extraerFilasInventarioDesdeLibro(workbook);
-    const existentesPorCodigo = new Map((estado.insumos || []).map((item) => [String(item.codigo || ''), item]));
+    const existentesPorCodigo = new Map((catalogoRemoto || []).map((item) => [String(item.codigo || ''), item]));
 
     const catalogo = filas.map((fila) => {
         const codigo = enteroSeguro(obtenerValorFilaInventario(fila, ['CODIGO', 'COD']));
@@ -4843,22 +4883,22 @@ async function importarCatalogoInsumosDesdeExcel(file) {
 
     if (!catalogo.length) throw new Error('No se encontraron insumos validos en la hoja INVENTARIO.');
 
-    estado.insumos = [...catalogo].sort(ordenarCatalogoInsumos);
-    await window.localDB?.insumos.clear().catch(() => {});
-    await window.localDB?.insumos.bulk(estado.insumos).catch(() => {});
-
-    let remoteSynced = false;
-    if (navigator.onLine && supabaseClient && insumosFeatureState.tablasRemotas.insumos) {
-        const { error } = await supabaseClient
-            .from(tablasDb.insumos)
-            .upsert(estado.insumos, { onConflict: 'codigo' });
-        remoteSynced = !error;
-        if (error) console.warn('[insumos] El catalogo se importo solo en local:', error.message);
+    const { data, error } = await supabaseClient
+        .from(tablasDb.insumos)
+        .upsert(catalogo, { onConflict: 'codigo' })
+        .select('*');
+    if (error) throw error;
+    if (!Array.isArray(data) || data.length !== catalogo.length) {
+        throw new Error('El servidor no confirmó la importación completa.');
     }
+
+    estado.insumos = data.map(item => normalizarRegistroInsumo(item)).sort(ordenarCatalogoInsumos);
+    await window.localDB?.insumos.clear();
+    await window.localDB?.insumos.bulk(estado.insumos);
 
     return {
         total: estado.insumos.length,
-        remoteSynced
+        remoteSynced: true
     };
 }
 
@@ -5158,6 +5198,8 @@ window.addEventListener('beforeunload', (event) => {
 });
 
 function hayUIBloqueandoRealtime() {
+    // La selección y el envío siguen en curso aunque el foco pase a un botón.
+    if (document.getElementById('insumo-solicitante')?.value || document.getElementById('insumo-select')?.value || document.getElementById('btn-enviar-solicitud-insumo')?.disabled) return true;
     const activeElement = document.activeElement;
     const tag = (activeElement?.tagName || '').toLowerCase();
     if (document.hidden) return true;
@@ -5276,7 +5318,7 @@ async function renderInsumosView() {
     const trabajador = obtenerTrabajadorActual();
     const esAdmin = esRolGestion();
     const puedeAprobar = usuarioPuedeAprobarInsumos();
-    const puedeSolicitar = estado.usuarioActual === 'trabajador';
+    const puedeSolicitar = estado.usuarioActual === 'trabajador' || puedeAprobar;
     const catalogoActivo = obtenerInsumosActivos();
     const stockBajo = obtenerInsumosStockBajo();
     const solicitudesBase = (esAdmin || puedeAprobar)
@@ -5388,6 +5430,13 @@ async function renderInsumosView() {
                     <div class="inv-solicitud-form panel">
                         <div class="panel-header"><h2 style="margin:0;"><i class="fa-solid fa-plus"></i> Nueva solicitud</h2></div>
                         <form id="form-insumo-solicitud" class="inv-solicitud-grid">
+                            ${puedeAprobar ? `<div class="form-group">
+                                <label for="insumo-solicitante">Solicitar a nombre de</label>
+                                <select id="insumo-solicitante" class="form-control" required>
+                                    <option value="">Selecciona una persona...</option>
+                                    ${estado.trabajadores.slice().sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es')).map((persona) => `<option value="${persona.id}">${escapeHtml(persona.nombre || '')}</option>`).join('')}
+                                </select>
+                            </div>` : ''}
                             <div class="form-group">
                                 <label for="insumo-select">Insumo</label>
                                 <select id="insumo-select" class="form-control">
@@ -5803,7 +5852,10 @@ async function renderInsumosView() {
         const container = document.getElementById('inv-solicitudes-list');
         if (!container) return;
 
-        const filas = solicitudesBase.filter((item) => {
+        const solicitudesActuales = (esAdmin || puedeAprobar)
+            ? estado.solicitudesInsumos
+            : estado.solicitudesInsumos.filter((item) => String(item.trabajador_id) === String(trabajador?.id));
+        const filas = solicitudesActuales.filter((item) => {
             if (filtroEstado !== 'todos' && item.estado !== filtroEstado) return false;
             if (filtroSolicitudesMes) {
                 const fechaBase = String(item.fecha_aprobacion || item.fecha_solicitud || item.created_at || '');
@@ -5858,6 +5910,7 @@ async function renderInsumosView() {
                                 <div class="inv-sol-head">
                                     <strong>${insumo?.nombre || 'Insumo no disponible'}</strong>
                                     ${badgeEstadoSolicitudInsumoHtml(item.estado)}
+                                    ${item.pendienteSincronizacion ? '<span class="inv-sol-note">Sin confirmar en el servidor</span>' : ''}
                                 </div>
                                 <div class="inv-sol-sub">
                                     ${(esAdmin || puedeAprobar) ? `<span><i class="fa-solid fa-user"></i> ${obtenerNombreTrabajadorPorId(item.trabajador_id)}</span>` : ''}
@@ -5865,6 +5918,8 @@ async function renderInsumosView() {
                                     <span><i class="fa-solid fa-calendar"></i> ${formatearFechaCorta(item.fecha_solicitud)}</span>
                                 </div>
                                 ${observaciones}
+                                ${item.pendienteSincronizacion && item.estado === 'pendiente' && (puedeAprobar || String(item.trabajador_id) === String(usuarioSolicitanteActualId()))
+                                    ? `<p class="inv-sol-note">Esta solicitud está guardada en este dispositivo. El planificador no podrá verla hasta que se envíe.</p><button type="button" class="btn btn-outline btn-small" onclick="window._insReenviar('${item.id}', this)">Reenviar solicitud</button>` : ''}
                             </div>
                             <div class="inv-sol-qty">
                                 <div class="inv-sol-qty-big">${formatearCantidadInsumo(item.cantidad, insumo?.unidad)}</div>
@@ -5882,11 +5937,29 @@ async function renderInsumosView() {
     document.getElementById('insumo-cantidad')?.addEventListener('input', actualizarMetaInsumoSeleccionado);
     actualizarMetaInsumoSeleccionado();
 
+    window._insReenviar = async (id, boton) => {
+        if (boton.disabled) return;
+        boton.disabled = true;
+        try {
+            await reenviarSolicitudInsumo(id);
+            if (boton.isConnected) renderTablaSolicitudes();
+            mostrarToastNotificacion('Solicitud enviada', 'El servidor confirmó la solicitud.', { type: 'success' });
+        } catch (error) {
+            alert(error?.message || 'No se pudo reenviar la solicitud.');
+        } finally {
+            boton.disabled = false;
+        }
+    };
+
     document.getElementById('form-insumo-solicitud')?.addEventListener('submit', async (event) => {
         event.preventDefault();
         const select = document.getElementById('insumo-select');
         const cantidadInput = document.getElementById('insumo-cantidad');
+        const solicitanteInput = document.getElementById('insumo-solicitante');
+        const solicitanteId = solicitanteInput ? solicitanteInput.value : usuarioSolicitanteActualId();
         const boton = document.getElementById('btn-enviar-solicitud-insumo');
+        if (!boton || boton.disabled) return;
+        const formulario = event.currentTarget;
         const insumo = obtenerInsumoPorId(select?.value);
         const cantidad = enteroSeguro(cantidadInput?.value, 0);
 
@@ -5907,11 +5980,22 @@ async function renderInsumosView() {
         boton.disabled = true;
         boton.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
         try {
-            await guardarSolicitudInsumo(usuarioSolicitanteActualId(), insumo.id, cantidad);
-            vistaActual = 'insumos';
-            renderizarVistaActual();
+            const solicitudGuardada = await guardarSolicitudInsumo(solicitanteId, insumo.id, cantidad);
+            // No reconstruir la pantalla ni volver a ella si el usuario navegó.
+            if (!formulario.isConnected) return;
+            if (select.value === String(insumo.id) && enteroSeguro(cantidadInput.value, 0) === cantidad
+                && (!solicitanteInput || solicitanteInput.value === solicitanteId)) {
+                formulario.reset();
+            }
+            actualizarMetaInsumoSeleccionado();
+            renderTablaSolicitudes();
+            mostrarToastNotificacion(
+                solicitudGuardada.pendienteSincronizacion ? 'Solicitud guardada en este dispositivo' : 'Solicitud enviada',
+                solicitudGuardada.pendienteSincronizacion ? 'Pendiente de envío. Se reintentará al sincronizar.' : 'Tu solicitud quedó registrada.',
+                { type: solicitudGuardada.pendienteSincronizacion ? 'warning' : 'success', duration: 5000 });
         } catch (error) {
             alert(error?.message || 'No se pudo guardar la solicitud.');
+        } finally {
             boton.disabled = false;
             boton.innerHTML = textoOriginal;
         }
@@ -5951,9 +6035,10 @@ async function renderInsumosView() {
     });
 
     window._insAprobar = async (id) => {
-        await aprobarSolicitudInsumo(id);
-        vistaActual = 'insumos';
-        renderizarVistaActual();
+        try {
+            await aprobarSolicitudInsumo(id);
+            if (vistaActual === 'insumos') renderizarVistaActual();
+        } catch (error) { alert(error.message || 'No se pudo aprobar la solicitud.'); }
     };
 
     window._insRechazar = (id) => {
@@ -5977,42 +6062,26 @@ async function renderInsumosView() {
             }
             btnConfirmar.disabled = true;
             btnConfirmar.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
-            await rechazarSolicitudInsumo(id, motivo);
-            modal.style.display = 'none';
-            btnConfirmar.disabled = false;
-            btnConfirmar.innerHTML = 'Guardar rechazo';
-            vistaActual = 'insumos';
-            renderizarVistaActual();
+            try {
+                await rechazarSolicitudInsumo(id, motivo);
+                modal.style.display = 'none';
+                if (vistaActual === 'insumos') renderizarVistaActual();
+            } catch (error) {
+                alert(error.message || 'No se pudo rechazar la solicitud.');
+            } finally {
+                btnConfirmar.disabled = false;
+                btnConfirmar.innerHTML = 'Guardar rechazo';
+            }
         };
     };
 
     window._insToggleAprobador = async (trabajadorId, checked) => {
-        await actualizarPermisoAprobadorInsumos(trabajadorId, checked);
-        vistaActual = 'insumos';
-        renderizarVistaActual();
-    };
-
-    // Revierte el efecto de una solicitud aprobada: devuelve stock y borra el movimiento
-    const revertirSolicitudAprobada = async (solicitud) => {
-        if (!solicitud || solicitud.estado !== 'aprobada') return;
-        const cant = enteroSeguro(solicitud.cantidad, 0);
-        if (cant <= 0) return;
-        const insumo = estado.insumos?.find((i) => String(i.id) === String(solicitud.insumo_id));
-        const stockNuevo = enteroSeguro(insumo?.stock_actual, 0) + cant;
-        if (insumo && window.localDB) {
-            await window.localDB.insumos.put({ ...insumo, stock_actual: stockNuevo }).catch(() => {});
-        }
-        if (window.supabaseClient) {
-            try { await window.supabaseClient.from('insumos').update({ stock_actual: stockNuevo }).eq('id', solicitud.insumo_id); } catch (e) { console.warn('[insumos] revertir stock', e); }
-            try { await window.supabaseClient.from('movimientos_inventario').delete().eq('referencia_id', solicitud.id); } catch (e) { console.warn('[insumos] borrar movimiento', e); }
-        }
-        if (window.localDB?.movimientos_inventario) {
-            try {
-                const movs = await window.localDB.movimientos_inventario.getAll();
-                for (const m of (movs || [])) {
-                    if (String(m.referencia_id) === String(solicitud.id)) await window.localDB.movimientos_inventario.delete(m.id);
-                }
-            } catch (e) { /* ignore */ }
+        try {
+            await actualizarPermisoAprobadorInsumos(trabajadorId, checked);
+            if (vistaActual === 'insumos') renderizarVistaActual();
+        } catch (error) {
+            alert(error?.message || 'No se pudo cambiar el permiso del aprobador.');
+            if (vistaActual === 'insumos') renderizarVistaActual();
         }
     };
 
@@ -6023,11 +6092,7 @@ async function renderInsumosView() {
             : '¿Eliminar esta solicitud del historial? Esta acción no se puede deshacer.';
         if (!confirm(msg)) return;
         try {
-            await revertirSolicitudAprobada(solicitud);
-            await localDB.solicitudes_insumos.delete(id);
-            if (window.supabaseClient) {
-                try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', id); } catch (e) { console.warn('[insumos] remote delete fallo', e); }
-            }
+            await eliminarSolicitudInsumoSegura(id);
             await refrescarDatosInsumos();
             vistaActual = 'insumos';
             renderizarVistaActual();
@@ -6085,13 +6150,7 @@ async function renderInsumosView() {
         if (!confirm(`Se eliminarán ${resueltas.length} solicitudes aprobadas/rechazadas. ¿Continuar?`)) return;
         suspenderRenderRealtime();
         try {
-            for (const s of resueltas) {
-                await revertirSolicitudAprobada(s);
-                await localDB.solicitudes_insumos.delete(s.id);
-                if (window.supabaseClient) {
-                    try { await window.supabaseClient.from('solicitudes_insumos').delete().eq('id', s.id); } catch (e) { /* ignore */ }
-                }
-            }
+            await eliminarSolicitudesInsumoSeguras(resueltas.map(s => s.id));
             await refrescarDatosInsumos();
             pendingRealtimeRender = false;
             vistaActual = 'insumos';
@@ -6109,8 +6168,13 @@ async function renderInsumosView() {
         if (!insumo) return;
         abrirModalInsumo({
             eyebrow: 'Movimiento manual',
-            titulo: `Ajustar stock: ${insumo.nombre}`,
+            titulo: `Ajustar: ${insumo.nombre}`,
             bodyHtml: `
+                <div class="form-group">
+                    <label for="inv-ajuste-nombre">Nombre</label>
+                    <input id="inv-ajuste-nombre" type="text" class="form-control" value="${escHtml(insumo.nombre)}" required>
+                </div>
+                <p class="inv-modal-info">Para cambiar solo el nombre, deja la cantidad vacía.</p>
                 <p class="inv-modal-info">Stock actual: <strong>${insumo.stock_actual}</strong> · Minimo: <strong>${calcularStockMinimoEfectivo(insumo)}</strong></p>
                 <div class="form-group">
                     <label>Tipo de movimiento</label>
@@ -6130,16 +6194,25 @@ async function renderInsumosView() {
                 </div>
             `,
             onConfirm: async () => {
+                if (!usuarioPuedeAprobarInsumos()) throw new Error('No tienes permiso para ajustar este insumo.');
+                const nombre = String(document.getElementById('inv-ajuste-nombre')?.value || '').trim();
+                if (!nombre) throw new Error('Ingresa un nombre para el insumo.');
                 const tipo = document.querySelector('input[name="inv-mov"]:checked')?.value || 'entrada';
                 const cantidadTexto = document.getElementById('inv-ajuste-cantidad')?.value ?? '';
                 const cantidad = Number(cantidadTexto);
                 const motivo = String(document.getElementById('inv-ajuste-motivo')?.value || '').trim();
-                if (!cantidadTexto.trim() || !Number.isSafeInteger(cantidad) || cantidad < 0 || (tipo !== 'ajuste' && cantidad === 0)) throw new Error('Ingresa una cantidad válida para el movimiento.');
-                if (!motivo) throw new Error('Indica un motivo para el movimiento.');
-                if (tipo === 'ajuste') {
-                    await ajustarStockInsumo(insumoId, cantidad, motivo);
-                } else {
-                    await registrarMovimientoManual(insumoId, tipo, cantidad, motivo);
+                const cambiarStock = Boolean(cantidadTexto.trim());
+                if (cambiarStock && (!Number.isSafeInteger(cantidad) || cantidad < 0 || (tipo !== 'ajuste' && cantidad === 0))) throw new Error('Ingresa una cantidad válida para el movimiento.');
+                if (cambiarStock && !motivo) throw new Error('Indica un motivo para el movimiento.');
+                if (cambiarStock && tipo === 'ajuste') {
+                    await ajustarStockInsumo(insumoId, cantidad, motivo, null, nombre);
+                } else if (cambiarStock) {
+                    const signo = tipo === 'entrada' ? 1 : -1;
+                    const stockNuevo = enteroSeguro(insumo.stock_actual, 0) + signo * cantidad;
+                    if (stockNuevo < 0) throw new Error(`No hay stock suficiente (disponible: ${insumo.stock_actual}).`);
+                    await ajustarStockInsumo(insumoId, stockNuevo, motivo, tipo, nombre);
+                } else if (nombre !== insumo.nombre) {
+                    await actualizarConfiguracionInsumo(insumoId, { nombre });
                 }
             }
         });
@@ -6300,8 +6373,7 @@ async function renderInsumosView() {
                     activo: true,
                     created_at: new Date().toISOString()
                 });
-                await persistirInsumoLocal(nuevo);
-                await sincronizarInsumoRemoto(nuevo);
+                await crearInsumoConfirmado(nuevo);
             }
         });
     };
@@ -9623,6 +9695,8 @@ function renderTrabajadoresView() {
                 </div>
             </section>
 
+        </div>
+
             <div id="modal-nuevo-trabajador" class="modal-overlay-base" style="z-index:9600;">
                 <div class="modal-shell modal-shell--medium">
                     <div class="modal-head">
@@ -9671,7 +9745,6 @@ function renderTrabajadoresView() {
                     </form>
                 </div>
             </div>
-        </div>
     `;
 
     window._trabTab = function(tab) {
@@ -9791,7 +9864,11 @@ function renderTrabajadoresView() {
             btnGuardarNuevoTrabajador.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar trabajador';
         }
         modalNuevoTrabajador.style.display = 'flex';
-        setTimeout(() => document.getElementById('nuevo-trabajador-nombre')?.focus(), 60);
+        setTimeout(() => {
+            if (modalNuevoTrabajador.style.display !== 'none') {
+                document.getElementById('nuevo-trabajador-nombre')?.focus({ preventScroll: true });
+            }
+        }, 60);
     };
     const cerrarModalNuevoTrabajador = () => {
         if (!modalNuevoTrabajador || !formNuevoTrabajador) return;

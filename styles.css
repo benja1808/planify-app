@@ -6766,3 +6766,29 @@ h3 {
     }
 }
 
+
+/* El diálogo de personal es hermano de la vista animada, no su descendiente.
+   dvh sigue el área visible del navegador móvil; vh queda como respaldo. */
+#modal-nuevo-trabajador {
+    padding: max(0.7rem, env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right)) max(0.7rem, env(safe-area-inset-bottom)) max(0.7rem, env(safe-area-inset-left));
+}
+#modal-nuevo-trabajador .modal-shell {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100dvh - max(0.7rem, env(safe-area-inset-top)) - max(0.7rem, env(safe-area-inset-bottom)));
+}
+#modal-nuevo-trabajador .modal-head,
+#modal-nuevo-trabajador .modal-actions {
+    flex-shrink: 0;
+}
+#modal-nuevo-trabajador .modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 768px) {
+    #modal-nuevo-trabajador input,
+    #modal-nuevo-trabajador select {
+        font-size: 16px;
+    }
+}
